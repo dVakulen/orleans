@@ -1092,10 +1092,10 @@ namespace Orleans.Runtime
             return directory.LocalLookup(grain, out addresses) && addresses != null && addresses.Count > 0;
             // NOTE: only check with the local directory cache.
             // DO NOT check in the local activations TargetDirectory!!!
-            // The only source of truth about which activation should be legit to is the state of the ditributed directory.
-            // Everyone should converge to that (that is the meaning of "eventualy consistency - eventualy we converge to one truth").
+            // The only source of truth about which activation should be legit to is the state of the distributed directory.
+            // Everyone should converge to that (that is the meaning of "eventually consistency - eventually we converge to one truth").
             // If we keep using the local activation, it may not be registered in th directory any more, but we will never know that and keep using it,
-            // thus volaiting the single-activation semantics and not converging even eventualy!
+            // thus violating the single-activation semantics and not converging even eventually!
         }
 
         public Task<List<ActivationAddress>> FullLookup(GrainId grain)
@@ -1163,7 +1163,7 @@ namespace Orleans.Runtime
             // We deactivate those activations when silo goes either of ShuttingDown/Stopping/Dead states,
             // since this is what Directory is doing as well. Directory removes a silo based on all those 3 statuses,
             // thus it will only deliver a "remove" notification for a given silo once to us. Therefore, we need to react the fist time we are notified.
-            // We may review the directory behaiviour in the future and treat ShuttingDown differently ("drain only") and then this code will have to change a well.
+            // We may review the directory behavior in the future and treat ShuttingDown differently ("drain only") and then this code will have to change a well.
             if (!status.IsTerminating()) return;
 
             var activationsToShutdown = new List<ActivationData>();

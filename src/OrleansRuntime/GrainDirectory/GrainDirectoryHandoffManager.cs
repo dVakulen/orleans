@@ -257,7 +257,7 @@ namespace Orleans.Runtime.GrainDirectory
                 SiloAddress predecessorOfNewSilo = localDirectory.FindPredecessors(addedSilo, 1)[0];
                 if (!directoryPartitionsMap.ContainsKey(predecessorOfNewSilo))
                 {
-                    // we should have the partition of the predcessor of our new successor
+                    // we should have the partition of the predecessor of our new successor
                     logger.Warn(ErrorCode.DirectoryPartitionPredecessorExpected, "This silo is expected to hold directory partition of " + predecessorOfNewSilo);
                 }
                 else

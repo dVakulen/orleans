@@ -32,7 +32,7 @@ using Orleans.Streams;
 namespace Orleans.Providers.Streams.AzureQueue
 {
     /// <summary>
-    /// Recieves batches of messages from a single partition of a message queue.  
+    /// Receives batches of messages from a single partition of a message queue.  
     /// </summary>
     internal class AzureQueueAdapterReceiver : IQueueAdapterReceiver
     {

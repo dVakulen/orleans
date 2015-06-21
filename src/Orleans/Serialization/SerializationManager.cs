@@ -40,7 +40,7 @@ using Orleans.Runtime.Configuration;
 namespace Orleans.Serialization
 {
     /// <summary>
-    /// SerializationManager to oversee the Orleans syrializer system.
+    /// SerializationManager to oversee the Orleans serializer system.
     /// </summary>
     public static class SerializationManager
     {

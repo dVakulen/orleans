@@ -196,11 +196,11 @@ namespace Orleans.CodeGeneration
         public static PropertyInfo[] GetPersistentProperties(Type persistenceInterface)
         {
             // those flags only apply to class members, they do not apply to inherited interfaces (so BindingFlags.DeclaredOnly is meaningless here)
-            // need to explicitely take all properties from all sub interfaces.
+            // need to explicitly take all properties from all sub interfaces.
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             if ((null != persistenceInterface) && (typeof (IGrainState).IsAssignableFrom(persistenceInterface)))
             {
-                // take all inherited intefaces that are subtypes of IGrainState except for IGrainState itself (it has internal properties which we don't want to expose here)
+                // take all inherited interfaces that are subtypes of IGrainState except for IGrainState itself (it has internal properties which we don't want to expose here)
                 // plus add the persistenceInterface itself
                 IEnumerable<Type> allInterfaces = persistenceInterface.GetInterfaces().
                     Where(t => !(t == typeof(IGrainState))).

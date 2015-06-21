@@ -491,7 +491,7 @@ namespace Orleans.Runtime
                     () => bootstrapProviderManager.LoadAppBootstrapProviders(GlobalConfig.ProviderConfigurations),
                     providerManagerSystemTarget.SchedulingContext)
                         .WaitWithThrow(initTimeout);
-                BootstrapProviders = bootstrapProviderManager.GetProviders(); // Data hook for testing & diagnotics
+                BootstrapProviders = bootstrapProviderManager.GetProviders(); // Data hook for testing & diagnostics
                 if (logger.IsVerbose) { logger.Verbose("App bootstrap calls done successfully."); }
 
                 // Now that we're active, we can start the gateway

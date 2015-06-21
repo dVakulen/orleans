@@ -32,8 +32,8 @@ namespace Orleans.Providers.Streams.Common
     internal class CacheBucket
     {
         // For backpressure detection we maintain a histogram of 10 buckets.
-        // Every buckets recors how many items are in the cache in that bucket
-        // and how many cursors are poinmting to an item in that bucket.
+        // Every buckets records how many items are in the cache in that bucket
+        // and how many cursors are pointing to an item in that bucket.
         // We update the NumCurrentItems when we add and remove cache item (potentially opening or removing a bucket)
         // We update NumCurrentCursors every time we move a cursor
         // If the first (most outdated bucket) has at least one cursor pointing to it, we say we are under back pressure (in a full cache).

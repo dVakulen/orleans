@@ -39,7 +39,7 @@ namespace Orleans.TestingHost
 {
     /// <summary>
     /// A host class for local testing with Orleans using in-process silos. 
-    /// Runs a Primary and Secondary silo in seperate app domains, and client in the main app domain.
+    /// Runs a Primary and Secondary silo in separate app domains, and client in the main app domain.
     /// Additional silos can also be started in-process if required for particular test cases.
     /// </summary>
     /// <remarks>

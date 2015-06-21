@@ -32,7 +32,7 @@ namespace OrleansProviders.Storage
 {
 
     /// <summary>
-    /// Implementaiton class for the Storage Grain used by In-memory Storage Provider
+    /// Implementation class for the Storage Grain used by In-memory Storage Provider
     /// </summary>
     /// <seealso cref="MemoryStorage"/>
     /// <seealso cref="IMemoryStorageGrain"/>

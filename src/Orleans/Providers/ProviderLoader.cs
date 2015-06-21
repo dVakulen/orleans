@@ -37,7 +37,7 @@ namespace Orleans.Providers
     /// Providers configuration and loading error semantics:
     /// 1) We will only load the providers that were specified in the config. 
     /// If a provider is not specified in the config, we will not attempt to load it.
-    /// Specificaly, it means both storage and streaming providers are loaded only if configured.
+    /// Specifically, it means both storage and streaming providers are loaded only if configured.
     /// 2) If a provider is specified in the config, but was not loaded (no type found, or constructor failed, or Init failed), the silo will fail to start.
     /// 
     /// Loading providers workflow and error handling implementation:
