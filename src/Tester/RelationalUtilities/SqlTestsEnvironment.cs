@@ -23,8 +23,8 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 
 using System;
 using System.IO;
-using Orleans.Runtime.Storage.Relational.Management;
-using Orleans.Runtime.Storage.Relational;
+using Orleans.SQLUtils;
+using Orleans.SQLUtils.Management;
 
 
 namespace UnitTests.General
