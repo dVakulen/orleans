@@ -23,13 +23,13 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 
 using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
-using Orleans.Runtime.Storage.Relational.Management;
-using Orleans.Runtime.Storage.Relational;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using Orleans.SQLUtils;
+using Orleans.SQLUtils.Management;
 
 
 namespace Orleans.Providers.SqlServer

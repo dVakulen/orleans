@@ -30,7 +30,7 @@ using Orleans.Runtime.Configuration;
 using Orleans.Runtime.MembershipService;
 using Orleans.TestingHost;
 using Orleans.AzureUtils;
-using Orleans.Runtime.Storage.Relational;
+using Orleans.SQLUtils;
 using UnitTests.StorageTests;
 using UnitTests.General;
 
