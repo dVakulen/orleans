@@ -149,6 +149,7 @@ namespace Orleans.Runtime.Configuration
                 using(var xw = XmlWriter.Create(sw))
                 { 
                     element.WriteTo(xw);
+                    xw.Flush();
                     return sw.ToString();
                 }
             }
