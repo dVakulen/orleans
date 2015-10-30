@@ -88,7 +88,7 @@ namespace Orleans.Runtime
 
             foreach (var assembly in assemblies)
             {
-                type = assembly.GetType(fullName, false);
+                type = assembly.GetType(fullName);
                 if (type != null)
                 {
                     return true;
