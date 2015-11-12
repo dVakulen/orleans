@@ -39,7 +39,8 @@ namespace UnitTests.MembershipTests
     /// <summary>
     /// Tests for operation of Orleans Membership Table using SQL
     /// </summary>
-    [TestClass]    
+    [TestClass]
+    [DeploymentItem("CreateOrleansTables_SqlServer.sql")]
     public class SQLMembershipTableTests
     {
         public TestContext TestContext { get; set; }
