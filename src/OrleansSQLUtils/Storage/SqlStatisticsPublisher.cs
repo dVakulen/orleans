@@ -29,11 +29,13 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using Orleans.SqlUtils;
-using Orleans.SqlUtils.Management;
 
 
 namespace Orleans.Providers.SqlServer
 {
+    /// <summary>
+    /// Plugin for publishing silos and client statistics to a SQL database.
+    /// </summary>
     public class SqlStatisticsPublisher: IConfigurableStatisticsPublisher, IConfigurableSiloMetricsDataPublisher, IConfigurableClientMetricsDataPublisher, IProvider
     {
         private string deploymentId;
@@ -45,14 +47,21 @@ namespace Orleans.Providers.SqlServer
         private string hostName;
         private bool isSilo;
         private long generation;                
-        private IRelationalStorage database;
-        private QueryConstantsBag queryConstants;
+        private RelationalOrleansQueries orleansQueries;
         private Logger logger;
         
-
+        /// <summary>
+        /// Name of the provider
+        /// </summary>
         public string Name { get; private set; }
 
-
+        /// <summary>
+        /// Initializes publisher
+        /// </summary>
+        /// <param name="name">Provider name</param>
+        /// <param name="providerRuntime">Provider runtime API</param>
+        /// <param name="config">Provider configuration</param>
+        /// <returns></returns>
         public async Task Init(string name, IProviderRuntime providerRuntime, IProviderConfiguration config)
         {
             Name = name;
@@ -62,16 +71,25 @@ namespace Orleans.Providers.SqlServer
             if (config.Properties.ContainsKey("AdoInvariant"))
                 adoInvariant = config.Properties["AdoInvariant"];
 
-            database = RelationalStorageUtilities.CreateGenericStorageInstance(adoInvariant, config.Properties["ConnectionString"]);
-
-            queryConstants = await database.InitializeOrleansQueriesAsync(); 
+            orleansQueries = await RelationalOrleansQueries.CreateInstance(adoInvariant, config.Properties["ConnectionString"]);
         }
 
+        /// <summary>
+        /// Closes provider
+        /// </summary>
+        /// <returns>Resolved task</returns>
         public Task Close()
         {
             return TaskDone.Done;
         }
 
+        /// <summary>
+        /// Adds configuration parameters
+        /// </summary>
+        /// <param name="deployment">Deployment ID</param>
+        /// <param name="hostName">Host name</param>
+        /// <param name="client">Client ID</param>
+        /// <param name="address">IP address</param>
         public void AddConfiguration(string deployment, string hostName, string client, IPAddress address)
         {
             deploymentId = deployment;
@@ -82,7 +100,15 @@ namespace Orleans.Providers.SqlServer
             generation = SiloAddress.AllocateNewGeneration();
         }
 
-
+        /// <summary>
+        /// Adds configuration parameters
+        /// </summary>
+        /// <param name="deployment">Deployment ID</param>
+        /// <param name="silo">Silo name</param>
+        /// <param name="siloId">Silo ID</param>
+        /// <param name="address">Silo address</param>
+        /// <param name="gatewayAddress">Client gateway address</param>
+        /// <param name="hostName">Host name</param>
         public void AddConfiguration(string deployment, bool silo, string siloId, SiloAddress address, IPEndPoint gatewayAddress, string hostName)
         {
             deploymentId = deployment;
@@ -99,20 +125,21 @@ namespace Orleans.Providers.SqlServer
 
 
         async Task IClientMetricsDataPublisher.Init(ClientConfiguration config, IPAddress address, string clientId)
-        {          
-            database = RelationalStorageUtilities.CreateGenericStorageInstance(config.AdoInvariant, config.DataConnectionString);
-            
-            queryConstants = await database.InitializeOrleansQueriesAsync();
+        {
+            orleansQueries = await RelationalOrleansQueries.CreateInstance(config.AdoInvariant, config.DataConnectionString);
         }
 
-
+        /// <summary>
+        /// Writes metrics to the database
+        /// </summary>
+        /// <param name="metricsData">Metrics data</param>
+        /// <returns>Task for database operation</returns>
         public Task ReportMetrics(IClientPerformanceMetrics metricsData)
         {
             if(logger != null && logger.IsVerbose3) logger.Verbose3("SqlStatisticsPublisher.ReportMetrics (client) called with data: {0}.", metricsData);
             try
             {
-                var query = queryConstants.GetConstant(database.InvariantName, QueryKeys.UpsertReportClientMetricsKey);
-                return database.UpsertReportClientMetricsAsync(query, deploymentId, clientId, clientAddress, hostName, metricsData);
+                return orleansQueries.UpsertReportClientMetricsAsync(deploymentId, clientId, clientAddress, hostName, metricsData);
             }
             catch(Exception ex)
             {
@@ -122,19 +149,22 @@ namespace Orleans.Providers.SqlServer
         }
 
 
-        async Task ISiloMetricsDataPublisher.Init(string deploymentId, string storageConnectionString, SiloAddress siloAddress, string siloName, IPEndPoint gateway, string hostName)
-        {            
-            await database.InitializeOrleansQueriesAsync();
+        Task ISiloMetricsDataPublisher.Init(string deploymentId, string storageConnectionString, SiloAddress siloAddress, string siloName, IPEndPoint gateway, string hostName)
+        {
+            return TaskDone.Done;
         }
 
-
+        /// <summary>
+        /// Writes silo performance metrics to the database
+        /// </summary>
+        /// <param name="metricsData">Metrics data</param>
+        /// <returns>Task for database operation</returns>
         public Task ReportMetrics(ISiloPerformanceMetrics metricsData)
         {
             if (logger != null && logger.IsVerbose3) logger.Verbose3("SqlStatisticsPublisher.ReportMetrics (silo) called with data: {0}.", metricsData);
             try
             {
-                var query = queryConstants.GetConstant(database.InvariantName, QueryKeys.UpsertSiloMetricsKey);
-                return database.UpsertSiloMetricsAsync(query, deploymentId, siloName, gateway, siloAddress, hostName, metricsData);
+                return orleansQueries.UpsertSiloMetricsAsync(deploymentId, siloName, gateway, siloAddress, hostName, metricsData);
             }
             catch(Exception ex)
             {
@@ -149,6 +179,11 @@ namespace Orleans.Providers.SqlServer
             return TaskDone.Done;
         }
 
+        /// <summary>
+        /// Writes statistics to the database
+        /// </summary>
+        /// <param name="statsCounters">Statistics counters to write</param>
+        /// <returns>Task for database opearation</returns>
         public async Task ReportStats(List<ICounter> statsCounters)
         {
             var siloOrClientName = (isSilo) ? siloName : clientId;
@@ -165,8 +200,7 @@ namespace Orleans.Providers.SqlServer
                 foreach(var counterBatch in counterBatches)
                 {
                     //The query template from which to retrieve the set of columns that are being inserted.
-                    var queryTemplate = queryConstants.GetConstant(database.InvariantName, QueryKeys.InsertOrleansStatisticsKey);
-                    insertTasks.Add(database.InsertStatisticsCountersAsync(queryTemplate, deploymentId, hostName, siloOrClientName, id, counterBatch));
+                    insertTasks.Add(orleansQueries.InsertStatisticsCountersAsync(deploymentId, hostName, siloOrClientName, id, counterBatch));
                 }
                 
                 await Task.WhenAll(insertTasks);                

@@ -186,9 +186,9 @@ namespace Orleans.Runtime.Management
             }
             
             using(var sw = new StringWriter())
-            {
-                using(XmlWriter xw = XmlWriter.Create(sw))
-                {
+            { 
+                using(var xw = XmlWriter.Create(sw))
+                { 
                     document.WriteTo(xw);
                     xw.Flush();
                     var xml = sw.ToString();

@@ -143,6 +143,7 @@ namespace UnitTests.General
             public static object Deserializer(System.Type expected, global::Orleans.Serialization.BinaryTokenStreamReader stream)
             {
                 TestTypeA result = new TestTypeA();
+                DeserializationContext.Current.RecordObject(result);
                 result.Collection = ((System.Collections.Generic.ICollection<TestTypeA>)(Orleans.Serialization.SerializationManager.DeserializeInner(typeof(System.Collections.Generic.ICollection<TestTypeA>), stream)));
                 return result;
             }
@@ -153,7 +154,6 @@ namespace UnitTests.General
             }
         }
 
-        [Ignore]
         [TestMethod, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization")]
         public void SerializationTests_RecursiveSerialization()
         {
@@ -166,7 +166,7 @@ namespace UnitTests.General
             TestTypeA output2 = SerializationManager.RoundTripSerializationForTesting(input);
         }
 
-        [TestMethod, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization")]
+        [TestMethod, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
         public void SerializationTests_JObject_Example1()
         {
             const string json = @"{ 
@@ -216,7 +216,7 @@ namespace UnitTests.General
             }
         }
         
-        [TestMethod, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization")]
+        [TestMethod, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
         public void SerializationTests_Json_InnerTypes_TypeNameHandling()
         {
             var original = new RootType();
@@ -235,7 +235,7 @@ namespace UnitTests.General
             Console.WriteLine("Done OK.");
         }
 
-        [TestMethod, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization")]
+        [TestMethod, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
         public void SerializationTests_Json_InnerTypes_NoTypeNameHandling()
         {
             var original = new RootType();
@@ -302,7 +302,7 @@ namespace UnitTests.General
                 return JsonConvert.DeserializeObject(str, expected);
             }
 
-            private static void Register()
+            public static void Register()
             {
                 foreach (var type in new[]
                     {

@@ -34,6 +34,7 @@ namespace Orleans.Streams
     internal class PersistentStreamPullingAgent : SystemTarget, IPersistentStreamPullingAgent
     {
         private static readonly IBackoffProvider DefaultBackoffProvider = new ExponentialBackoff(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(1));
+        private static readonly IStreamFilterPredicateWrapper DefaultStreamFilter =new DefaultStreamFilterPredicateWrapper();
         private const int StreamInactivityCheckFrequency = 10;
 
         private readonly string streamProviderName;
@@ -240,12 +241,12 @@ namespace Orleans.Streams
 
             StreamConsumerData data;
             if (!streamDataCollection.TryGetConsumer(subscriptionId, out data))
-                data = streamDataCollection.AddConsumer(subscriptionId, streamId, streamConsumer, filter);
+                data = streamDataCollection.AddConsumer(subscriptionId, streamId, streamConsumer, filter ?? DefaultStreamFilter);
 
             if (await DoHandshakeWithConsumer(data, cacheToken))
             {
                 if (data.State == StreamConsumerDataState.Inactive)
-                    RunConsumerCursor(data, filter).Ignore(); // Start delivering events if not actively doing so
+                    RunConsumerCursor(data, data.Filter).Ignore(); // Start delivering events if not actively doing so
             }
         }
 
@@ -504,12 +505,20 @@ namespace Orleans.Streams
                         numSentMessagesCounter.Increment();
                         if (batch != null)
                         {
-                            await AsyncExecutorWithRetries.ExecuteWithRetries(
+                            StreamHandshakeToken newToken = await AsyncExecutorWithRetries.ExecuteWithRetries(
                                 i => DeliverBatchToConsumer(consumerData, batch),
                                 AsyncExecutorWithRetries.INFINITE_RETRIES,
-                                (exception, i) => !(exception is DataNotAvailableException),
+                                (exception, i) => true,
                                 config.MaxEventDeliveryTime,
                                 DefaultBackoffProvider);
+                            if (newToken != null)
+                            {
+                                consumerData.LastToken = newToken;
+                                IQueueCacheCursor newCursor = queueCache.GetCacheCursor(consumerData.StreamId.Guid,
+                                    consumerData.StreamId.Namespace, newToken.Token);
+                                consumerData.SafeDisposeCursor(logger);
+                                consumerData.Cursor = newCursor;
+                            }
                         }
                     }
                     catch (Exception exc)
@@ -536,7 +545,7 @@ namespace Orleans.Streams
             }
         }
 
-        private async Task DeliverBatchToConsumer(StreamConsumerData consumerData, IBatchContainer batch)
+        private async Task<StreamHandshakeToken> DeliverBatchToConsumer(StreamConsumerData consumerData, IBatchContainer batch)
         {
             StreamHandshakeToken prevToken = consumerData.LastToken;
             Task<StreamHandshakeToken> batchDeliveryTask;
@@ -555,17 +564,8 @@ namespace Orleans.Streams
                 }
             }
             StreamHandshakeToken newToken = await batchDeliveryTask;
-            if (newToken != null)
-            {
-                consumerData.LastToken = newToken;
-                consumerData.Cursor = queueCache.GetCacheCursor(consumerData.StreamId.Guid,
-                    consumerData.StreamId.Namespace, newToken.Token);
-            }
-            else
-            {
-                consumerData.LastToken = StreamHandshakeToken.CreateDeliveyToken(batch.SequenceToken); // this is the currently delivered token
-            }
-
+            consumerData.LastToken = StreamHandshakeToken.CreateDeliveyToken(batch.SequenceToken); // this is the currently delivered token
+            return newToken;
         }
 
         private static async Task DeliverErrorToConsumer(StreamConsumerData consumerData, Exception exc, IBatchContainer batch)

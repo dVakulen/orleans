@@ -23,6 +23,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Net;
 using Orleans.Runtime;
@@ -83,6 +84,8 @@ namespace Orleans.Serialization
         {
             var count = stream.ReadInt();
             var list = new List<T>(count);
+            DeserializationContext.Current.RecordObject(list);
+
             for (var i = 0; i < count; i++)
             {
                 list.Add((T)SerializationManager.DeserializeInner(typeof(T), stream));
@@ -150,6 +153,7 @@ namespace Orleans.Serialization
         {
             var count = stream.ReadInt();
             var list = new LinkedList<T>();
+            DeserializationContext.Current.RecordObject(list);
             for (var i = 0; i < count; i++)
             {
                 list.AddLast((T)SerializationManager.DeserializeInner(typeof(T), stream));
@@ -223,6 +227,7 @@ namespace Orleans.Serialization
                 (IEqualityComparer<T>)SerializationManager.DeserializeInner(typeof(IEqualityComparer<T>), stream);
             var count = stream.ReadInt();
             var set = new HashSet<T>(comparer);
+            DeserializationContext.Current.RecordObject(set);
             for (var i = 0; i < count; i++)
             {
                 set.Add((T)SerializationManager.DeserializeInner(typeof(T), stream));
@@ -248,6 +253,75 @@ namespace Orleans.Serialization
             return retVal;
         }
 
+        internal static void SerializeGenericSortedSet(object original, BinaryTokenStreamWriter stream, Type expected)
+        {
+            Type t = original.GetType();
+            var generics = t.GetGenericArguments();
+            var concretes = RegisterConcreteMethods(t, "SerializeSortedSet", "DeserializeSortedSet", "DeepCopySortedSet", generics);
+
+            concretes.Item1(original, stream, expected);
+        }
+
+        internal static object DeserializeGenericSortedSet(Type expected, BinaryTokenStreamReader stream)
+        {
+            var generics = expected.GetGenericArguments();
+            var concretes = RegisterConcreteMethods(expected, "SerializeSortedSet", "DeserializeSortedSet", "DeepCopySortedSet", generics);
+
+            return concretes.Item2(expected, stream);
+        }
+
+        internal static object CopyGenericSortedSet(object original)
+        {
+            Type t = original.GetType();
+            var generics = t.GetGenericArguments();
+            var concretes = RegisterConcreteMethods(t, "SerializeSortedSet", "DeserializeSortedSet", "DeepCopySortedSet", generics);
+
+            return concretes.Item3(original);
+        }
+
+        internal static void SerializeSortedSet<T>(object obj, BinaryTokenStreamWriter stream, Type expected)
+        {
+            var set = (SortedSet<T>)obj;
+            SerializationManager.SerializeInner(set.Comparer.Equals(Comparer<T>.Default) ? null : set.Comparer,
+                stream, typeof(IComparer<T>));
+            stream.Write(set.Count);
+            foreach (var element in set)
+            {
+                SerializationManager.SerializeInner(element, stream, typeof(T));
+            }
+        }
+
+        internal static object DeserializeSortedSet<T>(Type expected, BinaryTokenStreamReader stream)
+        {
+            var comparer =
+                (IComparer<T>)SerializationManager.DeserializeInner(typeof(IComparer<T>), stream);
+            var count = stream.ReadInt();
+            var set = new SortedSet<T>(comparer);
+            DeserializationContext.Current.RecordObject(set);
+            for (var i = 0; i < count; i++)
+            {
+                set.Add((T)SerializationManager.DeserializeInner(typeof(T), stream));
+            }
+            return set;
+        }
+
+        internal static object DeepCopySortedSet<T>(object original)
+        {
+            var set = (SortedSet<T>)original;
+
+            if (typeof(T).IsOrleansShallowCopyable())
+            {
+                return new SortedSet<T>(set, set.Comparer);
+            }
+
+            var retVal = new SortedSet<T>(set.Comparer);
+            SerializationContext.Current.RecordObject(original, retVal);
+            foreach (var item in set)
+            {
+                retVal.Add((T)SerializationManager.DeepCopyInner(item));
+            }
+            return retVal;
+        }
         #endregion
 
         #region Queues
@@ -292,6 +366,7 @@ namespace Orleans.Serialization
         {
             var count = stream.ReadInt();
             var queue = new Queue<T>();
+            DeserializationContext.Current.RecordObject(queue);
             for (var i = 0; i < count; i++)
             {
                 queue.Enqueue((T)SerializationManager.DeserializeInner(typeof(T), stream));
@@ -361,12 +436,18 @@ namespace Orleans.Serialization
         {
             var count = stream.ReadInt();
             var list = new List<T>(count);
+            var stack = new Stack<T>(count);
+            DeserializationContext.Current.RecordObject(stack);
             for (var i = 0; i < count; i++)
             {
                 list.Add((T)SerializationManager.DeserializeInner(typeof(T), stream));
             }
-            list.Reverse(); // NOTE: this is required to get things on the stack in the original order
-            var stack = new Stack<T>(list);
+
+            for (var i = count - 1; i >= 0; i--)
+            {
+                stack.Push(list[i]);
+            }
+
             return stack;
         }
 
@@ -417,7 +498,7 @@ namespace Orleans.Serialization
         {
             var dict = (Dictionary<K, V>)original;
             SerializationManager.SerializeInner(dict.Comparer.Equals(EqualityComparer<K>.Default) ? null : dict.Comparer,
-                                           stream, typeof (IEqualityComparer<K>));
+                                           stream, typeof(IEqualityComparer<K>));
             stream.Write(dict.Count);
             foreach (var pair in dict)
             {
@@ -431,6 +512,7 @@ namespace Orleans.Serialization
             var comparer = (IEqualityComparer<K>)SerializationManager.DeserializeInner(typeof(IEqualityComparer<K>), stream);
             var count = stream.ReadInt();
             var dict = new Dictionary<K, V>(count, comparer);
+            DeserializationContext.Current.RecordObject(dict);
             for (var i = 0; i < count; i++)
             {
                 var key = (K)SerializationManager.DeserializeInner(typeof(K), stream);
@@ -477,6 +559,7 @@ namespace Orleans.Serialization
             var comparer = (IEqualityComparer<string>)SerializationManager.DeserializeInner(typeof(IEqualityComparer<string>), stream);
             var count = stream.ReadInt();
             var dict = new Dictionary<string, object>(count, comparer);
+            DeserializationContext.Current.RecordObject(dict);
             for (var i = 0; i < count; i++)
             {
                 //stream.ReadFullTypeHeader(stringType); // Skip the type header, which will be string
@@ -541,6 +624,7 @@ namespace Orleans.Serialization
             var comparer = (IComparer<K>)SerializationManager.DeserializeInner(typeof(IComparer<K>), stream);
             var count = stream.ReadInt();
             var dict = new SortedDictionary<K, V>(comparer);
+            DeserializationContext.Current.RecordObject(dict);
             for (var i = 0; i < count; i++)
             {
                 var key = (K)SerializationManager.DeserializeInner(typeof(K), stream);
@@ -609,6 +693,7 @@ namespace Orleans.Serialization
             var comparer = (IComparer<K>)SerializationManager.DeserializeInner(typeof(IComparer<K>), stream);
             var count = stream.ReadInt();
             var list = new SortedList<K, V>(count, comparer);
+            DeserializationContext.Current.RecordObject(list);
             for (var i = 0; i < count; i++)
             {
                 var key = (K)SerializationManager.DeserializeInner(typeof(K), stream);
@@ -963,7 +1048,7 @@ namespace Orleans.Serialization
                 return new T?();
             }
 
-            var val = (T) SerializationManager.DeserializeInner(typeof (T), stream);
+            var val = (T)SerializationManager.DeserializeInner(typeof(T), stream);
             return new Nullable<T>(val);
         }
 
@@ -998,7 +1083,7 @@ namespace Orleans.Serialization
 
         internal static void SerializeImmutable<T>(object original, BinaryTokenStreamWriter stream, Type expected)
         {
-            var obj = (Immutable<T>) original;
+            var obj = (Immutable<T>)original;
             SerializationManager.SerializeInner(obj.Value, stream, typeof(T));
         }
 
@@ -1016,7 +1101,7 @@ namespace Orleans.Serialization
         #endregion
 
         #endregion
-        
+
         #region Other System types
 
         #region TimeSpan
@@ -1083,7 +1168,7 @@ namespace Orleans.Serialization
 
         internal static void SerializeGuid(object obj, BinaryTokenStreamWriter stream, Type expected)
         {
-            var guid = (Guid) obj;
+            var guid = (Guid)obj;
             stream.Write(guid.ToByteArray());
         }
 
@@ -1103,17 +1188,17 @@ namespace Orleans.Serialization
         #region URIs
 
         [ThreadStatic]
-        static private UriTypeConverter uriConverter;
+        static private TypeConverter uriConverter;
 
         internal static void SerializeUri(object obj, BinaryTokenStreamWriter stream, Type expected)
         {
-            if (uriConverter == null) uriConverter = new UriTypeConverter();
+            if (uriConverter == null) uriConverter = TypeDescriptor.GetConverter(typeof(Uri));
             stream.Write(uriConverter.ConvertToInvariantString(obj));
         }
 
         internal static object DeserializeUri(Type expected, BinaryTokenStreamReader stream)
         {
-            if (uriConverter == null) uriConverter = new UriTypeConverter();
+            if (uriConverter == null) uriConverter = TypeDescriptor.GetConverter(typeof(Uri));
             return uriConverter.ConvertFromInvariantString(stream.ReadString());
         }
 
@@ -1132,7 +1217,7 @@ namespace Orleans.Serialization
 
         internal static void SerializeGrainId(object obj, BinaryTokenStreamWriter stream, Type expected)
         {
-            var id = (GrainId) obj;
+            var id = (GrainId)obj;
             stream.Write(id);
         }
 
@@ -1212,7 +1297,7 @@ namespace Orleans.Serialization
 
         internal static void SerializeCorrelationId(object obj, BinaryTokenStreamWriter stream, Type expected)
         {
-            var id = (CorrelationId) obj;
+            var id = (CorrelationId)obj;
             stream.Write(id);
         }
 
@@ -1352,15 +1437,15 @@ namespace Orleans.Serialization
                 genericArgs = t.GetGenericArguments();
             }
 
-            var genericCopier = typeof(BuiltInTypes).GetMethod(copierName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var genericCopier = typeof(BuiltInTypes).GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Where(m => m.Name == copierName).FirstOrDefault();
             var concreteCopier = genericCopier.MakeGenericMethod(genericArgs);
             var copier = (SerializationManager.DeepCopier)concreteCopier.CreateDelegate(typeof(SerializationManager.DeepCopier));
 
-            var genericSerializer = typeof(BuiltInTypes).GetMethod(serializerName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var genericSerializer = typeof(BuiltInTypes).GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Where(m => m.Name == serializerName).FirstOrDefault();
             var concreteSerializer = genericSerializer.MakeGenericMethod(genericArgs);
             var serializer = (SerializationManager.Serializer)concreteSerializer.CreateDelegate(typeof(SerializationManager.Serializer));
 
-            var genericDeserializer = typeof(BuiltInTypes).GetMethod(deserializerName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var genericDeserializer = typeof(BuiltInTypes).GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Where(m => m.Name == deserializerName).FirstOrDefault();
             var concreteDeserializer = genericDeserializer.MakeGenericMethod(genericArgs);
             var deserializer =
                 (SerializationManager.Deserializer)concreteDeserializer.CreateDelegate(typeof(SerializationManager.Deserializer));
@@ -1378,15 +1463,15 @@ namespace Orleans.Serialization
                 genericArgs = concreteType.GetGenericArguments();
             }
 
-            var genericCopier = definingType.GetMethod(copierName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var genericCopier = definingType.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Where(m => m.Name == copierName).FirstOrDefault();
             var concreteCopier = genericCopier.MakeGenericMethod(genericArgs);
             var copier = (SerializationManager.DeepCopier)concreteCopier.CreateDelegate(typeof(SerializationManager.DeepCopier));
 
-            var genericSerializer = definingType.GetMethod(serializerName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var genericSerializer = definingType.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Where(m => m.Name == serializerName).FirstOrDefault();
             var concreteSerializer = genericSerializer.MakeGenericMethod(genericArgs);
             var serializer = (SerializationManager.Serializer)concreteSerializer.CreateDelegate(typeof(SerializationManager.Serializer));
 
-            var genericDeserializer = definingType.GetMethod(deserializerName, System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            var genericDeserializer = definingType.GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic).Where(m => m.Name == deserializerName).FirstOrDefault();
             var concreteDeserializer = genericDeserializer.MakeGenericMethod(genericArgs);
             var deserializer =
                 (SerializationManager.Deserializer)concreteDeserializer.CreateDelegate(typeof(SerializationManager.Deserializer));
