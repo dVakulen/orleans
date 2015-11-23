@@ -37,6 +37,7 @@ namespace Orleans.Core
         private readonly IStorageProvider store;
         private readonly Grain grain;
         private readonly string grainTypeName;
+        private string eTag;
 
         public GrainStateStorageBridge(string grainTypeName, Grain grain, IStorageProvider store)
         {
@@ -68,8 +69,13 @@ namespace Orleans.Core
             GrainReference grainRef = grain.GrainReference;
             try
             {
-                await store.ReadStateAsync(grainTypeName, grainRef, grain.GrainState);
-                
+                var etagged = await store.ReadStateAsync(grainTypeName, grainRef, grain.GrainState);
+                grain.GrainState = etagged.State;
+                if (!string.IsNullOrEmpty(etagged.ETag))
+                {
+                    eTag = etagged.ETag;
+                }
+
                 StorageStatisticsGroup.OnStorageRead(store, grainTypeName, grainRef, sw.Elapsed);
             }
             catch (Exception exc)
@@ -97,8 +103,7 @@ namespace Orleans.Core
             Exception errorOccurred;
             try
             {
-                await store.WriteStateAsync(grainTypeName, grainRef, grain.GrainState);
-
+                eTag = await store.WriteStateAsync(grainTypeName, grainRef, new ETagged<object>(grain.GrainState, eTag));
                 StorageStatisticsGroup.OnStorageWrite(store, grainTypeName, grainRef, sw.Elapsed);
                 errorOccurred = null;
             }
@@ -152,9 +157,10 @@ namespace Orleans.Core
             try
             {
                 // Clear (most likely Delete) state from external storage
-                await store.ClearStateAsync(grainTypeName, grainRef, grain.GrainState);
+                eTag = await store.ClearStateAsync(grainTypeName, grainRef, new ETagged<object>(grain.GrainState, eTag));
+
                 // Null out the in-memory copy of the state
-                grain.GrainState.SetAll(null);
+                grain.GrainState = null;
 
                 // Update counters
                 StorageStatisticsGroup.OnStorageDelete(store, grainTypeName, grainRef, sw.Elapsed);

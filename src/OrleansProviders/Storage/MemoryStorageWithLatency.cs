@@ -84,19 +84,19 @@ namespace Orleans.Storage
             await MakeFixedLatencyCall(() => base.Close());
         }
 
-        public override async Task ReadStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+        public override async Task<ETagged<TState>> ReadStateAsync<TState>(string grainType, GrainReference grainReference, TState grainState)
         {
-            await MakeFixedLatencyCall(() => base.ReadStateAsync(grainType, grainReference, grainState));
+            return await MakeFixedLatencyCall(() => base.ReadStateAsync(grainType, grainReference, grainState));
         }
 
-        public override async Task WriteStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+        public override async Task<string> WriteStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
         {
-            await MakeFixedLatencyCall(() => base.WriteStateAsync(grainType, grainReference, grainState));
+           return await MakeFixedLatencyCall(() => base.WriteStateAsync(grainType, grainReference, grainState));
         }
 
-        public override async Task ClearStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+        public override async Task<string> ClearStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
         {
-            await MakeFixedLatencyCall(() => base.ClearStateAsync(grainType, grainReference, grainState));
+            return await MakeFixedLatencyCall(() => base.ClearStateAsync(grainType, grainReference, grainState));
         }
 
         private async Task MakeFixedLatencyCall(Func<Task> action)
@@ -129,8 +129,45 @@ namespace Orleans.Storage
             if (error != null)
             {
                 // Wrap in AggregateException so that the original error stack trace is preserved.
+                throw new AggregateException(error);
+            }
+        }
+
+        private async Task<TResult> MakeFixedLatencyCall<TResult>(Func<Task<TResult>> action)
+        {
+            var sw = Stopwatch.StartNew();
+            Exception error = null;
+            TResult res = default(TResult);
+            try
+            {
+                if (mockCallsOnly)
+                {
+                    // Simulated call with slight delay
+                    await Task.Delay(10);
+                }
+                else
+                {
+                    // Make the real call
+                    res =  await action();
+                }
+            }
+            catch (Exception exc)
+            {
+                error = exc;
+            }
+
+            if (sw.Elapsed < latency)
+            {
+                await Task.Delay(latency.Subtract(sw.Elapsed));
+            }
+
+            if (error != null)
+            {
+                // Wrap in AggregateException so that the original error stack trace is preserved.
                 throw new AggregateException(error); 
             }
+
+            return res;
         }
     }
 }

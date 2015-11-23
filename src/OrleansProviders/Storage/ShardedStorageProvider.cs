@@ -70,6 +70,7 @@ namespace Orleans.Storage
         private IStorageProvider[] storageProviders;
         private static int counter;
         private readonly int id;
+        private string etag;
 
         /// <summary>
         /// Default constructor.
@@ -137,16 +138,16 @@ namespace Orleans.Storage
 
         /// <summary> Read state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#ReadStateAsync"/>
-        public Task ReadStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+        public Task<ETagged<TState>> ReadStateAsync<TState>(string grainType, GrainReference grainReference, TState grainState)
         {
             int num = FindStorageShard(grainType, grainReference);
             IStorageProvider provider = storageProviders[num];
-            return provider.ReadStateAsync(grainType, grainReference, grainState);
+            return provider.ReadStateAsync<TState>(grainType, grainReference, grainState);
         }
 
         /// <summary> Write state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#WriteStateAsync"/>
-        public Task WriteStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+        public Task<string> WriteStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
         {
             int num = FindStorageShard(grainType, grainReference);
             IStorageProvider provider = storageProviders[num];
@@ -155,7 +156,7 @@ namespace Orleans.Storage
 
         /// <summary> Deleet / Clear state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#ClearStateAsync"/>
-        public Task ClearStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+        public Task<string> ClearStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
         {
             int num = FindStorageShard(grainType, grainReference);
             IStorageProvider provider = storageProviders[num];

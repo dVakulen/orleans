@@ -22,55 +22,20 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 */
 
 using System;
-using System.Threading.Tasks;
-using Orleans;
 
-namespace UnitTests.GrainInterfaces
+namespace Orleans.Runtime
 {
     [Serializable]
-    public class MyObserverSubscriptionManager<T> : ObserverSubscriptionManager<T> where T : IGrainObserver
+    public class ETagged<T>
     {
-        public int Foo { get; set; }
-    }
+        public T State { get; set; }
 
-    [Serializable]
-    public class MyState<T>
-         where T : IGrainObserver
-    {
-        public MyObserverSubscriptionManager<T> Subscription { get; set; }
-    }
+        public string ETag { get; set; }
 
-    public class MyGrain<T> : Grain<MyState<T>>, ISimpleGrain
-        where T : IGrainObserver
-    {
-        public Task SetA(int a)
+        public ETagged(T state, string eTag)
         {
-            throw new NotImplementedException();
-        }
-
-        public Task SetB(int b)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task IncrementA()
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<int> GetAxB()
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<int> GetAxB(int a, int b)
-        {
-            throw new NotImplementedException();
-        }
-
-        public Task<int> GetA()
-        {
-            throw new NotImplementedException();
+            State = state;
+            ETag = eTag;
         }
     }
 }

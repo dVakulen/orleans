@@ -653,16 +653,7 @@ namespace Orleans.Runtime
             grain.Data = data;
 
             Type stateObjectType = grainTypeData.StateObjectType;
-            GrainState state;
-            if (stateObjectType != null)
-            {
-                state = (GrainState) Activator.CreateInstance(stateObjectType);
-                state.InitState(null);
-            }
-            else
-            {
-                state = null;
-            }
+            var state = stateObjectType != null ? Activator.CreateInstance(stateObjectType) : null;
 
             lock (data)
             {
@@ -740,9 +731,13 @@ namespace Orleans.Runtime
                 {
                     var grainRef = result.GrainReference;
 
-                    await scheduler.RunOrQueueTask(() =>
+                    var etagged = await scheduler.RunOrQueueTask(() =>
                         result.StorageProvider.ReadStateAsync(grainType, grainRef, state),
                         new SchedulingContext(result));
+                    if (etagged.State != null) // if state not found in storage just keeping the default one
+                    {
+                        state = etagged.State;
+                    }
 
                     sw.Stop();
                     StorageStatisticsGroup.OnStorageActivate(result.StorageProvider, grainType, result.GrainReference, sw.Elapsed);

@@ -23,6 +23,7 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Orleans.Runtime;
 
 namespace Orleans.Storage
 {
@@ -37,7 +38,7 @@ namespace Orleans.Storage
         /// <param name="grainType">Type of this grain [fully qualified class name]</param>
         /// <param name="grainId">Grain id for this grain.</param>
         /// <returns>Value promise for the currently stored grain state for the specified grain.</returns>
-        Task<IDictionary<string, object>> ReadStateAsync(string grainType, string grainId);
+        Task<ETagged<object>> ReadStateAsync(string grainType, string grainId);
         
         /// <summary>
         /// Async method to cause update of the specified grain state data into memory store.
@@ -46,7 +47,7 @@ namespace Orleans.Storage
         /// <param name="grainId">Grain id for this grain.</param>
         /// <param name="grainState">New state data to be stored for this grain.</param>
         /// <returns>Completion promise for the update operation for stored grain state for the specified grain.</returns>
-        Task WriteStateAsync(string grainType, string grainId, IDictionary<string, object> grainState);
+        Task WriteStateAsync(string grainType, string grainId, ETagged<object> grainState);
 
         /// <summary>
         /// Async method to cause deletion of the specified grain state data from memory store.
@@ -54,6 +55,6 @@ namespace Orleans.Storage
         /// <param name="grainType">Type of this grain [fully qualified class name]</param>
         /// <param name="grainId">Grain id for this grain.</param>
         /// <returns>Completion promise for the update operation for stored grain state for the specified grain.</returns>
-        Task DeleteStateAsync(string grainType, string grainId);
+        Task DeleteStateAsync(string grainType, string grainId, string etag);
     }
 }

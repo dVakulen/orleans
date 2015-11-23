@@ -23,7 +23,9 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
+using Orleans.Runtime;
 
 namespace Orleans.Storage
 {
@@ -50,24 +52,24 @@ namespace Orleans.Storage
             return TaskDone.Done;
         }
 
-        public Task<IDictionary<string, object>> ReadStateAsync(string grainType, string grainId)
+        public Task<ETagged<object>> ReadStateAsync(string grainType, string grainId)
         {
             GrainStateStore storage = GetStoreForGrain(grainType);
             var state = storage.GetGrainState(grainId);
             return Task.FromResult(state);
         }
 
-        public Task WriteStateAsync(string grainType, string grainId, IDictionary<string, object> grainState)
+        public Task WriteStateAsync(string grainType, string grainId, ETagged<object> grainState)
         {
             GrainStateStore storage = GetStoreForGrain(grainType);
             storage.UpdateGrainState(grainId, grainState);
             return TaskDone.Done;
         }
 
-        public Task DeleteStateAsync(string grainType, string grainId)
+        public Task DeleteStateAsync(string grainType, string grainId, string etag)
         {
             GrainStateStore storage = GetStoreForGrain(grainType);
-            storage.DeleteGrainState(grainId);
+            storage.DeleteGrainState(grainId, etag);
             return TaskDone.Done;
         }
 
@@ -79,28 +81,77 @@ namespace Orleans.Storage
                 storage = new GrainStateStore();
                 grainStore.Add(grainType, storage);
             }
+
             return storage;
         }
 
         private class GrainStateStore
         {
-            private readonly IDictionary<string, IDictionary<string, object>> grainStateStorage = new Dictionary<string, IDictionary<string, object>>();
+            private readonly IDictionary<string, StoreEntry> grainStateStorage = new Dictionary<string, StoreEntry>();
 
-            public IDictionary<string, object> GetGrainState(string grainId)
+            public ETagged<object> GetGrainState(string grainId)
             {
-                IDictionary<string, object> state;
-                grainStateStorage.TryGetValue(grainId, out state);
-                return state;
+                StoreEntry entry;
+                grainStateStorage.TryGetValue(grainId, out entry);
+                if (entry == null) return null;
+                entry.Etag = NewEtag();
+
+                return new ETagged<object>(entry.State, entry.Etag);
             }
 
-            public void UpdateGrainState(string grainId, IDictionary<string, object> state)
+            public void UpdateGrainState(string grainId, ETagged<object> grainState)
             {
-                grainStateStorage[grainId] = state;
+                StoreEntry entry;
+                grainStateStorage.TryGetValue(grainId, out entry);
+                if (entry == null)
+                {
+                    entry = new StoreEntry(grainState.ETag, grainState.State);
+                }
+                else if (grainState.ETag != null && entry.Etag != null && grainState.ETag != entry.Etag)
+                {
+                    throw new InconsistentStateException(
+                        string.Format("Etag mismatch during Write: Expected = {0} Received = {1}", entry.Etag,
+                            grainState.ETag));
+                }
+                else
+                {
+                    entry.State = grainState.State;
+                }
+
+                grainStateStorage[grainId] = entry;
             }
 
-            public void DeleteGrainState(string grainId)
+            public void DeleteGrainState(string grainId, string eTag)
             {
+                StoreEntry entry;
+                grainStateStorage.TryGetValue(grainId, out entry);
+                if (entry == null)
+                {
+                    return;
+                }
+
+                if (entry.Etag != null && entry.Etag != eTag)
+                    throw new InconsistentStateException(string.Format("Etag mismatch during Delete: Expected = {0} Received = {1}", entry.Etag, eTag));
+
                 grainStateStorage.Remove(grainId);
+            }
+
+            private static string NewEtag()
+            {
+                return DateTime.UtcNow.ToString(CultureInfo.InvariantCulture);
+            }
+
+            private class StoreEntry
+            {
+                public string Etag { get; set; }
+
+                public object State { get; set; }
+
+                public StoreEntry(string etag, object state)
+                {
+                    Etag = etag;
+                    State = state;
+                }
             }
         }
     }
