@@ -23,16 +23,43 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 
 using System;
 
-namespace Orleans.Runtime
+namespace Orleans
 {
-    [Serializable]
-    public class ETagged<T>
+    public interface IGrainState
     {
-        public T State { get; set; }
+        object State { get; set; }
+        string ETag { get; set; }
+    }
+
+    [Serializable]
+    public class GrainState<T> : IGrainState
+    {
+        public T State;
+
+        object IGrainState.State
+        {
+            get
+            {
+                return State;
+                
+            }
+            set
+            {
+                State = (T)value;
+            }
+        }
 
         public string ETag { get; set; }
 
-        public ETagged(T state, string eTag)
+        public GrainState()
+        {
+        }
+
+        public GrainState(T state) : this(state, null)
+        {
+        }
+
+        public GrainState(T state, string eTag)
         {
             State = state;
             ETag = eTag;

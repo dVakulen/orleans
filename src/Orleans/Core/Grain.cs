@@ -41,10 +41,6 @@ namespace Orleans
     {
         private IGrainRuntime runtime;
 
-        internal object GrainState { get; set; }
-
-        internal IStorage Storage { get; set; }
-
         // Do not use this directly because we currently don't provide a way to inject it;
         // any interaction with it will result in non unit-testable code. Any behaviour that can be accessed 
         // from within client code (including subclasses of this class), should be exposed through IGrainRuntime.
@@ -278,9 +274,12 @@ namespace Orleans
     /// Base class for a Grain with declared persistent state.
     /// </summary>
     /// <typeparam name="TGrainState">The class of the persistent state object</typeparam>
-    public class Grain<TGrainState> : Grain 
+    public class Grain<TGrainState> : Grain, IStatefulGrain
         where TGrainState : class
     {
+        private readonly GrainState<TGrainState> grainState;
+
+        private IStorage storage { get; set; }
 
         /// <summary>
         /// This constructor should never be invoked. We expose it so that client code (subclasses of this class) do not have to add a constructor.
@@ -288,6 +287,7 @@ namespace Orleans
         /// </summary>
         protected Grain() : base()
         {
+            grainState = new GrainState<TGrainState>();
         }
 
         /// <summary>
@@ -301,8 +301,8 @@ namespace Orleans
         protected Grain(IGrainIdentity identity, IGrainRuntime runtime, TGrainState state, IStorage storage) 
             : base(identity, runtime)
         {
-            GrainState = state;
-            Storage = storage;
+            grainState = new GrainState<TGrainState>(state);
+            this.storage = storage;
         }
 
         /// <summary>
@@ -310,22 +310,33 @@ namespace Orleans
         /// </summary>
         protected TGrainState State
         {
-            get { return (TGrainState)GrainState; }
+            get { return grainState.State; }
+            set { grainState.State = value; }
+        }
+        
+        void IStatefulGrain.SetStorage(IStorage storage)
+        {
+            this.storage = storage;
+        }
+
+        IGrainState IStatefulGrain.GrainState
+        {
+            get { return grainState; }
         }
 
         protected virtual Task ClearStateAsync()
         {
-            return Storage.ClearStateAsync();
+            return storage.ClearStateAsync();
         }
 
         protected virtual Task WriteStateAsync()
         {
-            return Storage.WriteStateAsync();
+            return storage.WriteStateAsync();
         }
 
         protected virtual Task ReadStateAsync()
         {
-            return Storage.ReadStateAsync();
+            return storage.ReadStateAsync();
         }
     }
 }

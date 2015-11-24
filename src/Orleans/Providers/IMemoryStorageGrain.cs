@@ -21,9 +21,7 @@ OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHE
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using Orleans.Runtime;
 
 namespace Orleans.Storage
 {
@@ -38,7 +36,7 @@ namespace Orleans.Storage
         /// <param name="grainType">Type of this grain [fully qualified class name]</param>
         /// <param name="grainId">Grain id for this grain.</param>
         /// <returns>Value promise for the currently stored grain state for the specified grain.</returns>
-        Task<ETagged<object>> ReadStateAsync(string grainType, string grainId);
+        Task<IGrainState> ReadStateAsync(string grainType, string grainId);
         
         /// <summary>
         /// Async method to cause update of the specified grain state data into memory store.
@@ -46,15 +44,15 @@ namespace Orleans.Storage
         /// <param name="grainType">Type of this grain [fully qualified class name]</param>
         /// <param name="grainId">Grain id for this grain.</param>
         /// <param name="grainState">New state data to be stored for this grain.</param>
-        /// <returns>Completion promise for the update operation for stored grain state for the specified grain.</returns>
-        Task WriteStateAsync(string grainType, string grainId, ETagged<object> grainState);
+        /// <returns>Completion promise with new eTag for the update operation for stored grain state for the specified grain.</returns>
+        Task<string> WriteStateAsync(string grainType, string grainId, IGrainState grainState);
 
         /// <summary>
         /// Async method to cause deletion of the specified grain state data from memory store.
         /// </summary>
         /// <param name="grainType">Type of this grain [fully qualified class name]</param>
         /// <param name="grainId">Grain id for this grain.</param>
-        /// <returns>Completion promise for the update operation for stored grain state for the specified grain.</returns>
-        Task DeleteStateAsync(string grainType, string grainId, string etag);
+        /// <returns>Completion promise with new eTag for the update operation for stored grain state for the specified grain.</returns>
+        Task<string> DeleteStateAsync(string grainType, string grainId, string etag);
     }
 }

@@ -653,19 +653,27 @@ namespace Orleans.Runtime
             grain.Data = data;
 
             Type stateObjectType = grainTypeData.StateObjectType;
-            var state = stateObjectType != null ? Activator.CreateInstance(stateObjectType) : null;
-
-            lock (data)
+            object state = null;
+            if (stateObjectType != null)
             {
-                grain.Identity = data.Identity;
-                data.SetGrainInstance(grain);
+                state = Activator.CreateInstance(stateObjectType);
+            }
 
-                if (state != null)
+            grain.Identity = data.Identity;
+            data.SetGrainInstance(grain);
+
+            var statefullGrain = grain as IStatefulGrain;
+            if (statefullGrain != null)
+            {
+                lock (data)
                 {
-                    SetupStorageProvider(data);
-
-                    data.GrainInstance.GrainState = state;
-                    data.GrainInstance.Storage = new GrainStateStorageBridge(data.GrainTypeName, data.GrainInstance, data.StorageProvider);
+                    if (state != null)
+                    {
+                        SetupStorageProvider(data);
+                        statefullGrain.GrainState.State = state;
+                        statefullGrain.SetStorage(new GrainStateStorageBridge(data.GrainTypeName, statefullGrain,
+                            data.StorageProvider));
+                    }
                 }
             }
 
@@ -721,27 +729,30 @@ namespace Orleans.Runtime
 
         private async Task SetupActivationState(ActivationData result, string grainType)
         {
-            var state = result.GrainInstance.GrainState;
+            var statefullGrain = result.GrainInstance as IStatefulGrain;
+            if (statefullGrain == null)
+            {
+                return;
+            }
+
+            var state = statefullGrain.GrainState;
 
             if (result.StorageProvider != null && state != null)
             {
                 var sw = Stopwatch.StartNew();
+                var innerState = statefullGrain.GrainState.State;
+
                 // Populate state data
                 try
                 {
                     var grainRef = result.GrainReference;
 
-                    var etagged = await scheduler.RunOrQueueTask(() =>
+                    await scheduler.RunOrQueueTask(() =>
                         result.StorageProvider.ReadStateAsync(grainType, grainRef, state),
                         new SchedulingContext(result));
-                    if (etagged.State != null) // if state not found in storage just keeping the default one
-                    {
-                        state = etagged.State;
-                    }
-
+                    
                     sw.Stop();
                     StorageStatisticsGroup.OnStorageActivate(result.StorageProvider, grainType, result.GrainReference, sw.Elapsed);
-                    result.GrainInstance.GrainState = state;
                 }
                 catch (Exception ex)
                 {
@@ -750,7 +761,7 @@ namespace Orleans.Runtime
                     if (!(ex.GetBaseException() is KeyNotFoundException))
                         throw;
 
-                    result.GrainInstance.GrainState = state; // Just keep original empty state object
+                    statefullGrain.GrainState.State = innerState; // Just keep original empty state object
                 }
             }
         }

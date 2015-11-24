@@ -151,7 +151,7 @@ namespace Orleans.Storage
 
         /// <summary> Read state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider.ReadStateAsync"/>
-        public async Task<ETagged<TState>> ReadStateAsync<TState>(string grainType, GrainReference grainReference, TState grainState)
+        public async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
             if (tableDataManager == null) throw new ArgumentException("GrainState-Table property not initialized");
 
@@ -165,25 +165,23 @@ namespace Orleans.Storage
                 var entity = record.Entity;
                 if (entity != null)
                 {
-                    var state = ConvertFromStorageFormat(entity);
-                    return new ETagged<TState>((TState)state, record.ETag);
+                    grainState.State = ConvertFromStorageFormat(entity);
+                    grainState.State = record.ETag;
                 }
             }
 
             // Else leave grainState in previous default condition
-            return new ETagged<TState>(grainState, string.Empty);
         }
 
         /// <summary> Write state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider.WriteStateAsync"/>
-        public async Task<string> WriteStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
+        public async Task WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
             if (tableDataManager == null) throw new ArgumentException("GrainState-Table property not initialized");
 
-            string eTag = string.Empty;
             string pk = GetKeyString(grainReference);
             if (Log.IsVerbose3)
-                Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Writing: GrainType={0} Pk={1} Grainid={2} ETag={3} to Table={4}", grainType, pk, grainReference, eTag, tableName);
+                Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Writing: GrainType={0} Pk={1} Grainid={2} ETag={3} to Table={4}", grainType, pk, grainReference, grainState.ETag, tableName);
 
             var entity = new GrainStateEntity { PartitionKey = pk, RowKey = grainType };
             ConvertToStorageFormat(grainState, entity);
@@ -191,16 +189,14 @@ namespace Orleans.Storage
             try
             {
                 await tableDataManager.Write(record);
-                eTag = record.ETag;
+                grainState.ETag = record.ETag;
             }
             catch (Exception exc)
             {
                 Log.Error((int)AzureProviderErrorCode.AzureTableProvider_WriteError, string.Format("Error Writing: GrainType={0} Grainid={1} ETag={2} to Table={3} Exception={4}",
-                    grainType, grainReference, eTag, tableName, exc.Message), exc);
+                    grainType, grainReference, grainState.ETag, tableName, exc.Message), exc);
                 throw;
             }
-
-            return eTag;
         }
 
         /// <summary> Clear / Delete state data function for this storage provider. </summary>
@@ -210,13 +206,12 @@ namespace Orleans.Storage
         /// cleared by overwriting with default / null values.
         /// </remarks>
         /// <see cref="IStorageProvider.ClearStateAsync"/>
-        public async Task<string> ClearStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
+        public async Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
             if (tableDataManager == null) throw new ArgumentException("GrainState-Table property not initialized");
 
             string pk = GetKeyString(grainReference);
-            string eTag = string.Empty;
-            if (Log.IsVerbose3) Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Clearing: GrainType={0} Pk={1} Grainid={2} ETag={3} DeleteStateOnClear={4} from Table={5}", grainType, pk, grainReference, eTag, isDeleteStateOnClear, tableName);
+            if (Log.IsVerbose3) Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Clearing: GrainType={0} Pk={1} Grainid={2} ETag={3} DeleteStateOnClear={4} from Table={5}", grainType, pk, grainReference, grainState.ETag, isDeleteStateOnClear, tableName);
             var entity = new GrainStateEntity { PartitionKey = pk, RowKey = grainType };
             var record = new GrainStateRecord { Entity = entity, ETag = grainState.ETag };
             string operation = "Clearing";
@@ -232,16 +227,14 @@ namespace Orleans.Storage
                     await tableDataManager.Write(record);
                 }
 
-                eTag = record.ETag; // Update in-memory data to the new ETag
+                grainState.ETag = record.ETag; // Update in-memory data to the new ETag
             }
             catch (Exception exc)
             {
                 Log.Error((int)AzureProviderErrorCode.AzureTableProvider_DeleteError, string.Format("Error {0}: GrainType={1} Grainid={2} ETag={3} from Table={4} Exception={5}",
-                    operation, grainType, grainReference, eTag, tableName, exc.Message), exc);
+                    operation, grainType, grainReference, grainState.ETag, tableName, exc.Message), exc);
                 throw;
             }
-
-            return eTag;
         }
 
         /// <summary>
@@ -292,7 +285,6 @@ namespace Orleans.Storage
         /// <summary>
         /// Deserialize from Azure storage format
         /// </summary>
-        /// <param name="grainState">The grain state data to be deserialized in to</param>
         /// <param name="entity">The Azure table entity the stored data</param>
         internal object ConvertFromStorageFormat(GrainStateEntity entity)
         {

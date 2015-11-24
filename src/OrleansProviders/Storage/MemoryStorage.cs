@@ -124,7 +124,7 @@ namespace Orleans.Storage
 
         /// <summary> Read state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#ReadStateAsync"/>
-        public virtual async Task<ETagged<TState>> ReadStateAsync<TState>(string grainType, GrainReference grainReference, TState grainState)
+        public virtual async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
             var keys = MakeKeys(grainType, grainReference);
 
@@ -132,35 +132,34 @@ namespace Orleans.Storage
             
             string id = HierarchicalKeyStore.MakeStoreKey(keys);
             IMemoryStorageGrain storageGrain = GetStorageGrain(id);
-            var etaggedState = await storageGrain.ReadStateAsync(STATE_STORE_NAME, id);
-            return etaggedState == null ? new ETagged<TState>(default(TState), null) 
-                : new ETagged<TState>((TState) etaggedState.State, etaggedState.ETag);
+            var state = await storageGrain.ReadStateAsync(STATE_STORE_NAME, id);
+            if (state != null)
+            {
+                grainState.ETag = state.ETag;
+                grainState.State = state.State;
+            }
         }
 
         /// <summary> Write state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#WriteStateAsync"/>
-        public virtual async Task<string> WriteStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
+        public virtual async Task WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
             var keys = MakeKeys(grainType, grainReference);
             string key = HierarchicalKeyStore.MakeStoreKey(keys);
+            if (Log.IsVerbose2) Log.Verbose2("Write {0} ", StorageProviderUtils.PrintOneWrite(keys, grainState.State, grainState.ETag));
             IMemoryStorageGrain storageGrain = GetStorageGrain(key);
-            await storageGrain.WriteStateAsync(STATE_STORE_NAME, key, grainState);
-
-            return NewEtag();
+            grainState.ETag = await storageGrain.WriteStateAsync(STATE_STORE_NAME, key, grainState);
         }
 
         /// <summary> Delete / Clear state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#ClearStateAsync"/>
-        public virtual async Task<string> ClearStateAsync(string grainType, GrainReference grainReference, ETagged<object> grainState)
+        public virtual async Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
         {
             var keys = MakeKeys(grainType, grainReference);
             if (Log.IsVerbose2) Log.Verbose2("Delete Keys={0} Etag={1}", StorageProviderUtils.PrintKeys(keys), grainState.ETag);
-                
             string key = HierarchicalKeyStore.MakeStoreKey(keys);
             IMemoryStorageGrain storageGrain = GetStorageGrain(key);
-            await storageGrain.DeleteStateAsync(STATE_STORE_NAME, key, grainState.ETag);
-
-            return NewEtag();
+            grainState.ETag = await storageGrain.DeleteStateAsync(STATE_STORE_NAME, key, grainState.ETag);
         }
 
         #endregion
@@ -236,11 +235,6 @@ namespace Orleans.Storage
                 };
             }
             return compareClause;
-        }
-
-        private static string NewEtag()
-        {
-            return DateTime.UtcNow.ToString(CultureInfo.InvariantCulture);
         }
     }
 }
