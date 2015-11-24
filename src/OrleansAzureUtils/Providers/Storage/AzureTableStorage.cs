@@ -130,7 +130,11 @@ namespace Orleans.Storage
 
         /// <summary> Read state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider.ReadStateAsync"/>
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         public async Task ReadStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+=======
+        public async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+>>>>>>> Moved state and eTag to the Grain<TState>
         {
             if (tableDataManager == null) throw new ArgumentException("GrainState-Table property not initialized");
 
@@ -144,8 +148,13 @@ namespace Orleans.Storage
                 var entity = record.Entity;
                 if (entity != null)
                 {
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                     ConvertFromStorageFormat(grainState, entity);
                     grainState.Etag = record.ETag;
+=======
+                    grainState.State = ConvertFromStorageFormat(entity);
+                    grainState.State = record.ETag;
+>>>>>>> Moved state and eTag to the Grain<TState>
                 }
             }
             // Else leave grainState in previous default condition
@@ -153,13 +162,21 @@ namespace Orleans.Storage
 
         /// <summary> Write state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider.WriteStateAsync"/>
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         public async Task WriteStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+=======
+        public async Task WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+>>>>>>> Moved state and eTag to the Grain<TState>
         {
             if (tableDataManager == null) throw new ArgumentException("GrainState-Table property not initialized");
 
             string pk = GetKeyString(grainReference);
             if (Log.IsVerbose3)
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                 Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Writing: GrainType={0} Pk={1} Grainid={2} ETag={3} to Table={4}", grainType, pk, grainReference, grainState.Etag, tableName);
+=======
+                Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Writing: GrainType={0} Pk={1} Grainid={2} ETag={3} to Table={4}", grainType, pk, grainReference, grainState.ETag, tableName);
+>>>>>>> Moved state and eTag to the Grain<TState>
 
             var entity = new GrainStateEntity { PartitionKey = pk, RowKey = grainType };
             ConvertToStorageFormat(grainState, entity);
@@ -167,12 +184,20 @@ namespace Orleans.Storage
             try
             {
                 await tableDataManager.Write(record);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                 grainState.Etag = record.ETag;
+=======
+                grainState.ETag = record.ETag;
+>>>>>>> Moved state and eTag to the Grain<TState>
             }
             catch (Exception exc)
             {
                 Log.Error((int)AzureProviderErrorCode.AzureTableProvider_WriteError, string.Format("Error Writing: GrainType={0} Grainid={1} ETag={2} to Table={3} Exception={4}",
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                     grainType, grainReference, grainState.Etag, tableName, exc.Message), exc);
+=======
+                    grainType, grainReference, grainState.ETag, tableName, exc.Message), exc);
+>>>>>>> Moved state and eTag to the Grain<TState>
                 throw;
             }
         }
@@ -184,12 +209,20 @@ namespace Orleans.Storage
         /// cleared by overwriting with default / null values.
         /// </remarks>
         /// <see cref="IStorageProvider.ClearStateAsync"/>
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         public async Task ClearStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+=======
+        public async Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+>>>>>>> Moved state and eTag to the Grain<TState>
         {
             if (tableDataManager == null) throw new ArgumentException("GrainState-Table property not initialized");
 
             string pk = GetKeyString(grainReference);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
             if (Log.IsVerbose3) Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Clearing: GrainType={0} Pk={1} Grainid={2} ETag={3} DeleteStateOnClear={4} from Table={5}", grainType, pk, grainReference, grainState.Etag, isDeleteStateOnClear, tableName);
+=======
+            if (Log.IsVerbose3) Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Clearing: GrainType={0} Pk={1} Grainid={2} ETag={3} DeleteStateOnClear={4} from Table={5}", grainType, pk, grainReference, grainState.ETag, isDeleteStateOnClear, tableName);
+>>>>>>> Moved state and eTag to the Grain<TState>
             var entity = new GrainStateEntity { PartitionKey = pk, RowKey = grainType };
             var record = new GrainStateRecord { Entity = entity, ETag = grainState.Etag };
             string operation = "Clearing";
@@ -204,12 +237,21 @@ namespace Orleans.Storage
                 {
                     await tableDataManager.Write(record);
                 }
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                 grainState.Etag = record.ETag; // Update in-memory data to the new ETag
+=======
+
+                grainState.ETag = record.ETag; // Update in-memory data to the new ETag
+>>>>>>> Moved state and eTag to the Grain<TState>
             }
             catch (Exception exc)
             {
                 Log.Error((int)AzureProviderErrorCode.AzureTableProvider_DeleteError, string.Format("Error {0}: GrainType={1} Grainid={2} ETag={3} from Table={4} Exception={5}",
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                     operation, grainType, grainReference, grainState.Etag, tableName, exc.Message), exc);
+=======
+                    operation, grainType, grainReference, grainState.ETag, tableName, exc.Message), exc);
+>>>>>>> Moved state and eTag to the Grain<TState>
                 throw;
             }
         }
@@ -264,7 +306,6 @@ namespace Orleans.Storage
         /// <summary>
         /// Deserialize from Azure storage format
         /// </summary>
-        /// <param name="grainState">The grain state data to be deserialized in to</param>
         /// <param name="entity">The Azure table entity the stored data</param>
         internal void ConvertFromStorageFormat(GrainState grainState, GrainStateEntity entity)
         {

@@ -100,7 +100,11 @@ namespace Orleans.Storage
 
         /// <summary> Read state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#ReadStateAsync"/>
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         public virtual async Task ReadStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+=======
+        public virtual async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+>>>>>>> Moved state and eTag to the Grain<TState>
         {
             var keys = MakeKeys(grainType, grainReference);
 
@@ -108,17 +112,29 @@ namespace Orleans.Storage
             
             string id = HierarchicalKeyStore.MakeStoreKey(keys);
             IMemoryStorageGrain storageGrain = GetStorageGrain(id);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
             Tuple<IDictionary<string, object>, string> result = await storageGrain.ReadStateAsync(STATE_STORE_NAME, id);
             if (result != null && result.Item1 != null)
             {
                 grainState.SetAll(result.Item1);
                 grainState.Etag = result.Item2;
+=======
+            var state = await storageGrain.ReadStateAsync(STATE_STORE_NAME, id);
+            if (state != null)
+            {
+                grainState.ETag = state.ETag;
+                grainState.State = state.State;
+>>>>>>> Moved state and eTag to the Grain<TState>
             }
         }
 
         /// <summary> Write state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#WriteStateAsync"/>
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         public virtual async Task WriteStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+=======
+        public virtual async Task WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+>>>>>>> Moved state and eTag to the Grain<TState>
         {
             var keys = MakeKeys(grainType, grainReference);
             var data = grainState.AsDictionary();
@@ -127,14 +143,20 @@ namespace Orleans.Storage
             if (Log.IsVerbose2) Log.Verbose2("Write {0} ", StorageProviderUtils.PrintOneWrite(keys, data, prevEtag));
 
             string key = HierarchicalKeyStore.MakeStoreKey(keys);
+            if (Log.IsVerbose2) Log.Verbose2("Write {0} ", StorageProviderUtils.PrintOneWrite(keys, grainState.State, grainState.ETag));
             IMemoryStorageGrain storageGrain = GetStorageGrain(key);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
             string newEtag = await storageGrain.WriteStateAsync(STATE_STORE_NAME, key, data, prevEtag);
 
             grainState.Etag = newEtag;
+=======
+            grainState.ETag = await storageGrain.WriteStateAsync(STATE_STORE_NAME, key, grainState);
+>>>>>>> Moved state and eTag to the Grain<TState>
         }
 
         /// <summary> Delete / Clear state data function for this storage provider. </summary>
         /// <see cref="IStorageProvider#ClearStateAsync"/>
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         public virtual async Task ClearStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
         {
             var keys = MakeKeys(grainType, grainReference);
@@ -145,6 +167,15 @@ namespace Orleans.Storage
             string key = HierarchicalKeyStore.MakeStoreKey(keys);
             IMemoryStorageGrain storageGrain = GetStorageGrain(key);
             await storageGrain.DeleteStateAsync(STATE_STORE_NAME, key, prevEtag);
+=======
+        public virtual async Task ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+        {
+            var keys = MakeKeys(grainType, grainReference);
+            if (Log.IsVerbose2) Log.Verbose2("Delete Keys={0} Etag={1}", StorageProviderUtils.PrintKeys(keys), grainState.ETag);
+            string key = HierarchicalKeyStore.MakeStoreKey(keys);
+            IMemoryStorageGrain storageGrain = GetStorageGrain(key);
+            grainState.ETag = await storageGrain.DeleteStateAsync(STATE_STORE_NAME, key, grainState.ETag);
+>>>>>>> Moved state and eTag to the Grain<TState>
         }
 
         #endregion

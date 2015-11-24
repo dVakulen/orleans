@@ -87,7 +87,13 @@ namespace Orleans.SqlUtils.StorageProvider
             return TaskDone.Done;
         }
 
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         async Task IStorageProvider.ReadStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+=======
+        /// <summary> Read state data function for this storage provider. </summary>
+        /// <see cref="IStorageProvider.ReadStateAsync"/>
+        public async Task ReadStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+>>>>>>> Moved state and eTag to the Grain<TState>
         {
             var grainIdentity = GrainIdentity.FromGrainReference(grainType, grainReference);
 
@@ -95,18 +101,33 @@ namespace Orleans.SqlUtils.StorageProvider
                 return;
 
             var state = await _dataManager.ReadStateAsync(grainIdentity);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
             if (null != state)
                 grainState.SetAll(state);
         }
 
 
         async Task IStorageProvider.WriteStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
+=======
+            if (state != null)
+            {
+                grainState.State = state;
+            }
+        }
+
+
+        async Task IStorageProvider.WriteStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+>>>>>>> Moved state and eTag to the Grain<TState>
         {
             if (_ignore)
                 return;
 
             var grainIdentity = GrainIdentity.FromGrainReference(grainType, grainReference);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
             await _dataManager.UpsertStateAsync(grainIdentity, grainState.AsDictionary());
+=======
+            await _dataManager.UpsertStateAsync(grainIdentity, grainState.State);
+>>>>>>> Moved state and eTag to the Grain<TState>
         }
 
 
@@ -117,9 +138,15 @@ namespace Orleans.SqlUtils.StorageProvider
         /// <param name="grainReference"></param>
         /// <param name="grainState"></param>
         /// <returns></returns>
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         Task IStorageProvider.ClearStateAsync(string grainType, GrainReference grainReference, GrainState grainState)
         {
             Log.Verbose2("ClearStateAsync {0} {1} {2}", grainType, grainReference.ToKeyString(), grainState.Etag);
+=======
+        Task IStorageProvider.ClearStateAsync(string grainType, GrainReference grainReference, IGrainState grainState)
+        {
+            Log.Verbose2("ClearStateAsync {0} {1} {2}", grainType, grainReference.ToKeyString(), grainState.ETag);
+>>>>>>> Moved state and eTag to the Grain<TState>
 
             return TaskDone.Done;
         }

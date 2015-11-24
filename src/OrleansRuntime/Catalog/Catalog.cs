@@ -630,6 +630,7 @@ namespace Orleans.Runtime
             grain.Data = data;
 
             Type stateObjectType = grainTypeData.StateObjectType;
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
             GrainState state;
             if (stateObjectType != null)
             {
@@ -642,16 +643,29 @@ namespace Orleans.Runtime
             }
 
             lock (data)
+=======
+            object state = null;
+            if (stateObjectType != null)
+>>>>>>> Moved state and eTag to the Grain<TState>
             {
-                grain.Identity = data.Identity;
-                data.SetGrainInstance(grain);
+                state = Activator.CreateInstance(stateObjectType);
+            }
 
-                if (state != null)
+            grain.Identity = data.Identity;
+            data.SetGrainInstance(grain);
+
+            var statefullGrain = grain as IStatefulGrain;
+            if (statefullGrain != null)
+            {
+                lock (data)
                 {
-                    SetupStorageProvider(data);
-
-                    data.GrainInstance.GrainState = state;
-                    data.GrainInstance.Storage = new GrainStateStorageBridge(data.GrainTypeName, data.GrainInstance, data.StorageProvider);
+                    if (state != null)
+                    {
+                        SetupStorageProvider(data);
+                        statefullGrain.GrainState.State = state;
+                        statefullGrain.SetStorage(new GrainStateStorageBridge(data.GrainTypeName, statefullGrain,
+                            data.StorageProvider));
+                    }
                 }
             }
 
@@ -707,11 +721,19 @@ namespace Orleans.Runtime
 
         private async Task SetupActivationState(ActivationData result, string grainType)
         {
-            var state = result.GrainInstance.GrainState;
+            var statefullGrain = result.GrainInstance as IStatefulGrain;
+            if (statefullGrain == null)
+            {
+                return;
+            }
+
+            var state = statefullGrain.GrainState;
 
             if (result.StorageProvider != null && state != null)
             {
                 var sw = Stopwatch.StartNew();
+                var innerState = statefullGrain.GrainState.State;
+
                 // Populate state data
                 try
                 {
@@ -720,10 +742,13 @@ namespace Orleans.Runtime
                     await scheduler.RunOrQueueTask(() =>
                         result.StorageProvider.ReadStateAsync(grainType, grainRef, state),
                         new SchedulingContext(result));
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
 
+=======
+                    
+>>>>>>> Moved state and eTag to the Grain<TState>
                     sw.Stop();
                     StorageStatisticsGroup.OnStorageActivate(result.StorageProvider, grainType, result.GrainReference, sw.Elapsed);
-                    result.GrainInstance.GrainState = state;
                 }
                 catch (Exception ex)
                 {
@@ -732,7 +757,7 @@ namespace Orleans.Runtime
                     if (!(ex.GetBaseException() is KeyNotFoundException))
                         throw;
 
-                    result.GrainInstance.GrainState = state; // Just keep original empty state object
+                    statefullGrain.GrainState.State = innerState; // Just keep original empty state object
                 }
             }
         }

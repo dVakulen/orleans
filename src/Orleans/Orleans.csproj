@@ -89,7 +89,12 @@
     <Compile Include="CodeGeneration\OrleansCodeGenerationTargetAttribute.cs" />
     <Compile Include="CodeGeneration\KnownTypeAttribute.cs" />
     <Compile Include="CodeGeneration\SkipCodeGenerationAttribute.cs" />
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
     <Compile Include="Providers\DefaultServiceProvider.cs" />
+=======
+    <Compile Include="CodeGeneration\IGrainState.cs" />
+    <Compile Include="Core\IStatefulGrain.cs" />
+>>>>>>> Moved state and eTag to the Grain<TState>
     <Compile Include="Serialization\IExternalSerializer.cs" />
     <Compile Include="Configuration\LimitNames.cs" />
     <Compile Include="Configuration\LimitValue.cs" />

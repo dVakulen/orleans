@@ -12,10 +12,11 @@ namespace Orleans.Core
     internal class GrainStateStorageBridge : IStorage
     {
         private readonly IStorageProvider store;
-        private readonly Grain grain;
+        private readonly IStatefulGrain grain;
+        private readonly Grain baseGrain;
         private readonly string grainTypeName;
 
-        public GrainStateStorageBridge(string grainTypeName, Grain grain, IStorageProvider store)
+        public GrainStateStorageBridge(string grainTypeName, IStatefulGrain grain, IStorageProvider store)
         {
             if (grainTypeName == null)
             {
@@ -31,6 +32,7 @@ namespace Orleans.Core
             }
             this.grainTypeName = grainTypeName;
             this.grain = grain;
+            this.baseGrain = grain as Grain;
             this.store = store;
         }
 
@@ -42,11 +44,15 @@ namespace Orleans.Core
         {
             const string what = "ReadState";
             Stopwatch sw = Stopwatch.StartNew();
-            GrainReference grainRef = grain.GrainReference;
+            GrainReference grainRef = baseGrain.GrainReference;
             try
             {
                 await store.ReadStateAsync(grainTypeName, grainRef, grain.GrainState);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                 
+=======
+
+>>>>>>> Moved state and eTag to the Grain<TState>
                 StorageStatisticsGroup.OnStorageRead(store, grainTypeName, grainRef, sw.Elapsed);
             }
             catch (Exception exc)
@@ -70,12 +76,15 @@ namespace Orleans.Core
         {
             const string what = "WriteState";
             Stopwatch sw = Stopwatch.StartNew();
-            GrainReference grainRef = grain.GrainReference;
+            GrainReference grainRef = baseGrain.GrainReference;
             Exception errorOccurred;
             try
             {
                 await store.WriteStateAsync(grainTypeName, grainRef, grain.GrainState);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
 
+=======
+>>>>>>> Moved state and eTag to the Grain<TState>
                 StorageStatisticsGroup.OnStorageWrite(store, grainTypeName, grainRef, sw.Elapsed);
                 errorOccurred = null;
             }
@@ -125,13 +134,19 @@ namespace Orleans.Core
         {
             const string what = "ClearState";
             Stopwatch sw = Stopwatch.StartNew();
-            GrainReference grainRef = grain.GrainReference;
+            GrainReference grainRef = baseGrain.GrainReference;
             try
             {
                 // Clear (most likely Delete) state from external storage
                 await store.ClearStateAsync(grainTypeName, grainRef, grain.GrainState);
+<<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
                 // Null out the in-memory copy of the state
                 grain.GrainState.SetAll(null);
+=======
+
+                // Null out the in-memory copy of the state
+                grain.GrainState.State = null;
+>>>>>>> Moved state and eTag to the Grain<TState>
 
                 // Update counters
                 StorageStatisticsGroup.OnStorageDelete(store, grainTypeName, grainRef, sw.Elapsed);
@@ -159,7 +174,7 @@ namespace Orleans.Core
             if(decoder != null)
                 decoder.DecodeException(exc, out httpStatusCode, out errorCode, true);
 
-            GrainReference grainReference = grain.GrainReference;
+            GrainReference grainReference = baseGrain.GrainReference;
             return string.Format("Error from storage provider during {0} for grain Type={1} Pk={2} Id={3} Error={4}" + Environment.NewLine + " {5}",
                 what, grainTypeName, grainReference.GrainId.ToDetailedString(), grainReference, errorCode, TraceLogger.PrintException(exc));
         }
