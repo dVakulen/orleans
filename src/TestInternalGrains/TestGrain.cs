@@ -1,50 +1,25 @@
-﻿/*
-Project Orleans Cloud Service SDK ver. 1.0
- 
-Copyright (c) Microsoft Corporation
- 
-All rights reserved.
- 
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and 
-associated documentation files (the ""Software""), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED *AS IS*, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
-THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS
-OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-*/
-
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Orleans;
-using Orleans.Concurrency;
 using Orleans.Runtime;
-using TestInternalGrainInterfaces;
+using UnitTests.GrainInterfaces;
 
-namespace TestInternalGrains
+namespace UnitTests.Grains
 {
-    internal class TestGrain : Grain, ITestGrain
+    public class TestGrain : Grain, ITestGrain
     {
         private string label;
         private Logger logger;
-        private IDisposable timer; 
+        private IDisposable timer;
 
         public override Task OnActivateAsync()
         {
             if (this.GetPrimaryKeyLong() == -2)
                 throw new ArgumentException("Primary key cannot be -2 for this test case");
 
-            logger = base.GetLogger("TestGrain " + base.Data.Address.ToString());
+            logger = GetLogger("TestGrain " + Data.Address);
             label = this.GetPrimaryKeyLong().ToString();
             logger.Info("OnActivateAsync");
 
@@ -101,16 +76,16 @@ namespace TestInternalGrains
             string bar1 = null;
             RequestContext.Set("jarjar", "binks");
 
-            Task task = Task.Factory.StartNew(() =>
+            var task = Task.Factory.StartNew(() =>
             {
-                bar1 = (string)RequestContext.Get("jarjar");
+                bar1 = (string) RequestContext.Get("jarjar");
                 logger.Info("bar = {0}.", bar1);
             });
 
             string bar2 = null;
-            Task ac = Task.Factory.StartNew(() =>
+            var ac = Task.Factory.StartNew(() =>
             {
-                bar2 = (string)RequestContext.Get("jarjar");
+                bar2 = (string) RequestContext.Get("jarjar");
                 logger.Info("bar = {0}.", bar2);
             });
 
@@ -120,7 +95,7 @@ namespace TestInternalGrains
 
         public Task<string> GetRuntimeInstanceId()
         {
-            return Task.FromResult(this.RuntimeIdentity);
+            return Task.FromResult(RuntimeIdentity);
         }
 
         public Task<string> GetActivationId()
@@ -135,8 +110,8 @@ namespace TestInternalGrains
 
         public Task<IGrain[]> GetMultipleGrainInterfaces_Array()
         {
-            IGrain[] grains = new IGrain[5];
-            for (int i = 0; i < grains.Length; i++)
+            var grains = new IGrain[5];
+            for (var i = 0; i < grains.Length; i++)
             {
                 grains[i] = GrainFactory.GetGrain<ITestGrain>(i);
             }
@@ -145,8 +120,8 @@ namespace TestInternalGrains
 
         public Task<List<IGrain>> GetMultipleGrainInterfaces_List()
         {
-            IGrain[] grains = new IGrain[5];
-            for (int i = 0; i < grains.Length; i++)
+            var grains = new IGrain[5];
+            for (var i = 0; i < grains.Length; i++)
             {
                 grains[i] = GrainFactory.GetGrain<ITestGrain>(i);
             }
@@ -167,11 +142,12 @@ namespace TestInternalGrains
             //    throw new ArgumentException("Primary key cannot be -2 for this test case");
 
             label = this.GetPrimaryKey().ToString();
-            logger = base.GetLogger("GuidTestGrain " + base.Data.Address.ToString());
+            logger = GetLogger("GuidTestGrain " + Data.Address);
             logger.Info("OnActivateAsync");
 
             return TaskDone.Done;
         }
+
         #region Implementation of ITestGrain
 
         public Task<Guid> GetKey()
@@ -192,7 +168,7 @@ namespace TestInternalGrains
 
         public Task<string> GetRuntimeInstanceId()
         {
-            return Task.FromResult(this.RuntimeIdentity);
+            return Task.FromResult(RuntimeIdentity);
         }
 
         public Task<string> GetActivationId()

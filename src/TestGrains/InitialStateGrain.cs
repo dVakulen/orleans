@@ -22,5 +22,11 @@ namespace UnitTests.Grains
         {
             return Task.FromResult(State.Names);
         }
+
+        public Task AddName(string name)
+        {
+            State.Names.Add(name);
+            return WriteStateAsync();
+        }
     }
 }
