@@ -39,7 +39,7 @@ namespace UnitTests
 
         [TestMethod, TestCategory("Functional"), TestCategory("ErrorHandling")]
         public async Task ErrorGrain_GetGrain()
-        {
+        { 
             var grainFullName = typeof(ErrorGrain).FullName;
             IErrorGrain grain = GrainClient.GrainFactory.GetGrain<IErrorGrain>(GetRandomGrainId(), grainFullName);
             int ignored = await grain.GetA();
