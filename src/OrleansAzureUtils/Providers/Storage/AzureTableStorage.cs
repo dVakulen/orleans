@@ -143,7 +143,7 @@ namespace Orleans.Storage
                 if (entity != null)
                 {
                     grainState.State = ConvertFromStorageFormat(entity);
-                    grainState.State = record.ETag;
+                    grainState.ETag = record.ETag;
                 }
             }
 
@@ -161,7 +161,7 @@ namespace Orleans.Storage
                 Log.Verbose3((int)AzureProviderErrorCode.AzureTableProvider_WritingData, "Writing: GrainType={0} Pk={1} Grainid={2} ETag={3} to Table={4}", grainType, pk, grainReference, grainState.ETag, tableName);
 
             var entity = new GrainStateEntity { PartitionKey = pk, RowKey = grainType };
-            ConvertToStorageFormat(grainState, entity);
+            ConvertToStorageFormat(grainState.State, entity);
             var record = new GrainStateRecord { Entity = entity, ETag = grainState.ETag };
             try
             {
