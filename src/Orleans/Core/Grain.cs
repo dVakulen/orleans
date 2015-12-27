@@ -255,17 +255,16 @@ namespace Orleans
     /// </summary>
     /// <typeparam name="TGrainState">The class of the persistent state object</typeparam>
     public class Grain<TGrainState> : Grain, IStatefulGrain
-        where TGrainState : class
     {
         private readonly GrainState<TGrainState> grainState;
 
-        private IStorage storage { get; set; }
+        private IStorage storage;
 
         /// <summary>
         /// This constructor should never be invoked. We expose it so that client code (subclasses of this class) do not have to add a constructor.
         /// Client code should use the GrainFactory to get a reference to a Grain.
         /// </summary>
-        protected Grain() : base()
+        protected Grain()
         {
             grainState = new GrainState<TGrainState>();
         }

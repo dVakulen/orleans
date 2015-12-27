@@ -50,8 +50,6 @@ namespace UnitTests.Grains
         }
     }
 
-    [Serializable]
-    public class SimpleGenericGrainUState<U>
     [StorageProvider(ProviderName = "AzureStore")]
     public class SimpleGenericGrainUsingAzureTableStorage<T> : Grain<SimpleGenericGrainState<T>>, ISimpleGenericGrainUsingAzureTableStorage<T>
     {
@@ -84,7 +82,8 @@ namespace UnitTests.Grains
         }
     }
 
-    public class SimpleGenericGrainUState<U> : GrainState
+    [Serializable]
+    public class SimpleGenericGrainUState<U>
     {
         public U A { get; set; }
         public U B { get; set; }

@@ -639,16 +639,16 @@ namespace Orleans.Runtime
             grain.Identity = data.Identity;
             data.SetGrainInstance(grain);
 
-            var statefullGrain = grain as IStatefulGrain;
-            if (statefullGrain != null)
+            var statefulGrain = grain as IStatefulGrain;
+            if (statefulGrain != null)
             {
                 lock (data)
                 {
                     if (state != null)
                     {
                         SetupStorageProvider(data);
-                        statefullGrain.GrainState.State = state;
-                        statefullGrain.SetStorage(new GrainStateStorageBridge(data.GrainTypeName, statefullGrain,
+                        statefulGrain.GrainState.State = state;
+                        statefulGrain.SetStorage(new GrainStateStorageBridge(data.GrainTypeName, statefulGrain,
                             data.StorageProvider));
                     }
                 }
@@ -706,18 +706,18 @@ namespace Orleans.Runtime
 
         private async Task SetupActivationState(ActivationData result, string grainType)
         {
-            var statefullGrain = result.GrainInstance as IStatefulGrain;
-            if (statefullGrain == null)
+            var statefulGrain = result.GrainInstance as IStatefulGrain;
+            if (statefulGrain == null)
             {
                 return;
             }
 
-            var state = statefullGrain.GrainState;
+            var state = statefulGrain.GrainState;
 
             if (result.StorageProvider != null && state != null)
             {
                 var sw = Stopwatch.StartNew();
-                var innerState = statefullGrain.GrainState.State;
+                var innerState = statefulGrain.GrainState.State;
 
                 // Populate state data
                 try
@@ -738,7 +738,7 @@ namespace Orleans.Runtime
                     if (!(ex.GetBaseException() is KeyNotFoundException))
                         throw;
 
-                    statefullGrain.GrainState.State = innerState; // Just keep original empty state object
+                    statefulGrain.GrainState.State = innerState; // Just keep original empty state object
                 }
             }
         }
