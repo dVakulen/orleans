@@ -81,7 +81,8 @@ namespace UnitTests.Grains
         }
     }
 
-    public class SimpleGenericGrainUState<U> : GrainState
+    [Serializable]
+    public class SimpleGenericGrainUState<U>
     {
         public U A { get; set; }
         public U B { get; set; }

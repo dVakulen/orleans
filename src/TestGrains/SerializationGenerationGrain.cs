@@ -1,3 +1,7 @@
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
+=======
+﻿using System;
+>>>>>>> Fixed migrated tests
 using System.Threading.Tasks;
 
 namespace TestGrains

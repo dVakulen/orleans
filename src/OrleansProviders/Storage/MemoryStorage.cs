@@ -174,8 +174,12 @@ namespace Orleans.Storage
             if (Log.IsVerbose2) Log.Verbose2("Delete Keys={0} Etag={1}", StorageProviderUtils.PrintKeys(keys), grainState.ETag);
             string key = HierarchicalKeyStore.MakeStoreKey(keys);
             IMemoryStorageGrain storageGrain = GetStorageGrain(key);
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
             grainState.ETag = await storageGrain.DeleteStateAsync(STATE_STORE_NAME, key, grainState.ETag);
 >>>>>>> Moved state and eTag to the Grain<TState>
+=======
+            await storageGrain.DeleteStateAsync(STATE_STORE_NAME, key, grainState.ETag);
+>>>>>>> Fixed migrated tests
         }
 
         #endregion

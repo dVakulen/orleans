@@ -1,3 +1,4 @@
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
 <<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
 using System;
 using System.Collections.Generic;
@@ -26,6 +27,8 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR TH
 */
 
 >>>>>>> Moved state and eTag to the Grain<TState>
+=======
+>>>>>>> Fixed migrated tests
 using System.Threading.Tasks;
 
 namespace Orleans.Storage
@@ -38,11 +41,18 @@ namespace Orleans.Storage
         /// <summary>
         /// Async method to cause retrieval of the specified grain state data from memory store.
         /// </summary>
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
 <<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         /// <param name="stateStore">The name of the store that is used to store this grain state</param>
         /// <param name="grainStoreKey">Store key for this grain.</param>
         /// <returns>Value promise for the currently stored grain state for the specified grain and the etag of this data.</returns>
         Task<Tuple<IDictionary<string, object>, string>> ReadStateAsync(string stateStore, string grainStoreKey);
+=======
+        /// <param name="grainType">Type of this grain [fully qualified class name]</param>
+        /// <param name="grainId">Grain id for this grain.</param>
+        /// <returns>Value promise for the currently stored grain state for the specified grain.</returns>
+        Task<IGrainState> ReadStateAsync(string stateStore, string grainStoreKey);
+>>>>>>> Fixed migrated tests
 
 =======
         /// <param name="grainType">Type of this grain [fully qualified class name]</param>
@@ -57,6 +67,7 @@ namespace Orleans.Storage
         /// <param name="stateStore">The name of the store that is used to store this grain state</param>
         /// <param name="grainStoreKey">Store key for this grain.</param>
         /// <param name="grainState">New state data to be stored for this grain.</param>
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
 <<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
         /// <param name="eTag">The previous etag that was read.</param>
         /// <returns>Value promise of the etag of the update operation for stored grain state for the specified grain.</returns>
@@ -70,6 +81,11 @@ namespace Orleans.Storage
         /// Async method to cause deletion of the specified grain state data from memory store.
         /// </summary>
 <<<<<<< 505e746beb0edcc9916fd9128de4b3402f618eb6
+=======
+        /// <returns>Completion promise with new eTag for the update operation for stored grain state for the specified grain.</returns>
+        Task<string> WriteStateAsync(string grainType, string grainId, IGrainState grainState);
+        
+>>>>>>> Fixed migrated tests
         /// <param name="stateStore">The name of the store that is used to store this grain state</param>
         /// <param name="grainStoreKey">Store key for this grain.</param>
         /// <param name="eTag">The previous etag that was read.</param>

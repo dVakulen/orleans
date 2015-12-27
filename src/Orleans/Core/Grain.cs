@@ -266,18 +266,21 @@ namespace Orleans
         where TGrainState : GrainState
 =======
     public class Grain<TGrainState> : Grain, IStatefulGrain
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
         where TGrainState : class
 >>>>>>> Moved state and eTag to the Grain<TState>
+=======
+>>>>>>> Fixed migrated tests
     {
         private readonly GrainState<TGrainState> grainState;
 
-        private IStorage storage { get; set; }
+        private IStorage storage;
 
         /// <summary>
         /// This constructor should never be invoked. We expose it so that client code (subclasses of this class) do not have to add a constructor.
         /// Client code should use the GrainFactory to get a reference to a Grain.
         /// </summary>
-        protected Grain() : base()
+        protected Grain()
         {
             grainState = new GrainState<TGrainState>();
         }

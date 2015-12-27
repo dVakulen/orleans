@@ -153,8 +153,12 @@ namespace Orleans.Storage
                     grainState.Etag = record.ETag;
 =======
                     grainState.State = ConvertFromStorageFormat(entity);
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
                     grainState.State = record.ETag;
 >>>>>>> Moved state and eTag to the Grain<TState>
+=======
+                    grainState.ETag = record.ETag;
+>>>>>>> Fixed migrated tests
                 }
             }
             // Else leave grainState in previous default condition
@@ -179,8 +183,13 @@ namespace Orleans.Storage
 >>>>>>> Moved state and eTag to the Grain<TState>
 
             var entity = new GrainStateEntity { PartitionKey = pk, RowKey = grainType };
+<<<<<<< d473c48bf1777b788f1d34e76b3d4939ecbcb17a
             ConvertToStorageFormat(grainState, entity);
             var record = new GrainStateRecord { Entity = entity, ETag = grainState.Etag };
+=======
+            ConvertToStorageFormat(grainState.State, entity);
+            var record = new GrainStateRecord { Entity = entity, ETag = grainState.ETag };
+>>>>>>> Fixed migrated tests
             try
             {
                 await tableDataManager.Write(record);
