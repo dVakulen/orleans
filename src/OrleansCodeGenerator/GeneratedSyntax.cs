@@ -12,7 +12,7 @@ namespace Orleans.CodeGenerator
     {
         /// <summary>
         /// Gets or sets the collection of assemblies which this syntax was generated for.
-        /// </summary>
+        /// </summary> 
         public List<Assembly> SourceAssemblies { get; set; }
 
         /// <summary>
