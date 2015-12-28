@@ -674,6 +674,7 @@ namespace UnitTests.StorageTests
 
             storageProvider.SetValue<PersistenceTestGrainState>(grainType, (GrainReference)grain, "Field1", newVal);
 
+            await grain.DoRead();
             val = await grain.GetValue();
             Assert.AreEqual(newVal, val, "Returned value");
 
