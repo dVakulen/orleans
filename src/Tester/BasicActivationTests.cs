@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
@@ -7,7 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Orleans;
 using Orleans.Runtime;
 using Orleans.TestingHost;
-using TestInternalGrainInterfaces;
+using UnitTests.GrainInterfaces;
 using UnitTests.Tester;
 
 #pragma warning disable 618
@@ -21,6 +21,12 @@ namespace UnitTests.General
         public BasicActivationTests()
             : base(new TestingSiloOptions { StartFreshOrleans = true })
         {
+        }
+
+        [ClassCleanup]
+        public static void MyClassCleanup()
+        {
+            StopAllSilos();
         }
 
         [TestMethod, TestCategory("Functional"), TestCategory("ActivateDeactivate"), TestCategory("GetGrain")]

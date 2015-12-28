@@ -1,16 +1,12 @@
-﻿using System;
-using System.Linq;
-using System.Text;
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Orleans;
 using Orleans.Runtime;
-using TestInternalGrainInterfaces;
 using UnitTests.GrainInterfaces;
 
-
-namespace TestInternalGrains
+namespace UnitTests.Grains
 {
     internal class SimpleActivateDeactivateTestGrain : Grain, ISimpleActivateDeactivateTestGrain
     {
@@ -23,13 +19,13 @@ namespace TestInternalGrains
 
         public override async Task OnActivateAsync()
         {
-            this.logger = GetLogger();
+            logger = GetLogger();
             logger.Info("OnActivateAsync");
-            this.watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
+            watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Not doing Deactivate yet");
             doingActivate = true;
-            await watcher.RecordActivateCall(this.Data.ActivationId.ToString());
+            await watcher.RecordActivateCall(Data.ActivationId.ToString());
             Assert.IsTrue(doingActivate, "Activate method still running");
             doingActivate = false;
         }
@@ -40,7 +36,7 @@ namespace TestInternalGrains
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Not doing Deactivate yet");
             doingDeactivate = true;
-            await watcher.RecordDeactivateCall(this.Data.ActivationId.ToString());
+            await watcher.RecordDeactivateCall(Data.ActivationId.ToString());
             Assert.IsTrue(doingDeactivate, "Deactivate method still running");
             doingDeactivate = false;
         }
@@ -50,7 +46,7 @@ namespace TestInternalGrains
             logger.Info("DoSomething");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            return Task.FromResult(this.Data.ActivationId.ToString());
+            return Task.FromResult(Data.ActivationId.ToString());
         }
 
         public Task DoDeactivate()
@@ -58,7 +54,7 @@ namespace TestInternalGrains
             logger.Info("DoDeactivate");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            base.DeactivateOnIdle();
+            DeactivateOnIdle();
             return TaskDone.Done;
         }
     }
@@ -74,13 +70,13 @@ namespace TestInternalGrains
 
         public override Task OnActivateAsync()
         {
-            this.logger = GetLogger();
+            logger = GetLogger();
             logger.Info("OnActivateAsync");
-            this.watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
+            watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Not doing Deactivate yet");
             doingActivate = true;
-            return watcher.RecordActivateCall(this.Data.ActivationId.ToString())
+            return watcher.RecordActivateCall(Data.ActivationId.ToString())
                 .ContinueWith((Task t) =>
                 {
                     Assert.IsFalse(t.IsFaulted, "RecordActivateCall failed");
@@ -95,7 +91,7 @@ namespace TestInternalGrains
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Not doing Deactivate yet");
             doingDeactivate = true;
-            return watcher.RecordDeactivateCall(this.Data.ActivationId.ToString())
+            return watcher.RecordDeactivateCall(Data.ActivationId.ToString())
                 .ContinueWith((Task t) =>
                 {
                     Assert.IsFalse(t.IsFaulted, "RecordDeactivateCall failed");
@@ -109,7 +105,7 @@ namespace TestInternalGrains
             logger.Info("DoSomething");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            return Task.FromResult(this.Data.ActivationId.ToString());
+            return Task.FromResult(Data.ActivationId.ToString());
         }
 
         public Task DoDeactivate()
@@ -117,7 +113,7 @@ namespace TestInternalGrains
             logger.Info("DoDeactivate");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            base.DeactivateOnIdle();
+            DeactivateOnIdle();
             return TaskDone.Done;
         }
     }
@@ -133,8 +129,8 @@ namespace TestInternalGrains
 
         public override async Task OnActivateAsync()
         {
-            this.logger = GetLogger();
-            this.watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
+            logger = GetLogger();
+            watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
 
             Assert.IsFalse(doingActivate, "Not doing Activate yet");
             Assert.IsFalse(doingDeactivate, "Not doing Deactivate yet");
@@ -143,10 +139,11 @@ namespace TestInternalGrains
             logger.Info("OnActivateAsync");
 
             // Spawn Task to run on default .NET thread pool
-            Task task = Task.Factory.StartNew(() =>
+            var task = Task.Factory.StartNew(() =>
             {
                 logger.Info("Started-OnActivateAsync-SubTask");
-                Assert.IsTrue(TaskScheduler.Current == TaskScheduler.Default, "Running under default .NET Task scheduler");
+                Assert.IsTrue(TaskScheduler.Current == TaskScheduler.Default,
+                    "Running under default .NET Task scheduler");
                 Assert.IsTrue(doingActivate, "Still doing Activate in Sub-Task");
                 logger.Info("Finished-OnActivateAsync-SubTask");
             }, CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
@@ -154,7 +151,7 @@ namespace TestInternalGrains
 
             logger.Info("Started-OnActivateAsync");
 
-            await watcher.RecordActivateCall(this.Data.ActivationId.ToString());
+            await watcher.RecordActivateCall(Data.ActivationId.ToString());
             Assert.IsTrue(doingActivate, "Doing Activate");
 
             logger.Info("OnActivateAsync-Sleep");
@@ -175,7 +172,7 @@ namespace TestInternalGrains
 
             logger.Info("Started-OnDeactivateAsync");
 
-            await watcher.RecordDeactivateCall(this.Data.ActivationId.ToString());
+            await watcher.RecordDeactivateCall(Data.ActivationId.ToString());
             Assert.IsTrue(doingDeactivate, "Doing Deactivate");
 
             logger.Info("OnDeactivateAsync-Sleep");
@@ -189,7 +186,7 @@ namespace TestInternalGrains
             logger.Info("DoSomething");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            return Task.FromResult(this.Data.ActivationId.ToString());
+            return Task.FromResult(Data.ActivationId.ToString());
         }
 
         public Task DoDeactivate()
@@ -197,7 +194,7 @@ namespace TestInternalGrains
             logger.Info("DoDeactivate");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            base.DeactivateOnIdle();
+            DeactivateOnIdle();
             return TaskDone.Done;
         }
     }
@@ -213,15 +210,15 @@ namespace TestInternalGrains
 
         public override Task OnActivateAsync()
         {
-            this.logger = GetLogger();
+            logger = GetLogger();
 
-            var startMe = 
+            var startMe =
                 new Task(
                     () =>
                     {
                         logger.Info("OnActivateAsync");
 
-                        this.watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
+                        watcher = GrainFactory.GetGrain<IActivateDeactivateWatcherGrain>(0);
 
                         Assert.IsFalse(doingActivate, "Not doing Activate");
                         Assert.IsFalse(doingDeactivate, "Not doing Deactivate");
@@ -240,12 +237,12 @@ namespace TestInternalGrains
                     try
                     {
                         logger.Info("Calling RecordActivateCall");
-                        await watcher.RecordActivateCall(this.Data.ActivationId.ToString());
+                        await watcher.RecordActivateCall(Data.ActivationId.ToString());
                         logger.Info("Returned from calling RecordActivateCall");
                     }
                     catch (Exception exc)
                     {
-                        string msg = "RecordActivateCall failed with error " + exc;
+                        var msg = "RecordActivateCall failed with error " + exc;
                         logger.Error(0, msg);
                         Assert.Fail(msg);
                     }
@@ -273,15 +270,16 @@ namespace TestInternalGrains
             doingDeactivate = true;
 
             logger.Info("Started-OnDeactivateAsync");
-            return watcher.RecordDeactivateCall(this.Data.ActivationId.ToString())
-            .ContinueWith((Task t) =>
-            {
-                Assert.IsFalse(t.IsFaulted, "RecordDeactivateCall failed");
-                Assert.IsTrue(doingDeactivate, "Doing Deactivate");
-                Thread.Sleep(TimeSpan.FromSeconds(1));
-                doingDeactivate = false;
-            })
-            .ContinueWith((Task t) => logger.Info("Finished-OnDeactivateAsync"), TaskContinuationOptions.ExecuteSynchronously);
+            return watcher.RecordDeactivateCall(Data.ActivationId.ToString())
+                .ContinueWith((Task t) =>
+                {
+                    Assert.IsFalse(t.IsFaulted, "RecordDeactivateCall failed");
+                    Assert.IsTrue(doingDeactivate, "Doing Deactivate");
+                    Thread.Sleep(TimeSpan.FromSeconds(1));
+                    doingDeactivate = false;
+                })
+                .ContinueWith((Task t) => logger.Info("Finished-OnDeactivateAsync"),
+                    TaskContinuationOptions.ExecuteSynchronously);
         }
 
         public Task<string> DoSomething()
@@ -289,7 +287,7 @@ namespace TestInternalGrains
             logger.Info("DoSomething");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            return Task.FromResult(this.Data.ActivationId.ToString());
+            return Task.FromResult(Data.ActivationId.ToString());
         }
 
         public Task DoDeactivate()
@@ -297,7 +295,7 @@ namespace TestInternalGrains
             logger.Info("DoDeactivate");
             Assert.IsFalse(doingActivate, "Activate method should have finished");
             Assert.IsFalse(doingDeactivate, "Deactivate method should not be running yet");
-            base.DeactivateOnIdle();
+            DeactivateOnIdle();
             return TaskDone.Done;
         }
     }
@@ -308,7 +306,7 @@ namespace TestInternalGrains
 
         public override Task OnActivateAsync()
         {
-            this.logger = GetLogger();
+            logger = GetLogger();
             logger.Info("OnActivateAsync");
             throw new ApplicationException("Thrown from Application-OnActivateAsync");
         }
@@ -344,7 +342,7 @@ namespace TestInternalGrains
 
         public override Task OnActivateAsync()
         {
-            this.logger = GetLogger();
+            logger = GetLogger();
             logger.Info("OnActivateAsync");
             throw new NotImplementedException("OnActivateAsync should not have been called");
         }
@@ -381,7 +379,7 @@ namespace TestInternalGrains
         public async Task<string> DoSomething()
         {
             logger.Info("DoSomething");
-            Guid guid = Guid.NewGuid();
+            var guid = Guid.NewGuid();
             await grain.SetLabel(guid.ToString());
             var label = await grain.GetLabel();
 
@@ -389,7 +387,7 @@ namespace TestInternalGrains
             {
                 throw new ArgumentException("Bad data: Null label returned");
             }
-            return this.Data.ActivationId.ToString();
+            return Data.ActivationId.ToString();
         }
 
         public async Task ForwardCall(IBadActivateDeactivateTestGrain otherGrain)
@@ -397,6 +395,5 @@ namespace TestInternalGrains
             logger.Info("ForwardCall to " + otherGrain);
             await otherGrain.ThrowSomething();
         }
-
     }
 }
