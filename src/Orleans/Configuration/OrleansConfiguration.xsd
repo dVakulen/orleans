@@ -785,6 +785,18 @@
           </xs:sequence>
         </xs:complexType>
       </xs:element>
+      <xs:element name="StreamProviders" minOccurs="0" maxOccurs="1">
+        <xs:annotation>
+          <xs:documentation>
+            The optional StreamProviders element contains information relating to stream provider instances used for streaming.
+          </xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="Provider" type="tns:ProviderInstanceConfig" minOccurs="0" maxOccurs="unbounded" />
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
       <xs:element name="Application" minOccurs="0" maxOccurs="1">
         <xs:complexType>
           <xs:annotation>
