@@ -18,6 +18,7 @@ using Orleans.Runtime.Configuration;
 using Newtonsoft.Json;
 using Orleans.Providers;
 using System.Runtime.Serialization.Formatters;
+using Orleans.Threading;
 
 namespace Orleans.Serialization
 {

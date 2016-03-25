@@ -6,7 +6,7 @@ using Orleans.Concurrency;
 using Orleans.Providers;
 using UnitTests.GrainInterfaces;
 using System.Globalization;
-using Orleans.CodeGeneration;
+using System.Threading;
 
 namespace UnitTests.Grains
 {
@@ -580,9 +580,47 @@ namespace UnitTests.Grains
 
     public class LongRunningTaskGrain<T> : Grain, ILongRunningTaskGrain<T>
     {
+        public Task<bool> CancellationTokenCallbackResolve(CancellationToken tc)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            tc.Register(() =>
+            {
+                if (Thread.CurrentThread.Name == null ||
+                    !Thread.CurrentThread.Name.Contains("Runtime.Scheduler.WorkerPoolThread"))
+                {
+                    tcs.SetException(new Exception("Callback executed on wrong thread"));
+                }
+                else
+                {
+                    tcs.SetResult(true);
+                }
+            });
+
+            return tcs.Task;
+        }
+
         public async Task<T> CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, T t, TimeSpan delay)
         {
             return await target.LongRunningTask(t, delay);
+        }
+
+        public async Task CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, CancellationToken tc, TimeSpan delay)
+        {
+            await target.LongWait(tc, delay);
+        }
+
+        public async Task CallOtherLongRunningTaskWithLocalToken(ILongRunningTaskGrain<T> target, TimeSpan delay, TimeSpan delayBeforeCancel)
+        {
+            var tcs = new CancellationTokenSource();
+            var task = target.LongWait(tcs.Token, delay);
+            await Task.Delay(delayBeforeCancel);
+            tcs.Cancel();
+            await task;
+        }
+
+        public async Task LongWait(CancellationToken tc, TimeSpan delay)
+        {
+            await Task.Delay(delay, tc);
         }
 
         public async Task<T> LongRunningTask(T t, TimeSpan delay)
@@ -623,4 +661,14 @@ namespace UnitTests.Grains
             return Task.FromResult(value);
         }
     }
+
+
+    public class NonGenericCastableGrain : Grain, INonGenericCastableGrain, ISomeGenericGrain<string>
+    {
+        Task<string> ISomeGenericGrain<string>.Hello() {
+            return Task.FromResult("Hello!");
+        }
+    }
+
+
 }

@@ -1062,6 +1062,10 @@ namespace Orleans
         CodeGenIgnoringTypes                = CodeGenBase + 5,
         CodeGenDllMissing                   = CodeGenBase + 6,
         CodeGenSystemTypeRequiresSerializer = CodeGenBase + 7,
+
+        CancellationTokenManagerBase        = Runtime + 3900,
+        CancellationTokenCancelFailed       = CancellationTokenManagerBase + 1,
+        CancellationExtensionCreationFailed = CancellationTokenManagerBase + 2
     }
 }
 // ReSharper restore InconsistentNaming

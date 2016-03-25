@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading;
 using System.Reflection;
 using System.Threading.Tasks;
 
@@ -16,6 +17,7 @@ using Orleans.Runtime.ConsistentRing;
 using Orleans.Serialization;
 using Orleans.Storage;
 using Orleans.Streams;
+using Orleans.Threading;
 using Orleans.Runtime.Providers;
 
 
@@ -38,6 +40,7 @@ namespace Orleans.Runtime
         private readonly InvocationMethodInfoMap invocationMethodInfoMap = new InvocationMethodInfoMap();
         public TimeSpan ResponseTimeout { get; private set; }
         private readonly GrainTypeManager typeManager;
+        private readonly CancellationTokenManager cancellationTokenManager;
         private GrainInterfaceMap grainInterfaceMap;
 
         internal readonly IConsistentRingProvider ConsistentRingProvider;
@@ -64,6 +67,7 @@ namespace Orleans.Runtime
             config.OnConfigChange("Globals/Message", () => ResponseTimeout = Config.Globals.ResponseTimeout);
             RuntimeClient.Current = this;
             this.typeManager = typeManager;
+            cancellationTokenManager = new CancellationTokenManager();
             this.InternalGrainFactory = grainFactory;
         }
 
@@ -99,6 +103,7 @@ namespace Orleans.Runtime
             InvokeMethodOptions options,
             string genericArguments = null)
         {
+            cancellationTokenManager.WrapCancellationTokens(request.Arguments, target);
             var message = Message.CreateMessage(request, options);
             SendRequestMessage(target, message, context, callback, debugContext, options, genericArguments);
         }
@@ -336,6 +341,15 @@ namespace Orleans.Runtime
                 try
                 {
                     var request = (InvokeMethodRequest) message.BodyObject;
+                    if (request.Arguments != null)
+                    {
+                        for (var i = 0; i < request.Arguments.Length; i++)
+                        {
+                            var arg = request.Arguments[i];
+                            if (!(arg is CancellationTokenWrapper)) continue;
+                            UnwrapCancellationToken(target, arg, request, i);
+                        }
+                    }
 
                     var invoker = invokable.GetInvoker(request.InterfaceId, message.GenericGrainType);
 
@@ -411,6 +425,38 @@ namespace Orleans.Runtime
                 logger.Warn(ErrorCode.Runtime_Error_100329, "Exception during Invoke of message: " + message, exc2);
                 if (message.Direction != Message.Directions.OneWay)
                     SafeSendExceptionResponse(message, exc2);             
+            }
+        }
+
+        private static void UnwrapCancellationToken(IAddressable target, object arg, InvokeMethodRequest request, int i)
+        {
+            // essentially unwrapping tokens that were wrapped before request sending
+            var orleansTokenWrapper = ((CancellationTokenWrapper)arg);
+            if (orleansTokenWrapper.WentThroughSerialization
+                && !orleansTokenWrapper.CancellationToken.IsCancellationRequested)
+            {
+                ICancellationSourcesExtension cancellationExtension;
+                if (!SiloProviderRuntime.Instance.TryGetExtensionHandler(out cancellationExtension))
+                {
+                    cancellationExtension = new CancellationSourcesExtension();
+                    request.Arguments[i] = ((CancellationSourcesExtension)cancellationExtension).GetOrCreateCancellationTokenSource(
+                        orleansTokenWrapper.Id).Token;
+                    if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension) && logger.IsWarning)
+                    {
+                        logger.Warn(
+                            ErrorCode.CancellationExtensionCreationFailed,
+                            string.Format("Could not add cancellation token extension, target: {0}", target));
+                    }
+                }
+                else
+                {
+                    request.Arguments[i] = ((CancellationSourcesExtension)cancellationExtension).GetOrCreateCancellationTokenSource(
+                        orleansTokenWrapper.Id).Token;
+                }
+            }
+            else
+            {
+                request.Arguments[i] = orleansTokenWrapper.CancellationToken;
             }
         }
 
