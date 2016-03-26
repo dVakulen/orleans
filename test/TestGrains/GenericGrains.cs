@@ -581,6 +581,16 @@ namespace UnitTests.Grains
 
     public class LongRunningTaskGrain<T> : Grain, ILongRunningTaskGrain<T>
     {
+        public Task CancellationTokenCallbackThrow(GrainCancellationToken tc)
+        {
+            tc.CancellationToken.Register(() =>
+            {
+                throw new Exception("From cancellation token callback");
+            });
+
+            return TaskDone.Done;
+        }
+
         public Task<bool> CancellationTokenCallbackResolve(GrainCancellationToken tc)
         {
             var tcs = new TaskCompletionSource<bool>();
@@ -613,7 +623,7 @@ namespace UnitTests.Grains
         public async Task CallOtherLongRunningTaskWithLocalToken(ILongRunningTaskGrain<T> target, TimeSpan delay, TimeSpan delayBeforeCancel)
         {
             var tcs = new GrainCancellationTokenSource();
-            var task = target.LongWait(tcs.GrainCancellationToken, delay);
+            var task = target.LongWait(tcs.Token, delay);
             await Task.Delay(delayBeforeCancel);
             await tcs.Cancel();
             await task;

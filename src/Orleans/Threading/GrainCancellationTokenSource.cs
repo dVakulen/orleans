@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Orleans.Runtime;
 
 namespace Orleans.Threading
 {
@@ -12,52 +11,35 @@ namespace Orleans.Threading
     {
         private readonly CancellationTokenSource _cancellationTokenSource;
 
-        private readonly TraceLogger _logger = TraceLogger.GetLogger("GrainCancellationTokenSource", TraceLogger.LoggerType.Runtime);
-
-        private readonly GrainCancellationToken _cancellationToken;
-
-        private volatile bool _isCancellationRequested;
+        private readonly GrainCancellationToken _grainCancellationToken;
 
         /// <summary>
         /// Initializes the <see cref="T:Orleans.Threading.GrainCancellationTokenSource"/>.
         /// </summary>
-        public GrainCancellationTokenSource() : this(false)
-        {
-        }
-
-        /// <summary>
-        /// Initializes the <see cref="T:Orleans.Threading.GrainCancellationTokenSource"/>.
-        /// </summary>
-        public GrainCancellationTokenSource(bool cancelled) : this(Guid.NewGuid(), cancelled)
+        public GrainCancellationTokenSource() : this(Guid.NewGuid(), false)
         {
         }
 
         internal GrainCancellationTokenSource(Guid id, bool cancelled)
         {
             _cancellationTokenSource = new CancellationTokenSource();
-            _isCancellationRequested = cancelled;
             if (cancelled)
             {
                 _cancellationTokenSource.Cancel();
             }
 
-            _cancellationToken = new GrainCancellationToken(id, _cancellationTokenSource.Token);
+            _grainCancellationToken = new GrainCancellationToken(id, _cancellationTokenSource.Token);
         }
 
         /// <summary>
-        /// 
+        /// Gets the <see cref="Orleans.Threading.GrainCancellationToken">CancellationToken</see>
+        /// associated with this <see cref="GrainCancellationTokenSource"/>.
         /// </summary>
-        public CancellationToken Token
+        /// <value>The <see cref="Orleans.Threading.GrainCancellationToken">CancellationToken</see>
+        /// associated with this <see cref="GrainCancellationTokenSource"/>.</value>
+        public GrainCancellationToken Token
         {
-            get { return _cancellationTokenSource.Token; }
-        }
-
-        /// <summary>
-        /// 
-        /// </summary>
-        public GrainCancellationToken GrainCancellationToken
-        {
-            get { return _cancellationToken; }
+            get { return _grainCancellationToken; }
         }
 
         /// <summary>
@@ -112,30 +94,19 @@ namespace Orleans.Threading
         /// cref="T:Orleans.Threading.GrainCancellationTokenSource"/> has been disposed.</exception> 
         public Task Cancel()
         {
-            if (_isCancellationRequested)
+            if (_cancellationTokenSource.IsCancellationRequested)
             {
                 return TaskDone.Done;
             }
 
-            _isCancellationRequested = true;
             _cancellationTokenSource.Cancel();
-            if (_cancellationToken.TargetGrainReference == null && _cancellationToken.WentThroughSerialization)
-            {
-                if (_logger.IsWarning)
-                {
-                    _logger.Warn(ErrorCode.CancellationTokenCancelFailed, "Remote token cancellation failed");
-                }
-
-                throw new Exception();
-            }
-
-            if (!_cancellationToken.WentThroughSerialization)
+            if (!_grainCancellationToken.WentThroughSerialization)
             {
                 // token have not passed the croos-domain bounds and remote call is not needed
                 return TaskDone.Done;
             }
 
-            return _cancellationToken.TargetGrainReference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(_cancellationToken);
+            return _grainCancellationToken.TargetGrainReference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(_grainCancellationToken);
         }
 
         /// <summary>
@@ -156,11 +127,6 @@ namespace Orleans.Threading
         /// this <see cref="T:Orleans.Threading.GrainCancellationTokenSource"/> is canceled, if it has
         /// not been canceled already.
         /// </para>
-        /// <para>
-        /// Subsequent calls to CancelAfter will reset the millisecondsDelay for this  
-        /// <see cref="T:Orleans.Threading.GrainCancellationTokenSource"/>, if it has not been
-        /// canceled already.
-        /// </para>
         /// </remarks>
         public async Task CancelAfter(int millisecondsDelay)
         {
@@ -169,15 +135,30 @@ namespace Orleans.Threading
         }
 
         /// <summary>
-        /// 
+        /// Schedules a Cancel operation on this <see cref="T:Orleans.Threading.GrainCancellationTokenSource"/>.
         /// </summary>
-        /// <param name="delay"></param>
+        /// <param name="delay">The time span to wait before canceling this <see
+        /// cref="T:Orleans.Threading.GrainCancellationTokenSource"/>.
+        /// </param>
+        /// <remarks>
+        /// <para>
+        /// The countdown for the millisecondsDelay starts during this call.  When the millisecondsDelay expires, 
+        /// this <see cref="T:Orleans.Threading.GrainCancellationTokenSource"/> is canceled, if it has
+        /// not been canceled already.
+        /// </para>
+        /// </remarks>
         public async void CancelAfter(TimeSpan delay)
         {
             await Task.Delay(delay);
             await Cancel();
         }
 
+        /// <summary>
+        /// Releases the resources used by this <see cref="T:Orleans.Threading.GrainCancellationTokenSource" />.
+        /// </summary>
+        /// <remarks>
+        /// This method is not thread-safe for any other concurrent calls.
+        /// </remarks>
         public void Dispose()
         {
             _cancellationTokenSource.Dispose();
