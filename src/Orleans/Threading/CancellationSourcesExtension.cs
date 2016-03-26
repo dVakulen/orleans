@@ -12,20 +12,25 @@ namespace Orleans.Threading
     {
         private readonly Lazy<TraceLogger> _logger = new Lazy<TraceLogger>(() =>
             TraceLogger.GetLogger("CancellationSourcesExtension", TraceLogger.LoggerType.Application));
-        private readonly Interner<Guid, CancellationTokenSource> _cancellationTokenSources;
+        private readonly Interner<Guid, GrainCancellationTokenSource> _cancellationTokenSources;
         private readonly TimeSpan _cleanupFrequency = TimeSpan.FromMinutes(10);
         private readonly int _defaultInternerCollectionSize = 31;
 
         public CancellationSourcesExtension()
         {
-            _cancellationTokenSources = new Interner<Guid, CancellationTokenSource>(
+            _cancellationTokenSources = new Interner<Guid, GrainCancellationTokenSource>(
                 _defaultInternerCollectionSize,
                 _cleanupFrequency);
         }
 
+        public Task CancelTokenSource(GrainCancellationToken token)
+        {
+            return CancelTokenSource(token.Id);
+        }
+
         public Task CancelTokenSource(Guid tokenId)
         {
-            CancellationTokenSource cts;
+            GrainCancellationTokenSource cts;
             if (!_cancellationTokenSources.TryFind(tokenId, out cts))
             {
                 if (_logger.Value.IsWarning)
@@ -36,21 +41,25 @@ namespace Orleans.Threading
                 return TaskDone.Done;
             }
 
-            cts.Cancel();
-            return TaskDone.Done;
+            return cts.Cancel();
         }
 
-        internal CancellationTokenSource GetOrCreateCancellationTokenSource(Guid tokenId)
+        internal GrainCancellationToken GetOrCreateCancellationToken(Guid tokenId, bool cancelled)
         {
-            CancellationTokenSource cts;
-            if (_cancellationTokenSources.TryFind(tokenId, out cts))
-            {
-                return cts;
-            }
+            GrainCancellationTokenSource cts = _cancellationTokenSources.FindOrCreate(tokenId,
+                () =>
+                {
+                    var z =
+                        new GrainCancellationTokenSource(tokenId, cancelled);
+                    z.Token.Register(() =>
+                    {
+                        var b = z;
+                        var f = b;
+                    });
+                    return z;
+                });
 
-            cts = new CancellationTokenSource();
-            _cancellationTokenSources.Intern(tokenId, cts);
-            return cts;
+            return cts.GrainCancellationToken;
         }
     }
 }

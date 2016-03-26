@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Orleans;
 using Orleans.TestingHost;
+using Orleans.Threading;
 using UnitTests.GrainInterfaces;
 using Xunit;
 using UnitTests.Tester;
@@ -34,10 +35,10 @@ namespace UnitTests.MembershipTests
             foreach (var delay in cancellationDelaysInMS.Select(TimeSpan.FromMilliseconds))
             {
                 var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
-                var tcs = new CancellationTokenSource();
-                var wait = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
+                var tcs = new GrainCancellationTokenSource();
+                var wait = grain.LongWait(tcs.GrainCancellationToken, TimeSpan.FromSeconds(10));
                 await Task.Delay(delay);
-                tcs.Cancel();
+                await tcs.Cancel();
                 await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
             }
         }
@@ -46,9 +47,9 @@ namespace UnitTests.MembershipTests
         public async Task PreCancelledTokenPassing()
         {
             var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
-            var tcs = new CancellationTokenSource();
-            tcs.Cancel();
-            var wait = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
+            var tcs = new GrainCancellationTokenSource();
+            await tcs.Cancel();
+            var wait = grain.LongWait(tcs.GrainCancellationToken, TimeSpan.FromSeconds(10));
             await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
         }
 
@@ -56,10 +57,10 @@ namespace UnitTests.MembershipTests
         public async Task CancellationTokenCallbacksExecutionContext()
         {
             var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
-            var tcs = new CancellationTokenSource();
-            var wait = grain.CancellationTokenCallbackResolve(tcs.Token);
+            var tcs = new GrainCancellationTokenSource();
+            var wait = grain.CancellationTokenCallbackResolve(tcs.GrainCancellationToken);
             await Task.Delay(1000);
-            tcs.Cancel();
+            await tcs.Cancel();
             var result = await wait;
             Assert.Equal(true, result);
         }
@@ -72,10 +73,10 @@ namespace UnitTests.MembershipTests
                 var grains = await GetGrains<bool>();
                 var grain = grains.Item1;
                 var target = grains.Item2;
-                var tcs = new CancellationTokenSource();
-                var wait = grain.CallOtherLongRunningTask(target, tcs.Token, TimeSpan.FromSeconds(10));
+                var tcs = new GrainCancellationTokenSource();
+                var wait = grain.CallOtherLongRunningTask(target, tcs.GrainCancellationToken, TimeSpan.FromSeconds(10));
                 await Task.Delay(delay);
-                tcs.Cancel();
+                await tcs.Cancel();
                 await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
             }
         }
@@ -111,20 +112,26 @@ namespace UnitTests.MembershipTests
             var instanceId = await grain.GetRuntimeInstanceId();
             var target = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<T1>>(Guid.NewGuid());
             var targetInstanceId = await target.GetRuntimeInstanceId();
+            var retriesCount = 0;
+            var retriesLimit = 7;
             if (placeOnDifferentSilos)
             {
                 while (instanceId.Equals(targetInstanceId))
                 {
+                    if(retriesCount >= retriesLimit) throw new Exception("Could not place grains on different silos");
                     target = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<T1>>(Guid.NewGuid());
                     targetInstanceId = await target.GetRuntimeInstanceId();
+                    retriesCount++;
                 }
             }
             else
             {
                 while (!instanceId.Equals(targetInstanceId))
                 {
+                    if (retriesCount >= retriesLimit) throw new Exception("Could not place grains on same silo");
                     target = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<T1>>(Guid.NewGuid());
                     targetInstanceId = await target.GetRuntimeInstanceId();
+                    retriesCount++;
                 }
             }
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Orleans;
+using Orleans.Threading;
 
 namespace UnitTests.GrainInterfaces
 {
@@ -185,13 +186,13 @@ namespace UnitTests.GrainInterfaces
     public interface ILongRunningTaskGrain<T> : IGrainWithGuidKey
     {
         Task<string> GetRuntimeInstanceId();
-        Task LongWait(CancellationToken tc, TimeSpan delay);
+        Task LongWait(GrainCancellationToken tc, TimeSpan delay);
         Task<T> LongRunningTask(T t, TimeSpan delay);
         Task<T> CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, T t, TimeSpan delay);
-        Task CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, CancellationToken tc, TimeSpan delay);
+        Task CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, GrainCancellationToken tc, TimeSpan delay);
         Task CallOtherLongRunningTaskWithLocalToken(ILongRunningTaskGrain<T> target, TimeSpan delay,
             TimeSpan delayBeforeCancel);
-        Task<bool> CancellationTokenCallbackResolve(CancellationToken tc);
+        Task<bool> CancellationTokenCallbackResolve(GrainCancellationToken tc);
     }
 
     public interface IGenericGrainWithConstraints<A, B, C> : IGrainWithStringKey

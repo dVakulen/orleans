@@ -7,6 +7,7 @@ using Orleans.Providers;
 using UnitTests.GrainInterfaces;
 using System.Globalization;
 using System.Threading;
+using Orleans.Threading;
 
 namespace UnitTests.Grains
 {
@@ -580,10 +581,10 @@ namespace UnitTests.Grains
 
     public class LongRunningTaskGrain<T> : Grain, ILongRunningTaskGrain<T>
     {
-        public Task<bool> CancellationTokenCallbackResolve(CancellationToken tc)
+        public Task<bool> CancellationTokenCallbackResolve(GrainCancellationToken tc)
         {
             var tcs = new TaskCompletionSource<bool>();
-            tc.Register(() =>
+            tc.CancellationToken.Register(() =>
             {
                 if (Thread.CurrentThread.Name == null ||
                     !Thread.CurrentThread.Name.Contains("Runtime.Scheduler.WorkerPoolThread"))
@@ -604,23 +605,23 @@ namespace UnitTests.Grains
             return await target.LongRunningTask(t, delay);
         }
 
-        public async Task CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, CancellationToken tc, TimeSpan delay)
+        public async Task CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, GrainCancellationToken tc, TimeSpan delay)
         {
             await target.LongWait(tc, delay);
         }
 
         public async Task CallOtherLongRunningTaskWithLocalToken(ILongRunningTaskGrain<T> target, TimeSpan delay, TimeSpan delayBeforeCancel)
         {
-            var tcs = new CancellationTokenSource();
-            var task = target.LongWait(tcs.Token, delay);
+            var tcs = new GrainCancellationTokenSource();
+            var task = target.LongWait(tcs.GrainCancellationToken, delay);
             await Task.Delay(delayBeforeCancel);
-            tcs.Cancel();
+            await tcs.Cancel();
             await task;
         }
 
-        public async Task LongWait(CancellationToken tc, TimeSpan delay)
+        public async Task LongWait(GrainCancellationToken tc, TimeSpan delay)
         {
-            await Task.Delay(delay, tc);
+            await Task.Delay(delay, tc.CancellationToken);
         }
 
         public async Task<T> LongRunningTask(T t, TimeSpan delay)

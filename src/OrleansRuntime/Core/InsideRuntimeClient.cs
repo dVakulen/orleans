@@ -103,7 +103,7 @@ namespace Orleans.Runtime
             InvokeMethodOptions options,
             string genericArguments = null)
         {
-            cancellationTokenManager.WrapCancellationTokens(request.Arguments, target);
+            cancellationTokenManager.SetGrainCancellationTokensTarget(request.Arguments, target);
             var message = Message.CreateMessage(request, options);
             SendRequestMessage(target, message, context, callback, debugContext, options, genericArguments);
         }
@@ -346,7 +346,7 @@ namespace Orleans.Runtime
                         for (var i = 0; i < request.Arguments.Length; i++)
                         {
                             var arg = request.Arguments[i];
-                            if (!(arg is CancellationTokenWrapper)) continue;
+                            if (!(arg is GrainCancellationToken)) continue;
                             UnwrapCancellationToken(target, arg, request, i);
                         }
                     }
@@ -430,33 +430,31 @@ namespace Orleans.Runtime
 
         private static void UnwrapCancellationToken(IAddressable target, object arg, InvokeMethodRequest request, int i)
         {
-            // essentially unwrapping tokens that were wrapped before request sending
-            var orleansTokenWrapper = ((CancellationTokenWrapper)arg);
-            if (orleansTokenWrapper.WentThroughSerialization
-                && !orleansTokenWrapper.CancellationToken.IsCancellationRequested)
+            var grainToken = ((GrainCancellationToken)arg);
+            if (grainToken.WentThroughSerialization)
             {
-                ICancellationSourcesExtension cancellationExtension;
+                CancellationSourcesExtension cancellationExtension;
                 if (!SiloProviderRuntime.Instance.TryGetExtensionHandler(out cancellationExtension))
                 {
                     cancellationExtension = new CancellationSourcesExtension();
-                    request.Arguments[i] = ((CancellationSourcesExtension)cancellationExtension).GetOrCreateCancellationTokenSource(
-                        orleansTokenWrapper.Id).Token;
-                    if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension) && logger.IsWarning)
+
+                    if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension))
                     {
-                        logger.Warn(
+                        if (logger.IsWarning) logger.Warn(
                             ErrorCode.CancellationExtensionCreationFailed,
                             string.Format("Could not add cancellation token extension, target: {0}", target));
+                        return;
                     }
                 }
-                else
-                {
-                    request.Arguments[i] = ((CancellationSourcesExtension)cancellationExtension).GetOrCreateCancellationTokenSource(
-                        orleansTokenWrapper.Id).Token;
-                }
+
+                request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(
+                    grainToken.Id,
+                    grainToken.CancellationToken.IsCancellationRequested);
             }
             else
-            {
-                request.Arguments[i] = orleansTokenWrapper.CancellationToken;
+            { 
+                // no need to register remote token extension for already cancelled or local token
+                request.Arguments[i] = grainToken;
             }
         }
 

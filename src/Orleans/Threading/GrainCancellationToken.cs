@@ -7,32 +7,33 @@ using Orleans.Serialization;
 namespace Orleans.Threading
 {
     /// <summary>
-    /// Used as replacement of CancellationToken during network roundtrips
+    /// Grain cancellation token that can be passed thought cross-domain boundaries
     /// </summary>
     [Serializable]
-    internal class CancellationTokenWrapper
+    public class GrainCancellationToken
     {
         [NonSerialized]
         private CancellationToken _cancellationToken;
 
         [NonSerialized]
-        private Action<CancellationTokenWrapper> _onSerialization;
-
-        [NonSerialized]
         private bool _wentThroughSerialization;
 
-        public CancellationTokenWrapper(
+        /// <summary>
+        /// Initializes the <see cref="T:Orleans.Threading.GrainCancellationToken"/>.
+        /// </summary>
+        internal GrainCancellationToken(
             Guid id,
             CancellationToken cancellationToken, 
-            GrainReference target, 
-            Action<CancellationTokenWrapper> onSerialization)
+            GrainReference target)
             : this(id, cancellationToken)
         {
             TargetGrainReference = target;
-            OnSerialization = onSerialization;
         }
 
-        public CancellationTokenWrapper(Guid id, CancellationToken cancellationToken)
+        /// <summary>
+        /// Initializes the <see cref="T:Orleans.Threading.GrainCancellationToken"/>.
+        /// </summary>
+        internal GrainCancellationToken(Guid id, CancellationToken cancellationToken)
         {
             Id = id;
             CancellationToken = cancellationToken;
@@ -42,12 +43,12 @@ namespace Orleans.Threading
         /// <summary>
         /// Unique id of concrete token
         /// </summary>
-        public Guid Id { get; private set; }
+        internal Guid Id { get; private set; }
 
         /// <summary>
         /// Original request target grain reference
         /// </summary>
-        public GrainReference TargetGrainReference { get; private set; }
+        internal GrainReference TargetGrainReference { get; set; }
 
         /// <summary>
         /// Cancellation token
@@ -59,49 +60,37 @@ namespace Orleans.Threading
         }
 
         /// <summary>
-        /// Shows whether wrapper has went though serialization process or has not
+        /// Shows whether wrapper has went though serialization process or not
         /// </summary>
-        public bool WentThroughSerialization
+        internal bool WentThroughSerialization
         { 
             get { return _wentThroughSerialization; } 
             set { _wentThroughSerialization = value; }
         }
 
-        /// <summary>
-        /// Action that will be executed during serialization if wrapped token wasn't cancelled
-        /// </summary>
-        public Action<CancellationTokenWrapper> OnSerialization 
-        {
-            get { return _onSerialization; } 
-            private set { _onSerialization = value; }
-        }
-
         #region Serialization
 
         [SerializerMethodAttribute]
-        internal static void SerializeCancellationTokenWrapper(object obj, BinaryTokenStreamWriter stream, Type expected)
+        internal static void SerializeGrainCancellationToken(object obj, BinaryTokenStreamWriter stream, Type expected)
         {
-            var ctw = (CancellationTokenWrapper)obj;
+            var ctw = (GrainCancellationToken)obj;
+            ctw.WentThroughSerialization = true;
             var cancelled = ctw.CancellationToken.IsCancellationRequested;
-            if (!cancelled && ctw.OnSerialization != null)
-            {
-                ctw.OnSerialization(ctw);
-            }
 
             stream.Write(cancelled);
             stream.Write(ctw.Id);
         }
 
         [DeserializerMethodAttribute]
-        internal static object DeserializeCancellationTokenWrapper(Type expected, BinaryTokenStreamReader stream)
+        internal static object DeserializeGrainCancellationToken(Type expected, BinaryTokenStreamReader stream)
         {
             var cancellationRequested = stream.ReadToken() == SerializationTokenType.True;
             var tokenId = stream.ReadGuid();
-            return new CancellationTokenWrapper(tokenId, new CancellationToken(cancellationRequested)) { WentThroughSerialization = true };
+            return new GrainCancellationToken(tokenId, new CancellationToken(cancellationRequested)) { WentThroughSerialization = true };
         }
 
         [CopierMethodAttribute]
-        internal static object CopyCancellationTokenWrapper(object obj)
+        internal static object CopyGrainCancellationToken(object obj)
         {
             return obj; // CancellationToken is value type
         }
