@@ -13,7 +13,7 @@ namespace UnitTests.MembershipTests
 {
     public class CancellationTokenPassingTests : HostedTestClusterPerTest
     {
-        private double[] cancellationDelaysInMS = { 0, 10, 50, 500 };
+        private readonly double[] cancellationDelaysInMS = { 0, 10, 50, 500 };
 
         public override TestingSiloHost CreateSiloHost()
         {
@@ -36,7 +36,7 @@ namespace UnitTests.MembershipTests
             {
                 var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
                 var tcs = new GrainCancellationTokenSource();
-                var wait = grain.LongWait(tcs.GrainCancellationToken, TimeSpan.FromSeconds(10));
+                var wait = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
                 await Task.Delay(delay);
                 await tcs.Cancel();
                 await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
@@ -44,12 +44,22 @@ namespace UnitTests.MembershipTests
         }
 
         [Fact, TestCategory("Functional")]
+        public async Task TokenPassingWithoutCancellation_NoExceptionShouldBeThrown()
+        {
+            var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
+            var tcs = new GrainCancellationTokenSource();
+            await grain.LongWait(tcs.Token, TimeSpan.FromMilliseconds(100));
+            Assert.True(true);
+        }
+
+
+        [Fact, TestCategory("Functional")]
         public async Task PreCancelledTokenPassing()
         {
             var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
             var tcs = new GrainCancellationTokenSource();
             await tcs.Cancel();
-            var wait = grain.LongWait(tcs.GrainCancellationToken, TimeSpan.FromSeconds(10));
+            var wait = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
             await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
         }
 
@@ -58,11 +68,21 @@ namespace UnitTests.MembershipTests
         {
             var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
             var tcs = new GrainCancellationTokenSource();
-            var wait = grain.CancellationTokenCallbackResolve(tcs.GrainCancellationToken);
-            await Task.Delay(1000);
+            var wait = grain.CancellationTokenCallbackResolve(tcs.Token);
+            await Task.Delay(100);
             await tcs.Cancel();
             var result = await wait;
             Assert.Equal(true, result);
+        }
+
+        [Fact, TestCategory("Functional")]
+        public async Task CancellationTokenCallbacksThrow_ExceptionShouldBePropagated()
+        {
+            var grain = HostedCluster.GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
+            var tcs = new GrainCancellationTokenSource();
+            var wait = grain.CancellationTokenCallbackThrow(tcs.Token);
+            await Task.Delay(100);
+            await Assert.ThrowsAsync<AggregateException>(() => tcs.Cancel());
         }
 
         [Fact, TestCategory("Functional")]
@@ -74,7 +94,7 @@ namespace UnitTests.MembershipTests
                 var grain = grains.Item1;
                 var target = grains.Item2;
                 var tcs = new GrainCancellationTokenSource();
-                var wait = grain.CallOtherLongRunningTask(target, tcs.GrainCancellationToken, TimeSpan.FromSeconds(10));
+                var wait = grain.CallOtherLongRunningTask(target, tcs.Token, TimeSpan.FromSeconds(10));
                 await Task.Delay(delay);
                 await tcs.Cancel();
                 await Assert.ThrowsAsync<TaskCanceledException>(() => wait);

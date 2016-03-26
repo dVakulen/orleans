@@ -51,7 +51,7 @@ namespace Orleans.Threading
         internal GrainReference TargetGrainReference { get; set; }
 
         /// <summary>
-        /// Cancellation token
+        /// Underlying cancellation token
         /// </summary>
         public CancellationToken CancellationToken
         {
