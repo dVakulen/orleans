@@ -82,18 +82,30 @@ namespace Orleans.Runtime
             try
             {
                 Task ignore;
-                ActivationData target = catalog.GetOrCreateActivation(
+                var getOrCreateMessageResult = catalog.GetOrCreateActivation(
                     message.TargetAddress, 
                     message.IsNewPlacement, 
                     message.NewGrainType, 
                     message.GenericGrainType, 
                     message.RequestContextData,
                     out ignore);
-
-                if (ignore != null)
+                ActivationData target = null;
+                var successResult = getOrCreateMessageResult as Catalog.GetOrCreateActivationResult.Success;
+                if (successResult != null)
                 {
-                    ignore.Ignore();
+                    target = successResult.Result;
                 }
+                else
+                {
+                    var nea = getOrCreateMessageResult as Catalog.GetOrCreateActivationResult.NonExistentActivationFailure;
+                    if (nea != null)
+                    {
+                        HandleNonExistentActivationFailure(message, nea);
+                        return;
+                    }
+                }
+
+                ignore?.Ignore();
 
                 if (message.Direction == Message.Directions.Response)
                 {
@@ -112,78 +124,13 @@ namespace Orleans.Runtime
             }
             catch (Exception ex)
             {
-                try
-                {
-                    MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Non-existent activation");
-              
-                    var nea = ex as Catalog.NonExistentActivationException;
-                    if (nea == null)
-                    {
-                        var str = String.Format("Error creating activation for {0}. Message {1}", message.NewGrainType, message);
-                        logger.Error(ErrorCode.Dispatcher_ErrorCreatingActivation, str, ex);
-                        throw new OrleansException(str, ex);
-                    }
-
-                    if (nea.IsStatelessWorker)
-                    {
-                        if (logger.IsVerbose) logger.Verbose(ErrorCode.Dispatcher_Intermediate_GetOrCreateActivation,
-                           String.Format("Intermediate StatelessWorker NonExistentActivation for message {0}", message), ex);
-                    }
-                    else
-                    {
-                        logger.Info(ErrorCode.Dispatcher_Intermediate_GetOrCreateActivation,
-                            String.Format("Intermediate NonExistentActivation for message {0}", message), ex);
-                    }
-
-                    ActivationAddress nonExistentActivation = nea.NonExistentActivation;
-
-                    if (message.Direction != Message.Directions.Response)
-                    {
-                        // Un-register the target activation so we don't keep getting spurious messages.
-                        // The time delay (one minute, as of this writing) is to handle the unlikely but possible race where
-                        // this request snuck ahead of another request, with new placement requested, for the same activation.
-                        // If the activation registration request from the new placement somehow sneaks ahead of this un-registration,
-                        // we want to make sure that we don't un-register the activation we just created.
-                        // We would add a counter here, except that there's already a counter for this in the Catalog.
-                        // Note that this has to run in a non-null scheduler context, so we always queue it to the catalog's context
-                        if (config.Globals.DirectoryLazyDeregistrationDelay > TimeSpan.Zero)
-                        {
-                            Scheduler.QueueWorkItem(new ClosureWorkItem(
-                                // don't use message.TargetAddress, cause it may have been removed from the headers by this time!
-                                async () =>   
-                                {
-                                    try
-                                    { 
-                                        await Silo.CurrentSilo.LocalGrainDirectory.UnregisterConditionallyAsync(
-                                            nonExistentActivation);
-                                    }
-                                    catch(Exception exc)
-                                    {
-                                        logger.Warn(ErrorCode.Dispatcher_FailedToUnregisterNonExistingAct,
-                                            String.Format("Failed to un-register NonExistentActivation {0}", 
-                                                nonExistentActivation), exc);
-                                    }
-                                },
-                                () => "LocalGrainDirectory.UnregisterConditionallyAsync"),
-                                catalog.SchedulingContext);
-                        }
-                        ProcessRequestToInvalidActivation(message, nonExistentActivation, null, "Non-existent activation");
-                    }
-                    else
-                    {
-                        logger.Warn(ErrorCode.Dispatcher_NoTargetActivation,
-                            "No target activation {0} for response message: {1}", nonExistentActivation, message);
-                        Silo.CurrentSilo.LocalGrainDirectory.InvalidateCacheEntry(nonExistentActivation);
-                    }
-                }
-                catch (Exception exc)
-                {
-                    // Unable to create activation for this request - reject message
-                    RejectMessage(message, Message.RejectionTypes.Transient, exc);
-                }
+                MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Non-existent activation");
+                var str = $"Error creating activation for {message.NewGrainType}. Message {message}";
+                logger.Error(ErrorCode.Dispatcher_ErrorCreatingActivation, str, ex);
+                RejectMessage(message, Message.RejectionTypes.Transient, new OrleansException(str, ex));
             }
         }
-
+        
         public void RejectMessage(
             Message message, 
             Message.RejectionTypes rejectType, 
@@ -476,6 +423,73 @@ namespace Orleans.Runtime
                     logger.Warn(ErrorCode.Messaging_Dispatcher_TryForwardFailed, str, exc);
                     RejectMessage(message, Message.RejectionTypes.Transient, exc, str);
                 }
+            }
+        }
+
+        private void HandleNonExistentActivationFailure(Message message, Catalog.GetOrCreateActivationResult.NonExistentActivationFailure nea)
+        {
+            MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Non-existent activation");
+
+            var logMsg = $"Non-existent activation: {message.TargetAddress.ToFullString()}, grain type: {message.NewGrainType}.";
+            if (logger.IsVerbose) logger.Verbose(ErrorCode.CatalogNonExistingActivation2, logMsg);
+            if (nea.IsStatelessWorker)
+            {
+                if (logger.IsVerbose)
+                    logger.Verbose(ErrorCode.Dispatcher_Intermediate_GetOrCreateActivation,
+                        $"Intermediate StatelessWorker NonExistentActivation for message {message}; {logMsg}");
+            }
+            else
+            {
+                logger.Info(ErrorCode.Dispatcher_Intermediate_GetOrCreateActivation,
+                    $"Intermediate NonExistentActivation for message {message}; {logMsg}");
+            }
+
+            ActivationAddress nonExistentActivation = nea.NonExistentActivation;
+
+            if (message.Direction != Message.Directions.Response)
+            {
+                // Un-register the target activation so we don't keep getting spurious messages.
+                // The time delay (one minute, as of this writing) is to handle the unlikely but possible race where
+                // this request snuck ahead of another request, with new placement requested, for the same activation.
+                // If the activation registration request from the new placement somehow sneaks ahead of this un-registration,
+                // we want to make sure that we don't un-register the activation we just created.
+                // We would add a counter here, except that there's already a counter for this in the Catalog.
+                // Note that this has to run in a non-null scheduler context, so we always queue it to the catalog's context
+                if (config.Globals.DirectoryLazyDeregistrationDelay > TimeSpan.Zero)
+                {
+                    Scheduler.QueueWorkItem(new ClosureWorkItem(
+                        // don't use message.TargetAddress, cause it may have been removed from the headers by this time!
+                        async () =>
+                        {
+                            try
+                            {
+                                await Silo.CurrentSilo.LocalGrainDirectory.UnregisterConditionallyAsync(
+                                    nonExistentActivation);
+                            }
+                            catch (Exception exc)
+                            {
+                                logger.Warn(ErrorCode.Dispatcher_FailedToUnregisterNonExistingAct,
+                                    String.Format("Failed to un-register NonExistentActivation {0}",
+                                        nonExistentActivation), exc);
+                            }
+                        },
+                        () => "LocalGrainDirectory.UnregisterConditionallyAsync"),
+                        catalog.SchedulingContext);
+                }
+                try
+                {
+                    ProcessRequestToInvalidActivation(message, nonExistentActivation, null, "Non-existent activation");
+                }
+                catch (Exception exc)
+                {
+                    RejectMessage(message, Message.RejectionTypes.Transient, exc);
+                }
+            }
+            else
+            {
+                logger.Warn(ErrorCode.Dispatcher_NoTargetActivation,
+                    "No target activation {0} for response message: {1}", nonExistentActivation, message);
+                Silo.CurrentSilo.LocalGrainDirectory.InvalidateCacheEntry(nonExistentActivation);
             }
         }
 

@@ -20,98 +20,61 @@ namespace Orleans.Runtime
 {
     internal class Catalog : SystemTarget, ICatalog, IPlacementContext, ISiloStatusListener
     {
-        /// <summary>
-        /// Exception to indicate that the activation would have been a duplicate so messages pending for it should be redirected.
-        /// </summary>
-        [Serializable]
-        internal class DuplicateActivationException : Exception
+        internal interface IRegisterActivationResult { }
+
+        internal class RegisterActivationResult
         {
-            public ActivationAddress ActivationToUse { get; private set; }
+            [Serializable]
+            public class Success : IRegisterActivationResult { }
 
-            public SiloAddress PrimaryDirectoryForGrain { get; private set; } // for diagnostics only!
-
-            public DuplicateActivationException() : base("DuplicateActivationException") { }
-            public DuplicateActivationException(string msg) : base(msg) { }
-            public DuplicateActivationException(string message, Exception innerException) : base(message, innerException) { }
-
-            public DuplicateActivationException(ActivationAddress activationToUse)
-                : base("DuplicateActivationException")
+            [Serializable]
+            public class DuplicateActivationFailure : IRegisterActivationResult 
             {
-                ActivationToUse = activationToUse;
-            }
+                public ActivationAddress ActivationToUse { get; private set; }
+                public SiloAddress PrimaryDirectoryForGrain { get; private set; } // for diagnostics only!
 
-            public DuplicateActivationException(ActivationAddress activationToUse, SiloAddress primaryDirectoryForGrain)
-                : base("DuplicateActivationException")
-            {
-                ActivationToUse = activationToUse;
-                PrimaryDirectoryForGrain = primaryDirectoryForGrain;
-            }
-
-            // Implementation of exception serialization with custom properties according to:
-            // http://stackoverflow.com/questions/94488/what-is-the-correct-way-to-make-a-custom-net-exception-serializable
-            protected DuplicateActivationException(SerializationInfo info, StreamingContext context)
-                : base(info, context)
-            {
-                if (info != null)
+                public DuplicateActivationFailure(ActivationAddress activationToUse)
                 {
-                    ActivationToUse = (ActivationAddress) info.GetValue("ActivationToUse", typeof (ActivationAddress));
-                    PrimaryDirectoryForGrain = (SiloAddress) info.GetValue("PrimaryDirectoryForGrain", typeof (SiloAddress));
+                    ActivationToUse = activationToUse;
                 }
-            }
 
-            public override void GetObjectData(SerializationInfo info, StreamingContext context)
-            {
-                if (info != null)
+                public DuplicateActivationFailure(ActivationAddress activationToUse, SiloAddress primaryDirectoryForGrain)
+                    : this(activationToUse)
                 {
-                    info.AddValue("ActivationToUse", ActivationToUse, typeof (ActivationAddress));
-                    info.AddValue("PrimaryDirectoryForGrain", PrimaryDirectoryForGrain, typeof (SiloAddress));                   
+                    PrimaryDirectoryForGrain = primaryDirectoryForGrain;
                 }
-                // MUST call through to the base class to let it save its own state
-                base.GetObjectData(info, context);
             }
         }
 
-        [Serializable]
-        internal class NonExistentActivationException : Exception
+        internal interface IGetOrCreateActivationResult { }
+
+        internal class GetOrCreateActivationResult
         {
-            public ActivationAddress NonExistentActivation { get; private set; }
-
-            public bool IsStatelessWorker { get; private set; }
-
-            public NonExistentActivationException() : base("NonExistentActivationException") { }
-            public NonExistentActivationException(string msg) : base(msg) { }
-            public NonExistentActivationException(string message, Exception innerException) 
-                : base(message, innerException) { }
-
-            public NonExistentActivationException(string msg, ActivationAddress nonExistentActivation, bool isStatelessWorker)
-                : base(msg)
+            [Serializable]
+            public class Success : IGetOrCreateActivationResult
             {
-                NonExistentActivation = nonExistentActivation;
-                IsStatelessWorker = isStatelessWorker;
-            }
+                public ActivationData Result { get; private set; }
 
-            protected NonExistentActivationException(SerializationInfo info, StreamingContext context)
-                : base(info, context)
-            {
-                if (info != null)
+                public Success(ActivationData result)
                 {
-                    NonExistentActivation = (ActivationAddress)info.GetValue("NonExistentActivation", typeof(ActivationAddress));
-                    IsStatelessWorker = (bool)info.GetValue("IsStatelessWorker", typeof(bool));
+                    Result = result;
                 }
             }
 
-            public override void GetObjectData(SerializationInfo info, StreamingContext context)
+            [Serializable]
+            public class NonExistentActivationFailure : IGetOrCreateActivationResult
             {
-                if (info != null)
+                public ActivationAddress NonExistentActivation { get; private set; }
+
+                public bool IsStatelessWorker { get; private set; }
+
+                public NonExistentActivationFailure(ActivationAddress nonExistentActivation, bool isStatelessWorker)
                 {
-                    info.AddValue("NonExistentActivation", NonExistentActivation, typeof(ActivationAddress));
-                    info.AddValue("IsStatelessWorker", IsStatelessWorker, typeof(bool));
+                    NonExistentActivation = nonExistentActivation;
+                    IsStatelessWorker = isStatelessWorker;
                 }
-                // MUST call through to the base class to let it save its own state
-                base.GetObjectData(info, context);
             }
         }
-
 
         public GrainTypeManager GrainTypeManager { get; private set; }
         public SiloAddress LocalSilo { get; private set; }
@@ -387,7 +350,7 @@ namespace Orleans.Runtime
         /// <param name="genericArguments">Specific generic type of grain to be activated or created</param>
         /// <param name="activatedPromise"></param>
         /// <returns></returns>
-        public ActivationData GetOrCreateActivation(
+        public IGetOrCreateActivationResult GetOrCreateActivation(
             ActivationAddress address,
             bool newPlacement,
             string grainType,
@@ -403,7 +366,7 @@ namespace Orleans.Runtime
             {
                 if (TryGetActivationData(address.Activation, out result))
                 {
-                    return result;
+                    return new GetOrCreateActivationResult.Success(result);
                 }
                 
                 int typeCode = address.Grain.GetTypeCode();
@@ -444,16 +407,13 @@ namespace Orleans.Runtime
             // Did not find and did not start placing new
             if (result == null)
             {
-                var msg = String.Format("Non-existent activation: {0}, grain type: {1}.",
-                                           address.ToFullString(), grainType);
-                if (logger.IsVerbose) logger.Verbose(ErrorCode.CatalogNonExistingActivation2, msg);
                 CounterStatistic.FindOrCreate(StatisticNames.CATALOG_ACTIVATION_NON_EXISTENT_ACTIVATIONS).Increment();
-                throw new NonExistentActivationException(msg, address, placement is StatelessWorkerPlacement);
+                return new GetOrCreateActivationResult.NonExistentActivationFailure(address, placement is StatelessWorkerPlacement);
             }
    
             SetupActivationInstance(result, grainType, genericArguments);
             activatedPromise = InitActivation(result, grainType, genericArguments, requestContextData);
-            return result;
+            return new GetOrCreateActivationResult.Success(result);
         }
 
         private void SetupActivationInstance(ActivationData result, string grainType, string genericInterface)
@@ -482,7 +442,17 @@ namespace Orleans.Runtime
             try
             {
                 initStage = 1;
-                await RegisterActivationInGrainDirectoryAndValidate(activation);
+                var registerActivationResult = await RegisterActivationInGrainDirectoryAndValidate(activation);
+                var duplicateActivationFailure = registerActivationResult as RegisterActivationResult.DuplicateActivationFailure;
+                if (duplicateActivationFailure != null)
+                {
+                    lock (activation)
+                    {
+                        activation.SetState(ActivationState.Invalid);
+                        UnregisterMessageTargetSafe(activation);
+                        HandleDuplicateActivationFailure(activation, address, duplicateActivationFailure);
+                    }
+                }
 
                 initStage = 2;
                 await SetupActivationState(activation, grainType);                
@@ -500,68 +470,12 @@ namespace Orleans.Runtime
                 lock (activation)
                 {
                     activation.SetState(ActivationState.Invalid);
-                    try
-                    {
-                        UnregisterMessageTarget(activation);
-                    }
-                    catch (Exception exc)
-                    {
-                        logger.Warn(ErrorCode.Catalog_UnregisterMessageTarget4, String.Format("UnregisterMessageTarget failed on {0}.", activation), exc);
-                    }
+                    UnregisterMessageTargetSafe(activation);
 
                     switch (initStage)
                     {
                         case 1: // failed to RegisterActivationInGrainDirectory
-                            
-                            ActivationAddress target = null;
-                            Exception dupExc;
-                            // Failure!! Could it be that this grain uses single activation placement, and there already was an activation?
-                            if (Utils.TryFindException(ex, typeof (DuplicateActivationException), out dupExc))
-                            {
-                                target = ((DuplicateActivationException) dupExc).ActivationToUse;
-                                CounterStatistic.FindOrCreate(StatisticNames.CATALOG_ACTIVATION_DUPLICATE_ACTIVATIONS)
-                                    .Increment();
-                            }
-                            activation.ForwardingAddress = target;
-                            if (target != null)
-                            {
-                                var primary = ((DuplicateActivationException)dupExc).PrimaryDirectoryForGrain;
-                                // If this was a duplicate, it's not an error, just a race.
-                                // Forward on all of the pending messages, and then forget about this activation.
-                                string logMsg = String.Format("Tried to create a duplicate activation {0}, but we'll use {1} instead. " +
-                                    "GrainInstanceType is {2}. " +
-                                                            "{3}" +
-                                                            "Full activation address is {4}. We have {5} messages to forward.",
-                                    address,
-                                    target,
-                                    activation.GrainInstanceType,
-                                                primary != null ? "Primary Directory partition for this grain is " + primary + ". " : String.Empty,
-                                    address.ToFullString(),
-                                    activation.WaitingCount);
-                                if (activation.IsStatelessWorker)
-                                {
-                                    if (logger.IsVerbose) logger.Verbose(ErrorCode.Catalog_DuplicateActivation, logMsg);
-                                }
-                                else
-                                {
-                                    logger.Info(ErrorCode.Catalog_DuplicateActivation, logMsg);
-                                }
-                                RerouteAllQueuedMessages(activation, target, "Duplicate activation", ex);
-                            }
-                            else
-                            {
-                                logger.Warn(ErrorCode.Runtime_Error_100064,
-                                    String.Format("Failed to RegisterActivationInGrainDirectory for {0}.",
-                                        activation), ex);
-                                // Need to undo the registration we just did earlier
-                                if (!activation.IsStatelessWorker)
-                                {
-                                    scheduler.RunOrQueueTask(() => directory.UnregisterAsync(address),
-                                        SchedulingContext).Ignore();
-                                }
-                                RerouteAllQueuedMessages(activation, null,
-                                    "Failed RegisterActivationInGrainDirectory", ex);
-                            }
+                            HandleRegisterActivatioFailure(activation, address, ex);
                             break;
 
                         case 2: // failed to setup persistent state
@@ -594,6 +508,19 @@ namespace Orleans.Runtime
                     }
                 }
                 throw;
+            }
+        }
+
+        private void UnregisterMessageTargetSafe(ActivationData activation)
+        {
+            try
+            {
+                UnregisterMessageTarget(activation);
+            }
+            catch (Exception exc)
+            {
+                logger.Warn(ErrorCode.Catalog_UnregisterMessageTarget4,
+                    String.Format("UnregisterMessageTarget failed on {0}.", activation), exc);
             }
         }
 
@@ -1157,7 +1084,7 @@ namespace Orleans.Runtime
             return activation;
         }
 
-        private async Task RegisterActivationInGrainDirectoryAndValidate(ActivationData activation)
+        private async Task<IRegisterActivationResult> RegisterActivationInGrainDirectoryAndValidate(ActivationData activation)
         {
             ActivationAddress address = activation.Address;
             bool singleActivationMode = !activation.IsStatelessWorker;
@@ -1165,10 +1092,10 @@ namespace Orleans.Runtime
             if (singleActivationMode)
             {
                 var result = await scheduler.RunOrQueueTask(() => directory.RegisterAsync(address, singleActivation:true), this.SchedulingContext);
-                if (address.Equals(result.Address)) return;
+                if (address.Equals(result.Address)) return new RegisterActivationResult.Success();
                
                 SiloAddress primaryDirectoryForGrain = directory.GetPrimaryForGrain(address.Grain);
-                throw new DuplicateActivationException(result.Address, primaryDirectoryForGrain);
+                return new RegisterActivationResult.DuplicateActivationFailure(result.Address, primaryDirectoryForGrain);
             }
             else
             {
@@ -1178,13 +1105,79 @@ namespace Orleans.Runtime
                 {
                     List<ActivationData> local;
                     if (!LocalLookup(address.Grain, out local) || local.Count <= maxNumLocalActivations)
-                        return;
+                        return new RegisterActivationResult.Success();
 
                     var id = StatelessWorkerDirector.PickRandom(local).Address;
-                    throw new DuplicateActivationException(id);
+                    return new RegisterActivationResult.DuplicateActivationFailure(id);
                 }
             }
             // We currently don't have any other case for multiple activations except for StatelessWorker. 
+        }
+
+        private void HandleDuplicateActivationFailure(ActivationData activation, ActivationAddress address, RegisterActivationResult.DuplicateActivationFailure failureResult)
+        {
+            // Failure!! Could it be that this grain uses single activation placement, and there already was an activation?
+
+            ActivationAddress target = failureResult.ActivationToUse;
+            CounterStatistic.FindOrCreate(StatisticNames.CATALOG_ACTIVATION_DUPLICATE_ACTIVATIONS)
+                .Increment();
+            activation.ForwardingAddress = target;
+            if (target != null)
+            {
+                var primary = failureResult.PrimaryDirectoryForGrain;
+                // If this was a duplicate, it's not an error, just a race.
+                // Forward on all of the pending messages, and then forget about this activation.
+                string logMsg =
+                    String.Format("Tried to create a duplicate activation {0}, but we'll use {1} instead. " +
+                                  "GrainInstanceType is {2}. " +
+                                  "{3}" +
+                                  "Full activation address is {4}. We have {5} messages to forward.",
+                        address,
+                        target,
+                        activation.GrainInstanceType,
+                        primary != null
+                            ? "Primary Directory partition for this grain is " + primary + ". "
+                            : String.Empty,
+                        address.ToFullString(),
+                        activation.WaitingCount);
+                if (activation.IsStatelessWorker)
+                {
+                    if (logger.IsVerbose) logger.Verbose(ErrorCode.Catalog_DuplicateActivation, logMsg);
+                }
+                else
+                {
+                    logger.Info(ErrorCode.Catalog_DuplicateActivation, logMsg);
+                }
+
+                RerouteAllQueuedMessages(activation, target, "Duplicate activation");
+            }
+            else
+            {
+                HandleRegisterActivatioFailure(activation, address);
+            }
+        }
+
+        private void HandleRegisterActivatioFailure(ActivationData activation, ActivationAddress address, Exception ex = null)
+        {
+            var logMessage = string.Format("Failed to RegisterActivationInGrainDirectory for {0}.", activation);
+            if (ex != null)
+            {
+                logger.Warn(ErrorCode.Runtime_Error_100064, logMessage, ex);
+            }
+            else
+            {
+                logger.Warn(ErrorCode.Runtime_Error_100064, logMessage, activation);
+            }
+
+            // Need to undo the registration we just did earlier
+            if (!activation.IsStatelessWorker)
+            {
+                scheduler.RunOrQueueTask(() => directory.UnregisterAsync(address),
+                    SchedulingContext).Ignore();
+            }
+
+            RerouteAllQueuedMessages(activation, null,
+                "Failed RegisterActivationInGrainDirectory", ex);
         }
 
         #endregion

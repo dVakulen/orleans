@@ -21,29 +21,17 @@ namespace UnitTests.OrleansRuntime
         [Fact, TestCategory("Functional"), TestCategory("Serialization")]
         public void SerializationTests_Exception_DotNet()
         {
-            ActivationAddress activationAddress = ActivationAddress.NewActivationAddress(SiloAddress.NewLocalAddress(12345), GrainId.NewId());
-            SiloAddress primaryDirectoryForGrain = SiloAddress.NewLocalAddress(6789);
-           
-            Catalog.DuplicateActivationException original = new Catalog.DuplicateActivationException(activationAddress, primaryDirectoryForGrain);
-            Catalog.DuplicateActivationException output = TestingUtils.RoundTripDotNetSerializer(original);
-
+            var original = new InvalidSchedulingContextException("InvalidSchedulingContext");
+            var output = TestingUtils.RoundTripDotNetSerializer(original);
             Assert.AreEqual(original.Message, output.Message);
-            Assert.AreEqual(original.ActivationToUse, output.ActivationToUse);
-            Assert.AreEqual(original.PrimaryDirectoryForGrain, output.PrimaryDirectoryForGrain);
         }
 
         [Fact, TestCategory("Functional"), TestCategory("Serialization")]
         public void SerializationTests_Exception_Orleans()
         {
-            ActivationAddress activationAddress = ActivationAddress.NewActivationAddress(SiloAddress.NewLocalAddress(12345), GrainId.NewId());
-            SiloAddress primaryDirectoryForGrain = SiloAddress.NewLocalAddress(6789);
-
-            Catalog.DuplicateActivationException original = new Catalog.DuplicateActivationException(activationAddress, primaryDirectoryForGrain);
-            Catalog.DuplicateActivationException output = SerializationManager.RoundTripSerializationForTesting(original);
-
+            var original = new InvalidSchedulingContextException("InvalidSchedulingContext");
+            var output = SerializationManager.RoundTripSerializationForTesting(original);
             Assert.AreEqual(original.Message, output.Message);
-            Assert.AreEqual(original.ActivationToUse, output.ActivationToUse);
-            Assert.AreEqual(original.PrimaryDirectoryForGrain, output.PrimaryDirectoryForGrain);
         }
     }
 }
