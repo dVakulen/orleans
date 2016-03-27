@@ -90,14 +90,14 @@ namespace Orleans.Runtime
                     message.RequestContextData,
                     out ignore);
                 ActivationData target = null;
-                var successResult = getOrCreateMessageResult as Catalog.GetOrCreateActivationResult.Success;
+                var successResult = getOrCreateMessageResult as Catalog.ActivationCreationResult.Success<ActivationData>;
                 if (successResult != null)
                 {
                     target = successResult.Result;
                 }
                 else
                 {
-                    var nea = getOrCreateMessageResult as Catalog.GetOrCreateActivationResult.NonExistentActivationFailure;
+                    var nea = getOrCreateMessageResult as Catalog.ActivationCreationResult.NonExistentActivationFailure;
                     if (nea != null)
                     {
                         HandleNonExistentActivationFailure(message, nea);
@@ -426,7 +426,7 @@ namespace Orleans.Runtime
             }
         }
 
-        private void HandleNonExistentActivationFailure(Message message, Catalog.GetOrCreateActivationResult.NonExistentActivationFailure nea)
+        private void HandleNonExistentActivationFailure(Message message, Catalog.ActivationCreationResult.NonExistentActivationFailure nea)
         {
             MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Non-existent activation");
 

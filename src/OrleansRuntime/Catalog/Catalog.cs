@@ -20,15 +20,34 @@ namespace Orleans.Runtime
 {
     internal class Catalog : SystemTarget, ICatalog, IPlacementContext, ISiloStatusListener
     {
-        internal interface IRegisterActivationResult { }
+        //internal interface IRegisterActivationResult { }
 
-        internal class RegisterActivationResult
+        //internal class RegisterActivationResult
+        //{
+        //}
+
+        internal interface IActivationCreationResult { }
+
+        internal class ActivationCreationResult
         {
+            public static readonly Success SuccessfullResult = new Success();
             [Serializable]
-            public class Success : IRegisterActivationResult { }
+            public class Success : IActivationCreationResult { }
 
             [Serializable]
-            public class DuplicateActivationFailure : IRegisterActivationResult 
+            public class Success<TResult> : IActivationCreationResult
+            {
+                public TResult Result { get; private set; }
+
+                public Success(TResult result)
+                {
+                    Result = result;
+                }
+            }
+
+
+            [Serializable]
+            public class DuplicateActivationFailure : IActivationCreationResult
             {
                 public ActivationAddress ActivationToUse { get; private set; }
                 public SiloAddress PrimaryDirectoryForGrain { get; private set; } // for diagnostics only!
@@ -44,25 +63,8 @@ namespace Orleans.Runtime
                     PrimaryDirectoryForGrain = primaryDirectoryForGrain;
                 }
             }
-        }
-
-        internal interface IGetOrCreateActivationResult { }
-
-        internal class GetOrCreateActivationResult
-        {
             [Serializable]
-            public class Success : IGetOrCreateActivationResult
-            {
-                public ActivationData Result { get; private set; }
-
-                public Success(ActivationData result)
-                {
-                    Result = result;
-                }
-            }
-
-            [Serializable]
-            public class NonExistentActivationFailure : IGetOrCreateActivationResult
+            public class NonExistentActivationFailure : IActivationCreationResult
             {
                 public ActivationAddress NonExistentActivation { get; private set; }
 
@@ -350,7 +352,7 @@ namespace Orleans.Runtime
         /// <param name="genericArguments">Specific generic type of grain to be activated or created</param>
         /// <param name="activatedPromise"></param>
         /// <returns></returns>
-        public IGetOrCreateActivationResult GetOrCreateActivation(
+        public IActivationCreationResult GetOrCreateActivation(
             ActivationAddress address,
             bool newPlacement,
             string grainType,
@@ -366,7 +368,7 @@ namespace Orleans.Runtime
             {
                 if (TryGetActivationData(address.Activation, out result))
                 {
-                    return new GetOrCreateActivationResult.Success(result);
+                    return new ActivationCreationResult.Success<ActivationData>(result);
                 }
                 
                 int typeCode = address.Grain.GetTypeCode();
@@ -408,12 +410,12 @@ namespace Orleans.Runtime
             if (result == null)
             {
                 CounterStatistic.FindOrCreate(StatisticNames.CATALOG_ACTIVATION_NON_EXISTENT_ACTIVATIONS).Increment();
-                return new GetOrCreateActivationResult.NonExistentActivationFailure(address, placement is StatelessWorkerPlacement);
+                return new ActivationCreationResult.NonExistentActivationFailure(address, placement is StatelessWorkerPlacement);
             }
    
             SetupActivationInstance(result, grainType, genericArguments);
             activatedPromise = InitActivation(result, grainType, genericArguments, requestContextData);
-            return new GetOrCreateActivationResult.Success(result);
+            return new ActivationCreationResult.Success<ActivationData>(result);
         }
 
         private void SetupActivationInstance(ActivationData result, string grainType, string genericInterface)
@@ -430,7 +432,7 @@ namespace Orleans.Runtime
             }
         }
 
-        private async Task InitActivation(ActivationData activation, string grainType, string genericInterface, Dictionary<string, object> requestContextData)
+        private async Task<IActivationCreationResult> InitActivation(ActivationData activation, string grainType, string genericInterface, Dictionary<string, object> requestContextData)
         {
             // We've created a dummy activation, which we'll eventually return, but in the meantime we'll queue up (or perform promptly)
             // the operations required to turn the "dummy" activation into a real activation
@@ -443,7 +445,7 @@ namespace Orleans.Runtime
             {
                 initStage = 1;
                 var registerActivationResult = await RegisterActivationInGrainDirectoryAndValidate(activation);
-                var duplicateActivationFailure = registerActivationResult as RegisterActivationResult.DuplicateActivationFailure;
+                var duplicateActivationFailure = registerActivationResult as ActivationCreationResult.DuplicateActivationFailure;
                 if (duplicateActivationFailure != null)
                 {
                     lock (activation)
@@ -451,6 +453,7 @@ namespace Orleans.Runtime
                         activation.SetState(ActivationState.Invalid);
                         UnregisterMessageTargetSafe(activation);
                         HandleDuplicateActivationFailure(activation, address, duplicateActivationFailure);
+                        return duplicateActivationFailure;
                     }
                 }
 
@@ -509,6 +512,8 @@ namespace Orleans.Runtime
                 }
                 throw;
             }
+
+            return ActivationCreationResult.SuccessfullResult;
         }
 
         private void UnregisterMessageTargetSafe(ActivationData activation)
@@ -1084,7 +1089,7 @@ namespace Orleans.Runtime
             return activation;
         }
 
-        private async Task<IRegisterActivationResult> RegisterActivationInGrainDirectoryAndValidate(ActivationData activation)
+        private async Task<IActivationCreationResult> RegisterActivationInGrainDirectoryAndValidate(ActivationData activation)
         {
             ActivationAddress address = activation.Address;
             bool singleActivationMode = !activation.IsStatelessWorker;
@@ -1092,10 +1097,10 @@ namespace Orleans.Runtime
             if (singleActivationMode)
             {
                 var result = await scheduler.RunOrQueueTask(() => directory.RegisterAsync(address, singleActivation:true), this.SchedulingContext);
-                if (address.Equals(result.Address)) return new RegisterActivationResult.Success();
+                if (address.Equals(result.Address)) return ActivationCreationResult.SuccessfullResult;
                
                 SiloAddress primaryDirectoryForGrain = directory.GetPrimaryForGrain(address.Grain);
-                return new RegisterActivationResult.DuplicateActivationFailure(result.Address, primaryDirectoryForGrain);
+                return new ActivationCreationResult.DuplicateActivationFailure(result.Address, primaryDirectoryForGrain);
             }
             else
             {
@@ -1105,16 +1110,16 @@ namespace Orleans.Runtime
                 {
                     List<ActivationData> local;
                     if (!LocalLookup(address.Grain, out local) || local.Count <= maxNumLocalActivations)
-                        return new RegisterActivationResult.Success();
+                        return ActivationCreationResult.SuccessfullResult;
 
                     var id = StatelessWorkerDirector.PickRandom(local).Address;
-                    return new RegisterActivationResult.DuplicateActivationFailure(id);
+                    return new ActivationCreationResult.DuplicateActivationFailure(id);
                 }
             }
             // We currently don't have any other case for multiple activations except for StatelessWorker. 
         }
 
-        private void HandleDuplicateActivationFailure(ActivationData activation, ActivationAddress address, RegisterActivationResult.DuplicateActivationFailure failureResult)
+        private void HandleDuplicateActivationFailure(ActivationData activation, ActivationAddress address, ActivationCreationResult.DuplicateActivationFailure failureResult)
         {
             // Failure!! Could it be that this grain uses single activation placement, and there already was an activation?
 
@@ -1247,7 +1252,7 @@ namespace Orleans.Runtime
         {
             ActivationAddress target = ActivationAddress.NewActivationAddress(LocalSilo, grainId);
             Task activatedPromise;
-            GetOrCreateActivation(target, true, grainType, null, null, out activatedPromise);
+            var todo = GetOrCreateActivation(target, true, grainType, null, null, out activatedPromise);
             return activatedPromise ?? TaskDone.Done;
         }
 
