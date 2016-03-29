@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using Orleans.Runtime;
 
-namespace Orleans.Threading
+namespace Orleans.Async
 {
     /// <summary>
     /// Contains list of cancellation token source corresponding to the tokens
@@ -28,11 +28,7 @@ namespace Orleans.Threading
             GrainCancellationTokenSource cts;
             if (!_cancellationTokenSources.TryFind(token.Id, out cts))
             {
-                if (_logger.Value.IsWarning)
-                {
-                    _logger.Value.Warn(ErrorCode.CancellationTokenCancelFailed, "Remote token cancellation failed: token was not found");
-                }
-
+                _logger.Value.Error(ErrorCode.CancellationTokenCancelFailed, "Remote token cancellation failed: token was not found");
                 return TaskDone.Done;
             }
 
@@ -41,7 +37,19 @@ namespace Orleans.Threading
         
         internal GrainCancellationToken GetOrCreateCancellationToken(Guid tokenId, bool cancelled)
         {
-            var cts = _cancellationTokenSources.FindOrCreate(tokenId, () => new GrainCancellationTokenSource(tokenId, cancelled));
+            var cts = _cancellationTokenSources.FindOrCreate(tokenId, () =>
+            {
+                var grainCts = new GrainCancellationTokenSource(tokenId, cancelled);
+
+                // capture the reference so that GrainCancellationTokenSource will not be collected 
+                // earlier than underlying CancellationTokenSource
+                grainCts.Token.CancellationToken.Register((a) =>
+                {
+                    var captured = grainCts;
+                }, grainCts);
+
+                return grainCts;
+            });
             return cts.Token;
         }
     }

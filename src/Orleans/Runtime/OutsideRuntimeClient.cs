@@ -14,8 +14,8 @@ using Orleans.Serialization;
 using Orleans.Storage;
 using Orleans.Runtime.Configuration;
 using System.Collections.Concurrent;
+using Orleans.Async;
 using Orleans.Streams;
-using Orleans.Threading;
 
 namespace Orleans
 {

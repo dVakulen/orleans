@@ -8,7 +8,7 @@ using System.Globalization;
 using System.Threading;
 using System.Reflection;
 using System.Threading.Tasks;
-
+using Orleans.Async;
 using Orleans.CodeGeneration;
 using Orleans.Runtime.Configuration;
 using Orleans.Runtime.GrainDirectory;
@@ -17,7 +17,6 @@ using Orleans.Runtime.ConsistentRing;
 using Orleans.Serialization;
 using Orleans.Storage;
 using Orleans.Streams;
-using Orleans.Threading;
 using Orleans.Runtime.Providers;
 
 
@@ -347,7 +346,7 @@ namespace Orleans.Runtime
                         {
                             var arg = request.Arguments[i];
                             if (!(arg is GrainCancellationToken)) continue;
-                            UnwrapCancellationToken(target, arg, request, i);
+                            RegisterCancellationToken(target, arg, request, i);
                         }
                     }
 
@@ -428,7 +427,7 @@ namespace Orleans.Runtime
             }
         }
 
-        private static void UnwrapCancellationToken(IAddressable target, object arg, InvokeMethodRequest request, int i)
+        private void RegisterCancellationToken(IAddressable target, object arg, InvokeMethodRequest request, int i)
         {
             var grainToken = ((GrainCancellationToken)arg);
             if (grainToken.WentThroughSerialization)
@@ -440,7 +439,7 @@ namespace Orleans.Runtime
 
                     if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension))
                     {
-                        if (logger.IsWarning) logger.Warn(
+                        logger.Error(
                             ErrorCode.CancellationExtensionCreationFailed,
                             string.Format("Could not add cancellation token extension, target: {0}", target));
                         return;
@@ -453,7 +452,7 @@ namespace Orleans.Runtime
             }
             else
             { 
-                // no need to register remote token extension for already cancelled or local token
+                // no need to register remote token extension for local token
                 request.Arguments[i] = grainToken;
             }
         }

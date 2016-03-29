@@ -4,7 +4,7 @@ using Orleans.CodeGeneration;
 using Orleans.Runtime;
 using Orleans.Serialization;
 
-namespace Orleans.Threading
+namespace Orleans.Async
 {
     /// <summary>
     /// Grain cancellation token that can be passed thought cross-domain boundaries
@@ -19,7 +19,7 @@ namespace Orleans.Threading
         private bool _wentThroughSerialization;
 
         /// <summary>
-        /// Initializes the <see cref="T:Orleans.Threading.GrainCancellationToken"/>.
+        /// Initializes the <see cref="T:Orleans.Async.GrainCancellationToken"/>.
         /// </summary>
         internal GrainCancellationToken(
             Guid id,
@@ -31,7 +31,7 @@ namespace Orleans.Threading
         }
 
         /// <summary>
-        /// Initializes the <see cref="T:Orleans.Threading.GrainCancellationToken"/>.
+        /// Initializes the <see cref="T:Orleans.Async.GrainCancellationToken"/>.
         /// </summary>
         internal GrainCancellationToken(Guid id, CancellationToken cancellationToken)
         {
@@ -70,18 +70,17 @@ namespace Orleans.Threading
 
         #region Serialization
 
-        [SerializerMethodAttribute]
+        [SerializerMethod]
         internal static void SerializeGrainCancellationToken(object obj, BinaryTokenStreamWriter stream, Type expected)
         {
             var ctw = (GrainCancellationToken)obj;
             ctw.WentThroughSerialization = true;
-            var cancelled = ctw.CancellationToken.IsCancellationRequested;
-
-            stream.Write(cancelled);
+            var canceled = ctw.CancellationToken.IsCancellationRequested;
+            stream.Write(canceled);
             stream.Write(ctw.Id);
         }
 
-        [DeserializerMethodAttribute]
+        [DeserializerMethod]
         internal static object DeserializeGrainCancellationToken(Type expected, BinaryTokenStreamReader stream)
         {
             var cancellationRequested = stream.ReadToken() == SerializationTokenType.True;
@@ -89,7 +88,7 @@ namespace Orleans.Threading
             return new GrainCancellationToken(tokenId, new CancellationToken(cancellationRequested)) { WentThroughSerialization = true };
         }
 
-        [CopierMethodAttribute]
+        [CopierMethod]
         internal static object CopyGrainCancellationToken(object obj)
         {
             return obj; // CancellationToken is value type

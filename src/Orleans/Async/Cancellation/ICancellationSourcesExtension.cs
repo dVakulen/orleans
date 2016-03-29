@@ -1,9 +1,8 @@
-﻿using System;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Orleans.Concurrency;
 using Orleans.Runtime;
 
-namespace Orleans.Threading
+namespace Orleans.Async
 {
     internal interface ICancellationSourcesExtension : IGrainExtension, IGrain
     {

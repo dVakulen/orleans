@@ -1,6 +1,6 @@
 ﻿using Orleans.Runtime;
 
-namespace Orleans.Threading
+namespace Orleans.Async
 {
     internal class CancellationTokenManager
     {
@@ -12,9 +12,8 @@ namespace Orleans.Threading
         public void SetGrainCancellationTokensTarget(object[] arguments, GrainReference target)
         {
             if (arguments == null) return;
-            for (var i = 0; i < arguments.Length; i++)
+            foreach (var argument in arguments)
             {
-                var argument = arguments[i];
                 if (argument is GrainCancellationToken)
                 {
                     ((GrainCancellationToken) argument).TargetGrainReference = target;

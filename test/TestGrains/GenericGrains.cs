@@ -7,7 +7,8 @@ using Orleans.Providers;
 using UnitTests.GrainInterfaces;
 using System.Globalization;
 using System.Threading;
-using Orleans.Threading;
+using Orleans.Async;
+using Orleans.Runtime;
 
 namespace UnitTests.Grains
 {
@@ -585,7 +586,7 @@ namespace UnitTests.Grains
         {
             tc.CancellationToken.Register(() =>
             {
-                throw new Exception("From cancellation token callback");
+                throw new CustomException("From cancellation token callback");
             });
 
             return TaskDone.Done;
@@ -670,6 +671,17 @@ namespace UnitTests.Grains
         public Task<C> RoundTrip(C value)
         {
             return Task.FromResult(value);
+        }
+    }
+
+    [Serializable]
+    public class CustomException : Exception
+    {
+        public CustomException(string message) : base(message) { }
+
+        protected CustomException(System.Runtime.Serialization.SerializationInfo info, System.Runtime.Serialization.StreamingContext context)
+            : base(info, context)
+        {
         }
     }
 }
