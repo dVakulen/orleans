@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Threading;
 using Orleans.Async;
 using Orleans.Runtime;
+using Orleans.CodeGeneration;
 
 namespace UnitTests.Grains
 {
@@ -677,11 +678,22 @@ namespace UnitTests.Grains
     [Serializable]
     public class CustomException : Exception
     {
-        public CustomException(string message) : base(message) { }
+        public CustomException(string message) : base(message)
+        {
+        }
 
-        protected CustomException(System.Runtime.Serialization.SerializationInfo info, System.Runtime.Serialization.StreamingContext context)
+        protected CustomException(System.Runtime.Serialization.SerializationInfo info,
+            System.Runtime.Serialization.StreamingContext context)
             : base(info, context)
         {
+        }
+    }
+
+    public class NonGenericCastableGrain : Grain, INonGenericCastableGrain, ISomeGenericGrain<string>
+    {
+        Task<string> ISomeGenericGrain<string>.Hello()
+        {
+            return Task.FromResult("Hello!");
         }
     }
 }
