@@ -204,4 +204,16 @@ namespace UnitTests.GrainInterfaces
 
         Task<C> RoundTrip(C value);
     }
+
+    public interface INonGenericCastableGrain : IGrainWithGuidKey
+    {
+
+    }
+
+    public interface ISomeGenericGrain<T> : IGrainWithGuidKey
+    {
+        Task<string> Hello();
+    }
+
+
 }
