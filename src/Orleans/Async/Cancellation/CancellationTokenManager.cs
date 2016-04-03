@@ -5,7 +5,7 @@ namespace Orleans.Async
     internal class CancellationTokenManager
     {
         /// <summary>
-        /// Sets target activation to the found instances of type GrainCancellationToken
+        /// Sets target grain to the found instances of type GrainCancellationToken
         /// </summary>
         /// <param name="arguments"> Grain method arguments list</param>
         /// <param name="target"> Target grain reference</param>

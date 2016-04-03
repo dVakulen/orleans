@@ -46,7 +46,7 @@ namespace Orleans.Async
         internal Guid Id { get; private set; }
 
         /// <summary>
-        /// Original request target grain reference
+        /// Original request target grain reference.
         /// </summary>
         internal GrainReference TargetGrainReference { get; set; }
 
@@ -61,6 +61,8 @@ namespace Orleans.Async
 
         /// <summary>
         /// Shows whether wrapper has went though serialization process or not
+        /// Exists for local case optimization: there's no need to issue CancellationSourcesExtension cancel call 
+        /// if the token haven't crossed cross-domain boundaries.
         /// </summary>
         internal bool WentThroughSerialization
         { 

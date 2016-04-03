@@ -15,6 +15,7 @@ namespace Orleans.Async
         private static readonly Interner<Guid, GrainCancellationTokenSource> _cancellationTokenSources;
         private static readonly TimeSpan _cleanupFrequency = TimeSpan.FromMinutes(3);
         private static readonly int _defaultInternerCollectionSize = 31;
+        private static readonly Action<object> EmptyAction = o => {};
 
         static CancellationSourcesExtension()
         {
@@ -41,12 +42,12 @@ namespace Orleans.Async
             {
                 var grainCts = new GrainCancellationTokenSource(tokenId, cancelled);
 
-                // capture the reference so that GrainCancellationTokenSource will not be collected 
+                // Ordinary CancellationTokenSource can be collected only when there is no references to it or it's token.
+                // In _cancellationTokenSources weak reference to the grainCts is kept, and there's a possibility that it will be gone 
+                // before cancellation request arrives, as it is the only reference to it. In order to avoid such situation -
+                // capturing the reference so that GrainCancellationTokenSource will not be collected 
                 // earlier than underlying CancellationTokenSource
-                grainCts.Token.CancellationToken.Register((a) =>
-                {
-                    var captured = grainCts;
-                }, grainCts);
+                grainCts.Token.CancellationToken.Register(EmptyAction, grainCts);
 
                 return grainCts;
             });

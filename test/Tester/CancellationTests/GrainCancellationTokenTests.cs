@@ -1,8 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Orleans;
 using Orleans.Async;
@@ -13,7 +9,7 @@ using UnitTests.Grains;
 using Xunit;
 using UnitTests.Tester;
 
-namespace UnitTests.MembershipTests
+namespace UnitTests.CancellationTests
 {
     public class GrainCancellationTokenTests : OrleansTestingBase, IClassFixture<GrainCancellationTokenTests.Fixture>
     {
