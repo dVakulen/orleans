@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Orleans.Runtime;
+using Orleans.CodeGeneration;
+using Orleans.Serialization;
 
 namespace Orleans.Async
 {
@@ -102,7 +103,7 @@ namespace Orleans.Async
                 return TaskDone.Done;
             }
 
-            return _grainCancellationToken.TargetGrainReference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(_grainCancellationToken);
+            return _grainCancellationToken.TargetGrainReference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(_grainCancellationToken.Id);
         }
         
         /// <summary>
@@ -115,5 +116,27 @@ namespace Orleans.Async
         {
             _cancellationTokenSource.Dispose();
         }
+
+        #region Serialization
+
+        [SerializerMethod]
+        internal static void SerializeGrainCancellationTokenSource(object obj, BinaryTokenStreamWriter stream, Type expected)
+        {
+            throw new NotSupportedException("GrainCancellationTokenSource can not be serialized");
+        }
+
+        [DeserializerMethod]
+        internal static object DeserializeGrainCancellationTokenSource(Type expected, BinaryTokenStreamReader stream)
+        {
+            throw new NotSupportedException("GrainCancellationTokenSource can not be deserialized");
+        }
+
+        [CopierMethod]
+        internal static object CopyGrainCancellationTokenSource(object obj)
+        {
+            throw new NotSupportedException("GrainCancellationTokenSource can not be deep copied");
+        }
+
+        #endregion
     }
 }

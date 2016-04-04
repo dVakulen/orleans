@@ -24,10 +24,10 @@ namespace Orleans.Async
                 _cleanupFrequency);
         }
 
-        public Task CancelTokenSource(GrainCancellationToken token)
+        public Task CancelTokenSource(Guid tokenId)
         {
             GrainCancellationTokenSource cts;
-            if (!_cancellationTokenSources.TryFind(token.Id, out cts))
+            if (!_cancellationTokenSources.TryFind(tokenId, out cts))
             {
                 _logger.Value.Error(ErrorCode.CancellationTokenCancelFailed, "Remote token cancellation failed: token was not found");
                 return TaskDone.Done;
@@ -48,7 +48,6 @@ namespace Orleans.Async
                 // capturing the reference so that GrainCancellationTokenSource will not be collected 
                 // earlier than underlying CancellationTokenSource
                 grainCts.Token.CancellationToken.Register(EmptyAction, grainCts);
-
                 return grainCts;
             });
             return cts.Token;
