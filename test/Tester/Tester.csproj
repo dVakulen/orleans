@@ -146,6 +146,9 @@
     <Compile Include="BaseClusterFixture.cs" />
     <Compile Include="General\JsonGrainTests.cs" />
     <Compile Include="SerializationTests\DeepCopyTests.cs" />
+    <Compile Include="StreamingTests\AQClientStreamTests.cs" />
+    <Compile Include="StreamingTests\ClientStreamTestRunner.cs" />
+    <Compile Include="StreamingTests\EHClientStreamTests.cs" />
     <Compile Include="StreamingTests\EHImplicitSubscriptionStreamRecoveryTests.cs" />
     <Compile Include="StreamingTests\EHStreamProviderCheckpointTests.cs" />
     <Compile Include="BasicActivationTests.cs" />
@@ -207,6 +210,7 @@
     <Compile Include="StreamingTests\DelayedQueueRebalancingTests.cs" />
     <Compile Include="StreamingTests\ImplicitSubscritionRecoverableStreamTestRunner.cs" />
     <Compile Include="StreamingTests\SampleStreamingTests.cs" />
+    <Compile Include="StreamingTests\SMSClientStreamTests.cs" />
     <Compile Include="StreamingTests\SMSDeactivationTests.cs" />
     <Compile Include="StreamingTests\SMSSubscriptionMultiplicityTests.cs" />
     <Compile Include="StreamingTests\StreamFilteringTests.cs" />
