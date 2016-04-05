@@ -2,7 +2,8 @@ using Orleans;
 
 namespace TestGrainInterfaces
 {
-    public interface IGeneratedEventCollectorGrain : IGrainWithGuidKey
-    {
+	public interface IGeneratedEventCollectorGrain : IGrainWithGuidKey
+	{
+			
     }
 }
