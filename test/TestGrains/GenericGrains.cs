@@ -8,7 +8,6 @@ using UnitTests.GrainInterfaces;
 using System.Globalization;
 using System.Threading;
 using Orleans.Async;
-using Orleans.Runtime;
 using Orleans.CodeGeneration;
 
 namespace UnitTests.Grains
@@ -587,7 +586,7 @@ namespace UnitTests.Grains
         {
             tc.CancellationToken.Register(() =>
             {
-                throw new CustomException("From cancellation token callback");
+                throw new InvalidOperationException("From cancellation token callback");
             });
 
             return TaskDone.Done;
@@ -674,26 +673,28 @@ namespace UnitTests.Grains
             return Task.FromResult(value);
         }
     }
-
-    [Serializable]
-    public class CustomException : Exception
+    public class NonGenericCastableGrain : Grain, INonGenericCastableGrain, ISomeGenericGrain<string>, IIndependentlyConcretizedGenericGrain<string>, IIndependentlyConcretizedGrain
     {
-        public CustomException(string message) : base(message)
-        {
+        public Task DoSomething() {
+            return TaskDone.Done;
         }
 
-        protected CustomException(System.Runtime.Serialization.SerializationInfo info,
-            System.Runtime.Serialization.StreamingContext context)
-            : base(info, context)
-        {
+        public Task<string> Hello() {
+            return Task.FromResult("Hello!");
         }
     }
 
-    public class NonGenericCastableGrain : Grain, INonGenericCastableGrain, ISomeGenericGrain<string>
+    public class GenericCastableGrain<T> : Grain, IGenericCastableGrain<T>, INonGenericCastGrain
     {
-        Task<string> ISomeGenericGrain<string>.Hello()
-        {
+        public Task<string> Hello() {
             return Task.FromResult("Hello!");
+        }
+    }
+
+    public class IndepedentlyConcretizedGenericGrain : Grain, IIndependentlyConcretizedGenericGrain<string>, IIndependentlyConcretizedGrain
+    {
+        public Task<string> Hello() {
+            return Task.FromResult("I have been independently concretized!");
         }
     }
 }

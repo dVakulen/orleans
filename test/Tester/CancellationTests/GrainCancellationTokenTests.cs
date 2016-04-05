@@ -87,7 +87,7 @@ namespace UnitTests.CancellationTests
             }
             catch (AggregateException ex)
             {
-                Assert.True(ex.InnerException is CustomException, "Exception thrown has wrong type");
+                Assert.True(ex.InnerException is InvalidOperationException, "Exception thrown has wrong type");
                 return;
             }
 
