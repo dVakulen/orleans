@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Orleans.CodeGeneration;
 using Orleans.Runtime;
 using Orleans.Serialization;
@@ -13,6 +14,9 @@ namespace Orleans.Async
     public class GrainCancellationToken
     {
         [NonSerialized]
+        private GrainCancellationTokenSource _grainCancellationTokenSource;
+
+        [NonSerialized]
         private CancellationToken _cancellationToken;
 
         [NonSerialized]
@@ -24,17 +28,9 @@ namespace Orleans.Async
         internal GrainCancellationToken(
             Guid id,
             CancellationToken cancellationToken, 
-            GrainReference target)
-            : this(id, cancellationToken)
+            GrainCancellationTokenSource cancellationTokenSource)
         {
-            TargetGrainReference = target;
-        }
-
-        /// <summary>
-        /// Initializes the <see cref="T:Orleans.Async.GrainCancellationToken"/>.
-        /// </summary>
-        internal GrainCancellationToken(Guid id, CancellationToken cancellationToken)
-        {
+            _grainCancellationTokenSource = cancellationTokenSource;
             Id = id;
             CancellationToken = cancellationToken;
             WentThroughSerialization = false;
@@ -70,6 +66,11 @@ namespace Orleans.Async
             set { _wentThroughSerialization = value; }
         }
 
+        internal Task Cancel()
+        {
+            return _grainCancellationTokenSource.Cancel();
+        }
+
         #region Serialization
 
         [SerializerMethod]
@@ -87,7 +88,9 @@ namespace Orleans.Async
         {
             var cancellationRequested = stream.ReadToken() == SerializationTokenType.True;
             var tokenId = stream.ReadGuid();
-            return new GrainCancellationToken(tokenId, new CancellationToken(cancellationRequested)) { WentThroughSerialization = true };
+            var gcts = new GrainCancellationTokenSource(tokenId, cancellationRequested);
+            gcts.Token.WentThroughSerialization = true;
+            return gcts.Token;
         }
 
         [CopierMethod]

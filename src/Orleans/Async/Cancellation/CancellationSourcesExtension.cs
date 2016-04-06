@@ -12,45 +12,36 @@ namespace Orleans.Async
     {
         private readonly Lazy<TraceLogger> _logger = new Lazy<TraceLogger>(() =>
             TraceLogger.GetLogger("CancellationSourcesExtension", TraceLogger.LoggerType.Application));
-        private static readonly Interner<Guid, GrainCancellationTokenSource> _cancellationTokenSources;
+        private static readonly Interner<Guid, GrainCancellationToken> _cancellationTokens;
         private static readonly TimeSpan _cleanupFrequency = TimeSpan.FromMinutes(3);
         private static readonly int _defaultInternerCollectionSize = 31;
-        private static readonly Action<object> EmptyAction = o => {};
 
         static CancellationSourcesExtension()
         {
-            _cancellationTokenSources = new Interner<Guid, GrainCancellationTokenSource>(
+            _cancellationTokens = new Interner<Guid, GrainCancellationToken>(
                 _defaultInternerCollectionSize,
                 _cleanupFrequency);
         }
 
         public Task CancelTokenSource(Guid tokenId)
         {
-            GrainCancellationTokenSource cts;
-            if (!_cancellationTokenSources.TryFind(tokenId, out cts))
+            GrainCancellationToken gct;
+            if (!_cancellationTokens.TryFind(tokenId, out gct))
             {
                 _logger.Value.Error(ErrorCode.CancellationTokenCancelFailed, "Remote token cancellation failed: token was not found");
                 return TaskDone.Done;
             }
 
-            return cts.Cancel();
+            return gct.Cancel();
         }
-        
-        internal GrainCancellationToken GetOrCreateCancellationToken(Guid tokenId, bool cancelled)
-        {
-            var cts = _cancellationTokenSources.FindOrCreate(tokenId, () =>
-            {
-                var grainCts = new GrainCancellationTokenSource(tokenId, cancelled);
 
-                // Ordinary CancellationTokenSource can be collected only when there is no references to it or it's token.
-                // In _cancellationTokenSources weak reference to the grainCts is kept, and there's a possibility that it will be gone 
-                // before cancellation request arrives, as it is the only reference to it. In order to avoid such situation -
-                // capturing the reference so that GrainCancellationTokenSource will not be collected 
-                // earlier than underlying CancellationTokenSource
-                grainCts.Token.CancellationToken.Register(EmptyAction, grainCts);
-                return grainCts;
+        internal GrainCancellationToken GetOrCreateCancellationToken(GrainCancellationToken token)
+        {
+            return _cancellationTokens.FindOrCreate(token.Id, () =>
+            {
+                token.WentThroughSerialization = false;
+                return token;
             });
-            return cts.Token;
         }
     }
 }

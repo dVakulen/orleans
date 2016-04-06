@@ -453,9 +453,7 @@ namespace Orleans.Runtime
             }
 
             // Replacing the GrainCancellationToken that came from the wire with locally created one.
-            request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(
-                grainToken.Id,
-                grainToken.CancellationToken.IsCancellationRequested);
+            request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(grainToken);
         }
 
         private void SafeSendResponse(Message message, object resultObject)

@@ -30,7 +30,7 @@ namespace Orleans.Async
                 _cancellationTokenSource.Cancel();
             }
 
-            _grainCancellationToken = new GrainCancellationToken(id, _cancellationTokenSource.Token);
+            _grainCancellationToken = new GrainCancellationToken(id, _cancellationTokenSource.Token, this);
         }
 
         /// <summary>
