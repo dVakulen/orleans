@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Orleans.CodeGeneration;
 using Orleans.Runtime;
+using Orleans.Runtime.Providers;
 
 namespace Orleans.Async
 {
@@ -42,6 +44,35 @@ namespace Orleans.Async
                 token.WentThroughSerialization = false;
                 return token;
             });
+        }
+        /// <summary>
+        /// Adds CancellationToken to the grain extension
+        /// so that it can be cancelled through remote call to the CancellationSourcesExtension.
+        /// </summary>
+        /// <param name="target"></param>
+        /// <param name="request"></param>
+        /// <param name="i">Index of the GrainCancellationToken in the request.Arguments array</param>
+        /// <param name="logger"></param>
+        internal static void RegisterCancellationToken(IAddressable target, InvokeMethodRequest request, int i, TraceLogger logger)
+        {
+            var grainToken = ((GrainCancellationToken)request.Arguments[i]);
+            if (!grainToken.WentThroughSerialization) return;
+
+            CancellationSourcesExtension cancellationExtension;
+            if (!SiloProviderRuntime.Instance.TryGetExtensionHandler(out cancellationExtension))
+            {
+                cancellationExtension = new CancellationSourcesExtension();
+                if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension))
+                {
+                    logger.Error(
+                        ErrorCode.CancellationExtensionCreationFailed,
+                        string.Format("Could not add cancellation token extension, target: {0}", target));
+                    return;
+                }
+            }
+
+            // Replacing the GrainCancellationToken that came from the wire with locally created one.
+            request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(grainToken);
         }
     }
 }

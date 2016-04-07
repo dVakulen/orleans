@@ -346,7 +346,7 @@ namespace Orleans.Runtime
                         {
                             var arg = request.Arguments[i];
                             if (!(arg is GrainCancellationToken)) continue;
-                            RegisterCancellationToken(target, request, i);
+                            CancellationSourcesExtension.RegisterCancellationToken(target, request, i, logger);
                         }
                     }
 
@@ -426,36 +426,7 @@ namespace Orleans.Runtime
                     SafeSendExceptionResponse(message, exc2);             
             }
         }
-
-        /// <summary>
-        /// Adds CancellationToken to the grain extension
-        /// so that it can be cancelled through remote call to the CancellationSourcesExtension.
-        /// </summary>
-        /// <param name="target"></param>
-        /// <param name="request"></param>
-        /// <param name="i">Index of the GrainCancellationToken in the request.Arguments array</param>
-        private void RegisterCancellationToken(IAddressable target, InvokeMethodRequest request, int i)
-        {
-            var grainToken = ((GrainCancellationToken)request.Arguments[i]);
-            if (!grainToken.WentThroughSerialization) return;
-
-            CancellationSourcesExtension cancellationExtension;
-            if (!SiloProviderRuntime.Instance.TryGetExtensionHandler(out cancellationExtension))
-            {
-                cancellationExtension = new CancellationSourcesExtension();
-                if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension))
-                {
-                    logger.Error(
-                        ErrorCode.CancellationExtensionCreationFailed,
-                        string.Format("Could not add cancellation token extension, target: {0}", target));
-                    return;
-                }
-            }
-
-            // Replacing the GrainCancellationToken that came from the wire with locally created one.
-            request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(grainToken);
-        }
-
+        
         private void SafeSendResponse(Message message, object resultObject)
         {
             try
