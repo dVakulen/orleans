@@ -11,28 +11,29 @@ namespace Orleans.Async
     /// Grain cancellation token that can be passed thought cross-domain boundaries
     /// </summary>
     [Serializable]
-    public class GrainCancellationToken
+    public class GrainCancellationToken : IDisposable
     {
         [NonSerialized]
-        private GrainCancellationTokenSource _grainCancellationTokenSource;
-
-        [NonSerialized]
-        private CancellationToken _cancellationToken;
-
-        [NonSerialized]
         private bool _wentThroughSerialization;
+
+        [NonSerialized]
+        private readonly CancellationTokenSource _cancellationTokenSource;
+
 
         /// <summary>
         /// Initializes the <see cref="T:Orleans.Async.GrainCancellationToken"/>.
         /// </summary>
         internal GrainCancellationToken(
             Guid id,
-            CancellationToken cancellationToken, 
-            GrainCancellationTokenSource cancellationTokenSource)
+            bool canceled)
         {
-            _grainCancellationTokenSource = cancellationTokenSource;
+            _cancellationTokenSource = new CancellationTokenSource();
+            if (canceled)
+            {
+                _cancellationTokenSource.Cancel();
+            }
+
             Id = id;
-            CancellationToken = cancellationToken;
             WentThroughSerialization = false;
         }
 
@@ -49,11 +50,7 @@ namespace Orleans.Async
         /// <summary>
         /// Underlying cancellation token
         /// </summary>
-        public CancellationToken CancellationToken
-        {
-            get { return _cancellationToken; }
-            private set { _cancellationToken = value; }
-        }
+        public CancellationToken CancellationToken => _cancellationTokenSource.Token;
 
         /// <summary>
         /// Shows whether wrapper has went though serialization process or not
@@ -66,9 +63,23 @@ namespace Orleans.Async
             set { _wentThroughSerialization = value; }
         }
 
+        internal bool IsCancellationRequested => _cancellationTokenSource.IsCancellationRequested;
+
         internal Task Cancel()
         {
-            return _grainCancellationTokenSource.Cancel();
+            _cancellationTokenSource.Cancel();
+            if (!WentThroughSerialization)
+            {
+                // token have not passed the cross-domain bounds and remote call is not needed
+                return TaskDone.Done;
+            }
+
+            return TargetGrainReference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(Id);
+        }
+
+        public void Dispose()
+        {
+            _cancellationTokenSource.Dispose();
         }
 
         #region Serialization

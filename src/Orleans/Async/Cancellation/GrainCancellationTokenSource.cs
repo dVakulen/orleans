@@ -11,8 +11,6 @@ namespace Orleans.Async
     /// </summary>
     public class GrainCancellationTokenSource : IDisposable
     {
-        private readonly CancellationTokenSource _cancellationTokenSource;
-
         private readonly GrainCancellationToken _grainCancellationToken;
 
         /// <summary>
@@ -24,13 +22,7 @@ namespace Orleans.Async
 
         internal GrainCancellationTokenSource(Guid id, bool canceled)
         {
-            _cancellationTokenSource = new CancellationTokenSource();
-            if (canceled)
-            {
-                _cancellationTokenSource.Cancel();
-            }
-
-            _grainCancellationToken = new GrainCancellationToken(id, _cancellationTokenSource.Token, this);
+            _grainCancellationToken = new GrainCancellationToken(id, canceled);
         }
 
         /// <summary>
@@ -66,7 +58,7 @@ namespace Orleans.Async
         /// </remarks>
         public bool IsCancellationRequested
         {
-            get { return _cancellationTokenSource.IsCancellationRequested; }
+            get { return _grainCancellationToken.IsCancellationRequested; }
         }
 
         /// <summary>
@@ -96,14 +88,7 @@ namespace Orleans.Async
         /// cref="T:Orleans.Async.GrainCancellationTokenSource"/> has been disposed.</exception> 
         public Task Cancel()
         {
-            _cancellationTokenSource.Cancel();
-            if (!_grainCancellationToken.WentThroughSerialization)
-            {
-                // token have not passed the cross-domain bounds and remote call is not needed
-                return TaskDone.Done;
-            }
-
-            return _grainCancellationToken.TargetGrainReference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(_grainCancellationToken.Id);
+            return _grainCancellationToken.Cancel();
         }
         
         /// <summary>
@@ -114,7 +99,7 @@ namespace Orleans.Async
         /// </remarks>
         public void Dispose()
         {
-            _cancellationTokenSource.Dispose();
+            _grainCancellationToken.Dispose();
         }
 
         #region Serialization
