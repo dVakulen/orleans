@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Orleans;
 using Orleans.Async;
@@ -41,6 +42,22 @@ namespace UnitTests.CancellationTests
             await Task.Delay(delay);
             await tcs.Cancel();
             await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
+        }
+
+        [Theory(Skip = "Cancellation of multiple remote tokens is yet to be implemented"), TestCategory("Functional"), TestCategory("BVT")]
+        [InlineData(0)]
+        [InlineData(10)]
+        [InlineData(300)]
+        public async Task MultipleGrainsTaskCancellation(int delay)
+        {
+            var tcs = new GrainCancellationTokenSource();
+            var grainTasks = Enumerable.Range(0, 5)
+                .Select(i => GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid())
+                            .LongWait(tcs.Token, TimeSpan.FromSeconds(1)))
+                            .Select(task => Assert.ThrowsAsync<TaskCanceledException>(() => task)).ToList();
+            await Task.Delay(delay);
+            await tcs.Cancel();
+            await Task.WhenAll(grainTasks);
         }
 
         [Fact, TestCategory("Functional"), TestCategory("BVT")]
