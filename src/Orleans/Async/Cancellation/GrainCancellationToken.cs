@@ -26,7 +26,7 @@ namespace Orleans.Async
         /// References to remote grains to which this token was passed.
         /// </summary>
         [NonSerialized]
-        private readonly ConcurrentBag<GrainReference> _targetGrainReferences;
+        private readonly ConcurrentDictionary<GrainId, GrainReference> _targetGrainReferences;
 
 
         /// <summary>
@@ -44,7 +44,7 @@ namespace Orleans.Async
 
             Id = id;
             WentThroughSerialization = false;
-            _targetGrainReferences = new ConcurrentBag<GrainReference>();
+            _targetGrainReferences = new ConcurrentDictionary<GrainId, GrainReference>();
         }
 
         /// <summary>
@@ -79,15 +79,29 @@ namespace Orleans.Async
                 return TaskDone.Done;
             }
 
-            var cancellationTasks = _targetGrainReferences
-                .Select(reference => reference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(this))
-                .ToList();
+            var cancellationTasks = new List<Task>();
+
+            foreach (var pair in _targetGrainReferences)
+            {
+                var cancellationTask = pair.Value.AsReference<ICancellationSourcesExtension>().CancelTokenSource(this);
+                cancellationTasks.Add(cancellationTask);
+                cancellationTask.ContinueWith(task =>
+                {
+                    if (task.IsFaulted) return;
+
+                    // remove reference to which cancellation call has succeded, 
+                    // in order to avoid unnecessary remote call in case of retrying
+                    GrainReference grainRef;
+                    _targetGrainReferences.TryRemove(pair.Key, out grainRef);
+                });
+            }
+
             return Task.WhenAll(cancellationTasks);
         }
 
         internal void AddGrainReference(GrainReference grainReference)
         {
-            _targetGrainReferences.Add(grainReference);
+            _targetGrainReferences.AddOrUpdate(grainReference.GrainId, id => grainReference, (id, ignore) => grainReference);
         }
 
         public void Dispose()

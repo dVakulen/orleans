@@ -53,7 +53,7 @@ namespace UnitTests.CancellationTests
             var tcs = new GrainCancellationTokenSource();
             var grainTasks = Enumerable.Range(0, 5)
                 .Select(i => GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid())
-                            .LongWait(tcs.Token, TimeSpan.FromSeconds(1)))
+                            .LongWait(tcs.Token, TimeSpan.FromSeconds(10)))
                             .Select(task => Assert.ThrowsAsync<TaskCanceledException>(() => task)).ToList();
             await Task.Delay(delay);
             await tcs.Cancel();
