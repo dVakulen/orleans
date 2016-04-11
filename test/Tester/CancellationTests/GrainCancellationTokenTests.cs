@@ -44,7 +44,7 @@ namespace UnitTests.CancellationTests
             await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
         }
 
-        [Theory(Skip = "Cancellation of multiple remote tokens is yet to be implemented"), TestCategory("Functional"), TestCategory("BVT")]
+        [Theory, TestCategory("Functional"), TestCategory("BVT")]
         [InlineData(0)]
         [InlineData(10)]
         [InlineData(300)]

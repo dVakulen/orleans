@@ -16,7 +16,7 @@ namespace Orleans.Async
             {
                 if (argument is GrainCancellationToken)
                 {
-                    ((GrainCancellationToken) argument).TargetGrainReference = target;
+                    ((GrainCancellationToken) argument).AddGrainReference(target);
                 }
             }
         }

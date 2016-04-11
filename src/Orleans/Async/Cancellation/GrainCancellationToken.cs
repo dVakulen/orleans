@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Orleans.CodeGeneration;
@@ -19,6 +22,12 @@ namespace Orleans.Async
         [NonSerialized]
         private readonly CancellationTokenSource _cancellationTokenSource;
 
+        /// <summary>
+        /// References to remote grains to which this token was passed.
+        /// </summary>
+        [NonSerialized]
+        private readonly ConcurrentBag<GrainReference> _targetGrainReferences;
+
 
         /// <summary>
         /// Initializes the <see cref="T:Orleans.Async.GrainCancellationToken"/>.
@@ -35,17 +44,13 @@ namespace Orleans.Async
 
             Id = id;
             WentThroughSerialization = false;
+            _targetGrainReferences = new ConcurrentBag<GrainReference>();
         }
 
         /// <summary>
         /// Unique id of concrete token
         /// </summary>
         internal Guid Id { get; private set; }
-
-        /// <summary>
-        /// Original request target grain reference.
-        /// </summary>
-        internal GrainReference TargetGrainReference { get; set; }
 
         /// <summary>
         /// Underlying cancellation token
@@ -58,8 +63,8 @@ namespace Orleans.Async
         /// if the token haven't crossed cross-domain boundaries.
         /// </summary>
         internal bool WentThroughSerialization
-        { 
-            get { return _wentThroughSerialization; } 
+        {
+            get { return _wentThroughSerialization; }
             set { _wentThroughSerialization = value; }
         }
 
@@ -74,7 +79,15 @@ namespace Orleans.Async
                 return TaskDone.Done;
             }
 
-            return TargetGrainReference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(Id);
+            var cancellationTasks = _targetGrainReferences
+                .Select(reference => reference.AsReference<ICancellationSourcesExtension>().CancelTokenSource(this))
+                .ToList();
+            return Task.WhenAll(cancellationTasks);
+        }
+
+        internal void AddGrainReference(GrainReference grainReference)
+        {
+            _targetGrainReferences.Add(grainReference);
         }
 
         public void Dispose()
