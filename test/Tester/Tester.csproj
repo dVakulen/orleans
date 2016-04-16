@@ -215,23 +215,16 @@
     <Compile Include="StreamingTests\StreamFilteringTests.cs" />
     <Compile Include="StreamingTests\StreamGeneratorProviderTests.cs" />
     <Compile Include="StreamingTests\SubscriptionMultiplicityTestRunner.cs" />
+    <Compile Include="TestStreamProviders\AzureQueue\TestAzureQueueStreamProvider.cs" />
+    <Compile Include="TestingHost\TestingSiloHostTests.cs" />
     <Compile Include="TestStreamProviders\Controllable\ControllableTestStreamProvider.cs" />
+    <Compile Include="TestStreamProviders\EventHub\TestEventHubStreamProvider.cs" />
+    <Compile Include="TestStreamProviders\TestAzureTableStorageStreamFailureHandler.cs" />
     <Compile Include="TestUtils.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\src\Build\Version.txt">
       <Link>Version.txt</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\src\OrleansTestingHost\ClientConfigurationForTesting.xml">
-      <Link>ClientConfigurationForTesting.xml</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\src\OrleansTestingHost\OrleansConfigurationForTesting.xml">
-      <Link>OrleansConfigurationForTesting.xml</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="ClientConfigurationForStreamTesting.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="DeploymentTests\Configuration\Deployment.xml">
@@ -259,21 +252,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="DeploymentTests\Configuration\TestRelativePaths\OrleansConfiguration.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="OrleansConfigurationForStreaming4SilosUnitTests.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="OrleansConfigurationForStreamingDeactivationUnitTests.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="OrleansConfigurationForStreamingTesting_SMS.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="OrleansConfigurationForStreamingUnitTests.xml">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="OrleansStartupConfigurationForTesting.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="SerializationTests\ConfigurationTests\ClientConfigurationForSerializer.xml">
