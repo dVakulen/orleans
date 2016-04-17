@@ -293,6 +293,26 @@ namespace UnitTests
         }
 
         [Fact, TestCategory("Functional"), TestCategory("Cast")]
+        public async void CastGrainRefUpCastFromGenericChildToNonGenericParent()
+        {
+            var grain = GrainClient.GrainFactory.GetGrain<IGenericDescendantOfNonGenericGrain<bool>>(Guid.NewGuid());
+            GrainReference cast = (GrainReference)grain.AsReference<IClosedGenericDescendantGrain>();
+            Assert.IsInstanceOfType(cast, typeof(IClosedGenericDescendantGrain));
+            Assert.IsInstanceOfType(cast, typeof(IGenericDescendantOfNonGenericGrain<bool>));
+            await grain.DerivedPing(true);
+        }
+
+        [Fact, TestCategory("Functional"), TestCategory("Cast")]
+        public async void CastGrainRefUpCastFromNonGenericChildToGenericParent()
+        {
+            var grain = GrainClient.GrainFactory.GetGrain<IClosedGenericDescendantGrain>(Guid.NewGuid());
+            GrainReference cast = (GrainReference)grain.AsReference<IGenericBaseGrain<string>>();
+            Assert.IsInstanceOfType(cast, typeof(IClosedGenericDescendantGrain));
+            Assert.IsInstanceOfType(cast, typeof(IGenericBaseGrain<string>));
+            await grain.ClosedGenericPing();
+        }
+
+        [Fact, TestCategory("Functional"), TestCategory("Cast")]
         public void CastAsyncGrainRefCastFromSelf()
         {
             IAddressable grain = GrainClient.GrainFactory.GetGrain<ISimpleGrain>(random.Next(), SimpleGrain.SimpleGrainNamePrefix); ;

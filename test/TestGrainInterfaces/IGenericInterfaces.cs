@@ -203,11 +203,8 @@ namespace UnitTests.GrainInterfaces
         Task DoSomething();
     }
 
-    
     public interface IGenericCastableGrain<T> : IGrainWithGuidKey
     { }
-    
-
 
     public interface IGrainSayingHello : IGrainWithGuidKey
     {
@@ -219,17 +216,29 @@ namespace UnitTests.GrainInterfaces
 
     public interface INonGenericCastGrain : IGrainSayingHello
     { }
-
     
-
     public interface IIndependentlyConcretizedGrain : ISomeGenericGrain<string>
     { }
 
     public interface IIndependentlyConcretizedGenericGrain<T> : ISomeGenericGrain<T>
     { }
 
+    public interface IGenericBaseGrain<T>: IGrainWithGuidKey
+    {
+    }
+    public interface INonGenericBaseGrain : IGrainWithGuidKey
+    {
+    }
 
+    public interface IClosedGenericDescendantGrain : IGenericBaseGrain<string>
+    {
+        Task ClosedGenericPing();
+    }
 
+    public interface IGenericDescendantOfNonGenericGrain<T> : INonGenericBaseGrain
+    {
+        Task<T> DerivedPing(T t);
+    }
 
     namespace Generic.EdgeCases
     {

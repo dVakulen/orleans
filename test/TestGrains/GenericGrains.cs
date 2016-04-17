@@ -578,6 +578,22 @@ namespace UnitTests.Grains
         }
     }
 
+    public class NonGenericPingSelfGrain : IClosedGenericDescendantGrain
+    {
+        public Task ClosedGenericPing()
+        {
+            return TaskDone.Done;
+        }
+    }
+
+    public class GenericPingSelfGrain<T> : IGenericDescendantOfNonGenericGrain<T>
+    {
+        public Task<T> DerivedPing(T t)
+        {
+            return Task.FromResult(t);
+        }
+    }
+
     public class LongRunningTaskGrain<T> : Grain, ILongRunningTaskGrain<T>
     {
         public async Task<T> CallOtherLongRunningTask(ILongRunningTaskGrain<T> target, T t, TimeSpan delay)
