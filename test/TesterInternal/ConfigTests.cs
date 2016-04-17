@@ -76,6 +76,7 @@ namespace UnitTests
             Assert.AreEqual<IPEndPoint>(new IPEndPoint(IPAddress.IPv6Loopback, 22222), config.Globals.SeedNodes[1], "Second seed node is set incorrectly");
 
             Assert.AreEqual<int>(12345, config.Defaults.Port, "Default port is set incorrectly");
+            Assert.AreEqual<string>("UnitTests.General.TestStartup,Tester", config.Defaults.StartupTypeName);
 
             NodeConfiguration nc;
             bool hasNodeConfig = config.TryGetNodeConfigurationForSilo("Node1", out nc);
@@ -84,6 +85,7 @@ namespace UnitTests
             Assert.IsTrue(nc.IsPrimaryNode, "Node1 should be primary node");
             Assert.IsTrue(nc.IsSeedNode, "Node1 should be seed node");
             Assert.IsFalse(nc.IsGatewayNode, "Node1 should not be gateway node");
+            Assert.AreEqual<string>("UnitTests.General.TestStartup,Tester", nc.StartupTypeName, "Startup type should be copied automatically");
 
             hasNodeConfig = config.TryGetNodeConfigurationForSilo("Node2", out nc);
             Assert.IsTrue(hasNodeConfig, "Node Node2 has config");
@@ -717,6 +719,20 @@ namespace UnitTests
                 }
             }
         }
+
+        [Fact, TestCategory("Functional"), TestCategory("Config")]
+        public void Config_AdditionalAssemblyPaths_Config()
+        {
+            const string filename = "Config_AdditionalAssemblies.xml";
+            const int numPaths = 2;
+            var orleansConfig = new ClusterConfiguration();
+            orleansConfig.LoadFromFile(filename);
+
+            Assert.IsNotNull(orleansConfig.Defaults.AdditionalAssemblyDirectories, "Additional Assembly Dictionary");
+            Assert.AreEqual(numPaths, orleansConfig.Defaults.AdditionalAssemblyDirectories.Count, "Additional Assembly count");
+
+        }
+
         [Fact, TestCategory("Functional"), TestCategory("Config"), TestCategory("Azure")]
         public void Config_StorageProviders_AzureTable_Default()
         {
@@ -790,7 +806,7 @@ namespace UnitTests
         public void ClientConfig_FromFile_FileNotFound()
         {
             const string filename = "ClientConfig_NotFound.xml";
-            Xunit.Assert.Throws<FileNotFoundException>(() => 
+            Xunit.Assert.Throws<FileNotFoundException>(() =>
             ClientConfiguration.LoadFromFile(filename));
         }
 
@@ -799,7 +815,7 @@ namespace UnitTests
         {
             const string filename = "SiloConfig_NotFound.xml";
             var config = new ClusterConfiguration();
-            Xunit.Assert.Throws<FileNotFoundException>(() => 
+            Xunit.Assert.Throws<FileNotFoundException>(() =>
                 config.LoadFromFile(filename));
         }
 
