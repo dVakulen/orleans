@@ -126,9 +126,12 @@ namespace Orleans.Async
         {
             var cancellationRequested = stream.ReadToken() == SerializationTokenType.True;
             var tokenId = stream.ReadGuid();
-            var gcts = new GrainCancellationTokenSource(tokenId, cancellationRequested);
-            gcts.Token.WentThroughSerialization = true;
-            return gcts.Token;
+            var gct = new GrainCancellationToken(tokenId, cancellationRequested)
+            {
+                WentThroughSerialization = true
+            };
+
+            return gct;
         }
 
         [CopierMethod]
