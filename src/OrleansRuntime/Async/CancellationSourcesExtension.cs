@@ -39,11 +39,7 @@ namespace Orleans.Async
 
         internal GrainCancellationToken GetOrCreateCancellationToken(GrainCancellationToken token)
         {
-            return _cancellationTokens.FindOrCreate(token.Id, () =>
-            {
-                token.WentThroughSerialization = false;
-                return token;
-            });
+            return _cancellationTokens.FindOrCreate(token.Id, () => new GrainCancellationToken(token.Id, token.IsCancellationRequested));
         }
 
         /// <summary>

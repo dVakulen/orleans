@@ -14,19 +14,11 @@ namespace UnitTests.CancellationTests
 {
     public class GrainCancellationTokenTests : OrleansTestingBase, IClassFixture<GrainCancellationTokenTests.Fixture>
     {
-        private class Fixture : BaseClusterFixture
+        private class Fixture : BaseTestClusterFixture
         {
-            protected override TestingSiloHost CreateClusterHost()
+            protected override TestCluster CreateTestCluster()
             {
-                return new TestingSiloHost(new TestingSiloOptions
-                {
-                    StartPrimary = true,
-                    StartSecondary = true,
-                    AdjustConfig = config =>
-                    {
-                        config.Globals.DefaultPlacementStrategy = "ActivationCountBasedPlacement";
-                    }
-                });
+                return new TestCluster(new TestClusterOptions(2));
             }
         }
 
