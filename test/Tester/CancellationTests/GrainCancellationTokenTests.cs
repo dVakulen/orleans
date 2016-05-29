@@ -30,10 +30,10 @@ namespace UnitTests.CancellationTests
         {
             var grain = GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
             var tcs = new GrainCancellationTokenSource();
-            var wait = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
-            await Task.Delay(delay);
+            var grainTask = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
+            await Task.Delay(TimeSpan.FromMilliseconds(delay));
             await tcs.Cancel();
-            await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
+            await Assert.ThrowsAsync<TaskCanceledException>(() => grainTask);
         }
 
         [Theory, TestCategory("Functional"), TestCategory("BVT")]
@@ -47,7 +47,7 @@ namespace UnitTests.CancellationTests
                 .Select(i => GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid())
                             .LongWait(tcs.Token, TimeSpan.FromSeconds(10)))
                             .Select(task => Assert.ThrowsAsync<TaskCanceledException>(() => task)).ToList();
-            await Task.Delay(delay);
+            await Task.Delay(TimeSpan.FromMilliseconds(delay));
             await tcs.Cancel();
             await Task.WhenAll(grainTasks);
         }
@@ -57,8 +57,14 @@ namespace UnitTests.CancellationTests
         {
             var grain = GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
             var tcs = new GrainCancellationTokenSource();
-            await grain.LongWait(tcs.Token, TimeSpan.FromMilliseconds(1));
-            Assert.True(true);
+            try
+            {
+                await grain.LongWait(tcs.Token, TimeSpan.FromMilliseconds(1));
+            }
+            catch (Exception ex)
+            {
+                Assert.True(false, "Expected no exception, but got: " + ex.Message);
+            }
         }
 
         [Fact, TestCategory("Functional"), TestCategory("BVT")]
@@ -67,8 +73,8 @@ namespace UnitTests.CancellationTests
             var grain = GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
             var tcs = new GrainCancellationTokenSource();
             await tcs.Cancel();
-            var wait = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
-            await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
+            var grainTask = grain.LongWait(tcs.Token, TimeSpan.FromSeconds(10));
+            await Assert.ThrowsAsync<TaskCanceledException>(() => grainTask);
         }
 
         [Fact, TestCategory("Functional"), TestCategory("BVT")]
@@ -76,10 +82,23 @@ namespace UnitTests.CancellationTests
         {
             var grain = GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
             var tcs = new GrainCancellationTokenSource();
-            var wait = grain.CancellationTokenCallbackResolve(tcs.Token);
-            await Task.Delay(100);
+            var grainTask = grain.CancellationTokenCallbackResolve(tcs.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
             await tcs.Cancel();
-            var result = await wait;
+            var result = await grainTask;
+            Assert.Equal(true, result);
+        }
+
+        [Fact, TestCategory("Functional"), TestCategory("BVT")]
+        public async Task CancellationTokenCallbacksTaskSchedulerContext()
+        {
+            var grains = await GetGrains<bool>(false);
+
+            var tcs = new GrainCancellationTokenSource();
+            var grainTask = grains.Item1.CallOtherCancellationTokenCallbackResolve(grains.Item2);
+           // await Task.Delay(TimeSpan.FromMilliseconds(100));
+            await tcs.Cancel();
+            var result = await grainTask;
             Assert.Equal(true, result);
         }
 
@@ -88,8 +107,8 @@ namespace UnitTests.CancellationTests
         {
             var grain = GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid());
             var tcs = new GrainCancellationTokenSource();
-            var wait = grain.CancellationTokenCallbackThrow(tcs.Token);
-            await Task.Delay(100);
+            var grainTask = grain.CancellationTokenCallbackThrow(tcs.Token);
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
             try
             {
                 await tcs.Cancel();
@@ -145,10 +164,10 @@ namespace UnitTests.CancellationTests
             var grain = grains.Item1;
             var target = grains.Item2;
             var tcs = new GrainCancellationTokenSource();
-            var wait = grain.CallOtherLongRunningTask(target, tcs.Token, TimeSpan.FromSeconds(10));
-            await Task.Delay(delay);
+            var grainTask = grain.CallOtherLongRunningTask(target, tcs.Token, TimeSpan.FromSeconds(10));
+            await Task.Delay(TimeSpan.FromMilliseconds(delay));
             await tcs.Cancel();
-            await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
+            await Assert.ThrowsAsync<TaskCanceledException>(() => grainTask);
         }
 
         private async Task GrainGrainCancellation(bool interSilo, int delay)
@@ -156,9 +175,9 @@ namespace UnitTests.CancellationTests
             var grains = await GetGrains<bool>(interSilo);
             var grain = grains.Item1;
             var target = grains.Item2;
-            var wait = grain.CallOtherLongRunningTaskWithLocalToken(target, TimeSpan.FromSeconds(10),
+            var grainTask = grain.CallOtherLongRunningTaskWithLocalToken(target, TimeSpan.FromSeconds(10),
                 TimeSpan.FromMilliseconds(delay));
-            await Assert.ThrowsAsync<TaskCanceledException>(() => wait);
+            await Assert.ThrowsAsync<TaskCanceledException>(() => grainTask);
         }
 
         private async Task<Tuple<ILongRunningTaskGrain<T1>, ILongRunningTaskGrain<T1>>> GetGrains<T1>(bool placeOnDifferentSilos = true)

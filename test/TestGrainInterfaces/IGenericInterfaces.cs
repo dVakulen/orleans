@@ -192,6 +192,7 @@ namespace UnitTests.GrainInterfaces
         Task CallOtherLongRunningTaskWithLocalToken(ILongRunningTaskGrain<T> target, TimeSpan delay,
             TimeSpan delayBeforeCancel);
         Task<bool> CancellationTokenCallbackResolve(GrainCancellationToken tc);
+        Task<bool> CallOtherCancellationTokenCallbackResolve(ILongRunningTaskGrain<T> target);
         Task CancellationTokenCallbackThrow(GrainCancellationToken tc);
     }
 

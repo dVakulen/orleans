@@ -592,12 +592,23 @@ namespace UnitTests.Grains
             return TaskDone.Done;
         }
 
+        public async Task<bool> CallOtherCancellationTokenCallbackResolve(ILongRunningTaskGrain<T> target)
+        {
+            var tc = new GrainCancellationTokenSource();
+            var grainTask = target.CancellationTokenCallbackResolve(tc.Token);
+            await Task.Delay(300);
+            await tc.Cancel();
+            return await grainTask;
+        }
+
         public Task<bool> CancellationTokenCallbackResolve(GrainCancellationToken tc)
         {
             var tcs = new TaskCompletionSource<bool>();
+            var orleansTs = TaskScheduler.Current;
             tc.CancellationToken.Register(() =>
             {
-                if (Thread.CurrentThread.Name == null ||
+                if (TaskScheduler.Current != orleansTs || 
+                    Thread.CurrentThread.Name == null ||
                     !Thread.CurrentThread.Name.Contains("Runtime.Scheduler.WorkerPoolThread"))
                 {
                     tcs.SetException(new Exception("Callback executed on wrong thread"));
