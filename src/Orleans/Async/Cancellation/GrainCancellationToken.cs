@@ -57,7 +57,6 @@ namespace Orleans.Async
         internal Task Cancel()
         {
             _cancellationTokenSource.Cancel();
-
             if (_targetGrainReferences.IsEmpty)
             {
                 return TaskDone.Done;
