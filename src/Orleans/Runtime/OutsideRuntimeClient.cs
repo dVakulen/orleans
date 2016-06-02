@@ -14,7 +14,6 @@ using Orleans.Serialization;
 using Orleans.Storage;
 using Orleans.Runtime.Configuration;
 using System.Collections.Concurrent;
-using Orleans.Async;
 using Orleans.Streams;
 
 namespace Orleans
@@ -33,7 +32,6 @@ namespace Orleans
         private readonly ConcurrentDictionary<GuidId, LocalObjectData> localObjects;
 
         private readonly ProxiedMessageCenter transport;
-
         private bool listenForMessages;
         private CancellationTokenSource listeningCts;
 
