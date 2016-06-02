@@ -607,9 +607,7 @@ namespace UnitTests.Grains
             var orleansTs = TaskScheduler.Current;
             tc.CancellationToken.Register(() =>
             {
-                if (TaskScheduler.Current != orleansTs || 
-                    Thread.CurrentThread.Name == null ||
-                    !Thread.CurrentThread.Name.Contains("Runtime.Scheduler.WorkerPoolThread"))
+                if (TaskScheduler.Current != orleansTs)
                 {
                     tcs.SetException(new Exception("Callback executed on wrong thread"));
                 }

@@ -14,21 +14,21 @@ namespace Orleans.Async
     {
         private readonly Lazy<TraceLogger> _logger = new Lazy<TraceLogger>(() =>
             TraceLogger.GetLogger("CancellationSourcesExtension", TraceLogger.LoggerType.Application));
-        private static readonly Interner<Guid, GrainCancellationToken> _cancellationTokens;
+        private static readonly Interner<long, GrainCancellationToken> _cancellationTokens;
         private static readonly TimeSpan _cleanupFrequency = TimeSpan.FromMinutes(3);
         private static readonly int _defaultInternerCollectionSize = 31;
 
         static CancellationSourcesExtension()
         {
-            _cancellationTokens = new Interner<Guid, GrainCancellationToken>(
+            _cancellationTokens = new Interner<long, GrainCancellationToken>(
                 _defaultInternerCollectionSize,
                 _cleanupFrequency);
         }
 
-        public Task CancelTokenSource(GrainCancellationToken token)
+        public Task CancelTokenSource(uint grainId, GrainCancellationToken token)
         {
             GrainCancellationToken gct;
-            if (!_cancellationTokens.TryFind(token.Id, out gct))
+            if (!_cancellationTokens.TryFind(GetCompoundKey(grainId, token.Id), out gct))
             {
                 _logger.Value.Error(ErrorCode.CancellationTokenCancelFailed, "Remote token cancellation failed: token was not found");
                 return TaskDone.Done;
@@ -37,9 +37,9 @@ namespace Orleans.Async
             return gct.Cancel();
         }
 
-        internal GrainCancellationToken GetOrCreateCancellationToken(GrainCancellationToken token)
+        internal GrainCancellationToken GetOrCreateCancellationToken(uint grainId, GrainCancellationToken token)
         {
-            return _cancellationTokens.FindOrCreate(token.Id, () => new GrainCancellationToken(token.Id, token.IsCancellationRequested));
+            return _cancellationTokens.FindOrCreate(GetCompoundKey(grainId, token.Id), () => new GrainCancellationToken(token.Id, token.IsCancellationRequested));
         }
 
         /// <summary>
@@ -53,8 +53,7 @@ namespace Orleans.Async
         internal static void RegisterCancellationToken(IAddressable target, InvokeMethodRequest request, int i, TraceLogger logger)
         {
             var grainToken = ((GrainCancellationToken)request.Arguments[i]);
-            if (!grainToken.WentThroughSerialization) return;
-
+            
             CancellationSourcesExtension cancellationExtension;
             if (!SiloProviderRuntime.Instance.TryGetExtensionHandler(out cancellationExtension))
             {
@@ -69,7 +68,12 @@ namespace Orleans.Async
             }
 
             // Replacing the GrainCancellationToken that came from the wire with locally created one.
-            request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(grainToken);
+            request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(GrainExtensions.GetGrainId(target).GetUniformHashCode(), grainToken);
+        }
+
+        private long GetCompoundKey(uint grainIdUniformHashCode, Guid tokenId)
+        {
+            return ((long)grainIdUniformHashCode << 32) + tokenId.GetHashCode();
         }
     }
 }

@@ -39,7 +39,6 @@ namespace Orleans.Runtime
         private readonly InvocationMethodInfoMap invocationMethodInfoMap = new InvocationMethodInfoMap();
         public TimeSpan ResponseTimeout { get; private set; }
         private readonly GrainTypeManager typeManager;
-        private readonly CancellationTokenManager cancellationTokenManager;
         private GrainInterfaceMap grainInterfaceMap;
 
         internal readonly IConsistentRingProvider ConsistentRingProvider;
@@ -66,7 +65,6 @@ namespace Orleans.Runtime
             config.OnConfigChange("Globals/Message", () => ResponseTimeout = Config.Globals.ResponseTimeout);
             RuntimeClient.Current = this;
             this.typeManager = typeManager;
-            cancellationTokenManager = new CancellationTokenManager();
             this.InternalGrainFactory = grainFactory;
         }
 
@@ -102,7 +100,6 @@ namespace Orleans.Runtime
             InvokeMethodOptions options,
             string genericArguments = null)
         {
-            cancellationTokenManager.SetGrainCancellationTokensTarget(request.Arguments, target);
             var message = Message.CreateMessage(request, options);
             SendRequestMessage(target, message, context, callback, debugContext, options, genericArguments);
         }

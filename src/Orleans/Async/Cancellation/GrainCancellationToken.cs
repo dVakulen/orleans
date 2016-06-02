@@ -17,9 +17,6 @@ namespace Orleans.Async
     public class GrainCancellationToken : IDisposable
     {
         [NonSerialized]
-        private bool _wentThroughSerialization;
-
-        [NonSerialized]
         private readonly CancellationTokenSource _cancellationTokenSource;
 
         /// <summary>
@@ -27,7 +24,6 @@ namespace Orleans.Async
         /// </summary>
         [NonSerialized]
         private readonly ConcurrentDictionary<GrainId, GrainReference> _targetGrainReferences;
-
 
         /// <summary>
         /// Initializes the <see cref="T:Orleans.Async.GrainCancellationToken"/>.
@@ -43,7 +39,6 @@ namespace Orleans.Async
             }
 
             Id = id;
-            WentThroughSerialization = false;
             _targetGrainReferences = new ConcurrentDictionary<GrainId, GrainReference>();
         }
 
@@ -57,44 +52,20 @@ namespace Orleans.Async
         /// </summary>
         public CancellationToken CancellationToken => _cancellationTokenSource.Token;
 
-        /// <summary>
-        /// Shows whether wrapper has went though serialization process or not
-        /// Exists for local case optimization: there's no need to issue CancellationSourcesExtension cancel call 
-        /// if the token haven't crossed cross-domain boundaries.
-        /// </summary>
-        internal bool WentThroughSerialization
-        {
-            get { return _wentThroughSerialization; }
-            set { _wentThroughSerialization = value; }
-        }
-
         internal bool IsCancellationRequested => _cancellationTokenSource.IsCancellationRequested;
 
         internal Task Cancel()
         {
             _cancellationTokenSource.Cancel();
-            if (!WentThroughSerialization)
+
+            if (_targetGrainReferences.IsEmpty)
             {
-                // token have not passed the cross-domain bounds and remote call is not needed
                 return TaskDone.Done;
             }
 
-            var cancellationTasks = new List<Task>();
-
-            foreach (var pair in _targetGrainReferences)
-            {
-                var cancellationTask = pair.Value.AsReference<ICancellationSourcesExtension>().CancelTokenSource(this);
-                cancellationTasks.Add(cancellationTask);
-                cancellationTask.ContinueWith(task =>
-                {
-                    if (task.IsFaulted) return;
-
-                    // remove reference to which cancellation call has succeded, 
-                    // in order to avoid unnecessary remote call in case of retrying
-                    GrainReference grainRef;
-                    _targetGrainReferences.TryRemove(pair.Key, out grainRef);
-                });
-            }
+            var cancellationTasks = _targetGrainReferences
+                .Select(pair => pair.Value.AsReference<ICancellationSourcesExtension>()
+                .ToList();
 
             return Task.WhenAll(cancellationTasks);
         }
@@ -115,7 +86,6 @@ namespace Orleans.Async
         internal static void SerializeGrainCancellationToken(object obj, BinaryTokenStreamWriter stream, Type expected)
         {
             var ctw = (GrainCancellationToken)obj;
-            ctw.WentThroughSerialization = true;
             var canceled = ctw.CancellationToken.IsCancellationRequested;
             stream.Write(canceled);
             stream.Write(ctw.Id);
@@ -126,18 +96,13 @@ namespace Orleans.Async
         {
             var cancellationRequested = stream.ReadToken() == SerializationTokenType.True;
             var tokenId = stream.ReadGuid();
-            var gct = new GrainCancellationToken(tokenId, cancellationRequested)
-            {
-                WentThroughSerialization = true
-            };
-
-            return gct;
+            return new GrainCancellationToken(tokenId, cancellationRequested);
         }
 
         [CopierMethod]
         internal static object CopyGrainCancellationToken(object obj)
         {
-            return obj; // CancellationToken is value type
+            var gct = (GrainCancellationToken) obj;
         }
 
         #endregion

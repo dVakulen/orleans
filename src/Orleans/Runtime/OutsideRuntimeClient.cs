@@ -34,8 +34,6 @@ namespace Orleans
 
         private readonly ProxiedMessageCenter transport;
 
-        private readonly CancellationTokenManager cancellationTokenManager;
-
         private bool listenForMessages;
         private CancellationTokenSource listeningCts;
 
@@ -190,7 +188,6 @@ namespace Orleans
                 var gatewayListProvider = GatewayProviderFactory.CreateGatewayListProvider(config)
                     .WithTimeout(initTimeout).Result;
                 transport = new ProxiedMessageCenter(config, localAddress, generation, clientId, gatewayListProvider);
-                cancellationTokenManager = new CancellationTokenManager();
 
                 if (StatisticsCollector.CollectThreadTimeTrackingStats)
                 {
@@ -583,7 +580,6 @@ namespace Orleans
             Justification = "CallbackData is IDisposable but instances exist beyond lifetime of this method so cannot Dispose yet.")]
         public void SendRequest(GrainReference target, InvokeMethodRequest request, TaskCompletionSource<object> context, Action<Message, TaskCompletionSource<object>> callback, string debugContext = null, InvokeMethodOptions options = InvokeMethodOptions.None, string genericArguments = null)
         {
-            cancellationTokenManager.SetGrainCancellationTokensTarget(request.Arguments, target);
             var message = Message.CreateMessage(request, options);
             SendRequestMessage(target, message, context, callback, debugContext, options, genericArguments);
         }

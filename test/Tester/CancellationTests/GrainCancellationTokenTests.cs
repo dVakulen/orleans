@@ -96,7 +96,6 @@ namespace UnitTests.CancellationTests
 
             var tcs = new GrainCancellationTokenSource();
             var grainTask = grains.Item1.CallOtherCancellationTokenCallbackResolve(grains.Item2);
-           // await Task.Delay(TimeSpan.FromMilliseconds(100));
             await tcs.Cancel();
             var result = await grainTask;
             Assert.Equal(true, result);

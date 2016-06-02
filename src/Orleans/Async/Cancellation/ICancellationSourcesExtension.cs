@@ -8,6 +8,6 @@ namespace Orleans.Async
     internal interface ICancellationSourcesExtension : IGrainExtension, IGrain
     {
         [AlwaysInterleave]
-        Task CancelTokenSource(GrainCancellationToken token);
+        Task CancelTokenSource(uint grainId, GrainCancellationToken token);
     }
 }
