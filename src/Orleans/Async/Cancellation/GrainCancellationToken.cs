@@ -65,6 +65,7 @@ namespace Orleans.Async
 
             var cancellationTasks = _targetGrainReferences
                 .Select(pair => pair.Value.AsReference<ICancellationSourcesExtension>()
+                .CancelTokenSource(GrainExtensions.GetGrainId(pair.Value).GetUniformHashCode(), this))
                 .ToList();
 
             return Task.WhenAll(cancellationTasks);
@@ -103,6 +104,7 @@ namespace Orleans.Async
         internal static object CopyGrainCancellationToken(object obj)
         {
             var gct = (GrainCancellationToken) obj;
+            return new GrainCancellationToken(gct.Id, gct.IsCancellationRequested);
         }
 
         #endregion
