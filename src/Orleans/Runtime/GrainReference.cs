@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Threading.Tasks;
+using Orleans.Async;
 using Orleans.Serialization;
 using Orleans.CodeGeneration;
 
@@ -19,6 +20,8 @@ namespace Orleans.Runtime
         
         [NonSerialized]
         private static readonly TraceLogger logger = TraceLogger.GetLogger("GrainReference", TraceLogger.LoggerType.Runtime);
+
+        private static readonly CancellationTokenManager cancellationTokenManager = new CancellationTokenManager();
 
         [NonSerialized] private const bool USE_DEBUG_CONTEXT = true;
 
@@ -301,6 +304,7 @@ namespace Orleans.Runtime
             if (arguments != null)
             {
                 CheckForGrainArguments(arguments);
+                cancellationTokenManager.SetGrainCancellationTokensTarget(arguments, this);
                 argsDeepCopy = (object[])SerializationManager.DeepCopy(arguments);
             }
             

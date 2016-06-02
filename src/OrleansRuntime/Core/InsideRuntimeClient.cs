@@ -5,9 +5,10 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading;
 using System.Reflection;
 using System.Threading.Tasks;
-
+using Orleans.Async;
 using Orleans.CodeGeneration;
 using Orleans.Runtime.Configuration;
 using Orleans.Runtime.GrainDirectory;
@@ -336,6 +337,15 @@ namespace Orleans.Runtime
                 try
                 {
                     var request = (InvokeMethodRequest) message.BodyObject;
+                    if (request.Arguments != null)
+                    {
+                        for (var i = 0; i < request.Arguments.Length; i++)
+                        {
+                            var arg = request.Arguments[i];
+                            if (!(arg is GrainCancellationToken)) continue;
+                            CancellationSourcesExtension.RegisterCancellationToken(target, request, i, logger);
+                        }
+                    }
 
                     var invoker = invokable.GetInvoker(request.InterfaceId, message.GenericGrainType);
 
