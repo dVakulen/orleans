@@ -1064,7 +1064,15 @@ namespace Orleans
         CodeGenDllMissing                   = CodeGenBase + 6,
         CodeGenSystemTypeRequiresSerializer = CodeGenBase + 7,
 
-        CancellationTokenManagerBase        = Runtime + 3900,
+        MultiClusterNetworkBase = Runtime + 3900,
+        MultiClusterNetwork_Starting = MultiClusterNetworkBase + 1,
+        MultiClusterNetwork_Started = MultiClusterNetworkBase + 2,
+        MultiClusterNetwork_FailedToStart = MultiClusterNetworkBase + 3,
+        MultiClusterNetwork_LocalSubscriberException = MultiClusterNetworkBase + 4,
+        MultiClusterNetwork_GossipCommunicationFailure = MultiClusterNetworkBase + 5,
+        MultiClusterNetwork_NoChannelsConfigured = MultiClusterNetworkBase + 6,
+
+        CancellationTokenManagerBase        = Runtime + 4000,
         CancellationTokenCancelFailed       = CancellationTokenManagerBase + 1,
         CancellationExtensionCreationFailed = CancellationTokenManagerBase + 2
     }

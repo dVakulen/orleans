@@ -7,6 +7,7 @@ using Orleans.Providers;
 using UnitTests.GrainInterfaces;
 using System.Globalization;
 using System.Threading;
+using System.Reflection;
 using Orleans.Async;
 using Orleans.CodeGeneration;
 
@@ -738,11 +739,11 @@ namespace UnitTests.Grains
 
 
             Type GetImmediateSubclass(Type subject) {
-                if(subject.BaseType == typeof(BasicGrain)) {
+                if(subject.GetTypeInfo().BaseType == typeof(BasicGrain)) {
                     return subject;
                 }
 
-                return GetImmediateSubclass(subject.BaseType);
+                return GetImmediateSubclass(subject.GetTypeInfo().BaseType);
             }
         }
 

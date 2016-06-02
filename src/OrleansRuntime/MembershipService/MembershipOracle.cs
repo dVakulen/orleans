@@ -91,10 +91,10 @@ namespace Orleans.Runtime.MembershipService
             if (logger.IsVerbose) logger.Verbose("-ReadAll Membership table {0}", table.ToString());
             CheckMissedIAmAlives(table);
 
-            string myInstanceName = nodeConfig.SiloName;
+            string mySiloName = nodeConfig.SiloName;
             MembershipEntry mostRecentPreviousEntry = null;
             // look for silo instances that are same as me, find most recent with Generation before me.
-            foreach (MembershipEntry entry in table.Members.Select(tuple => tuple.Item1).Where(data => myInstanceName.Equals(data.InstanceName)))
+            foreach (MembershipEntry entry in table.Members.Select(tuple => tuple.Item1).Where(data => mySiloName.Equals(data.SiloName)))
             {
                 bool iAmLater = MyAddress.Generation.CompareTo(entry.SiloAddress.Generation) > 0;
                 // more recent
@@ -107,14 +107,14 @@ namespace Orleans.Runtime.MembershipService
                 bool physicalHostChanged = !myHostname.Equals(mostRecentPreviousEntry.HostName) || !MyAddress.Endpoint.Equals(mostRecentPreviousEntry.SiloAddress.Endpoint);
                 if (physicalHostChanged)
                 {
-                    string error = String.Format("Silo instance {0} migrated from host {1} silo address {2} to host {3} silo address {4}.",
-                        myInstanceName, myHostname, MyAddress.ToLongString(), mostRecentPreviousEntry.HostName, mostRecentPreviousEntry.SiloAddress.ToLongString());
+                    string error = String.Format("Silo {0} migrated from host {1} silo address {2} to host {3} silo address {4}.",
+                        mySiloName, myHostname, MyAddress.ToLongString(), mostRecentPreviousEntry.HostName, mostRecentPreviousEntry.SiloAddress.ToLongString());
                     logger.Warn(ErrorCode.MembershipNodeMigrated, error);
                 }
                 else
                 {
-                    string error = String.Format("Silo instance {0} restarted on same host {1} New silo address = {2} Previous silo address = {3}",
-                        myInstanceName, myHostname, MyAddress.ToLongString(), mostRecentPreviousEntry.SiloAddress.ToLongString());
+                    string error = String.Format("Silo {0} restarted on same host {1} New silo address = {2} Previous silo address = {3}",
+                        mySiloName, myHostname, MyAddress.ToLongString(), mostRecentPreviousEntry.SiloAddress.ToLongString());
                     logger.Warn(ErrorCode.MembershipNodeRestarted, error);
                 }
             }
@@ -238,6 +238,12 @@ namespace Orleans.Runtime.MembershipService
         public Dictionary<SiloAddress, SiloStatus> GetApproximateSiloStatuses(bool onlyActive = false)
         {
             return membershipOracleData.GetApproximateSiloStatuses(onlyActive);
+        }
+
+        // ONLY access gatewaysLocalCopy to prevent races
+        public IReadOnlyList<SiloAddress> GetApproximateMultiClusterGateways()
+        {
+            return membershipOracleData.GetApproximateMultiClusterGateways();
         }
 
         public bool TryGetSiloName(SiloAddress siloAddress, out string siloName)
@@ -498,12 +504,19 @@ namespace Orleans.Runtime.MembershipService
             // only process the table if in the active or ShuttingDown state. In other states I am not ready yet.
             if (IsFunctionalMBR(CurrentStatus))
             {
-                foreach (var entry in table.Members.Select(tuple => tuple.Item1).Where(
-                    item => !item.SiloAddress.Endpoint.Equals(MyAddress.Endpoint)))
+                foreach (var entry in table.Members.Select(tuple => tuple.Item1))
                 {
-                    bool changed = membershipOracleData.TryUpdateStatusAndNotify(entry);
-                    localViewChanged = localViewChanged || changed;
+                    if (!entry.SiloAddress.Endpoint.Equals(MyAddress.Endpoint))
+                    {
+                        bool changed = membershipOracleData.TryUpdateStatusAndNotify(entry);
+                        localViewChanged = localViewChanged || changed;
+                    }
+                    else
+                    {
+                        membershipOracleData.UpdateMyFaultAndUpdateZone(entry);
+                    }
                 }
+
                 if (localViewChanged)
                     UpdateListOfProbedSilos();
             }
