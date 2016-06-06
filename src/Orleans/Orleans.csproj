@@ -162,7 +162,6 @@
     <Compile Include="Async\Cancellation\GrainCancellationTokenSource.cs" />
     <Compile Include="SystemTargetInterfaces\IMultiClusterGossipService.cs" />
     <Compile Include="Async\Cancellation\ICancellationSourcesExtension.cs" />
-    <Compile Include="Async\Cancellation\CancellationTokenManager.cs" />
     <Compile Include="Timers\IReminderRegistry.cs" />
     <Compile Include="Runtime\IRuntimeClient.cs" />
     <Compile Include="Runtime\IGrainExtension.cs" />
