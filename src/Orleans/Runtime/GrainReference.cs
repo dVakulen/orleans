@@ -513,10 +513,7 @@ namespace Orleans.Runtime
             if (arguments == null) return;
             foreach (var argument in arguments)
             {
-                if (argument is GrainCancellationToken)
-                {
-                    ((GrainCancellationToken)argument).AddGrainReference(target);
-                }
+                (argument as GrainCancellationToken)?.AddGrainReference(target);
             }
         }
 

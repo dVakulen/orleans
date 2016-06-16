@@ -12,8 +12,8 @@ namespace Orleans.Async
     /// </summary>
     internal class CancellationSourcesExtension : ICancellationSourcesExtension
     {
-        private readonly Lazy<TraceLogger> _logger = new Lazy<TraceLogger>(() =>
-            TraceLogger.GetLogger("CancellationSourcesExtension", TraceLogger.LoggerType.Application));
+        private readonly static Lazy<TraceLogger> _logger = new Lazy<TraceLogger>(() =>
+            TraceLogger.GetLogger("CancellationSourcesExtension", TraceLogger.LoggerType.Runtime));
         private readonly Interner<Guid, GrainCancellationToken> _cancellationTokens;
         private static readonly TimeSpan _cleanupFrequency = TimeSpan.FromMinutes(7);
         private static readonly int _defaultInternerCollectionSize = 31;
@@ -61,25 +61,30 @@ namespace Orleans.Async
         /// <param name="request"></param>
         /// <param name="i">Index of the GrainCancellationToken in the request.Arguments array</param>
         /// <param name="logger"></param>
-        internal static void RegisterCancellationToken(IAddressable target, InvokeMethodRequest request, int i, TraceLogger logger)
+        internal static void RegisterCancellationTokens(IAddressable target, InvokeMethodRequest request, TraceLogger logger)
         {
-            var grainToken = ((GrainCancellationToken)request.Arguments[i]);
-            
-            CancellationSourcesExtension cancellationExtension;
-            if (!SiloProviderRuntime.Instance.TryGetExtensionHandler(out cancellationExtension))
+            for (var i = 0; i < request.Arguments.Length; i++)
             {
-                cancellationExtension = new CancellationSourcesExtension();
-                if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension))
-                {
-                    logger.Error(
-                        ErrorCode.CancellationExtensionCreationFailed,
-                        string.Format("Could not add cancellation token extension, target: {0}", target));
-                    return;
-                }
-            }
+                var arg = request.Arguments[i];
+                if (!(arg is GrainCancellationToken)) continue;
+                var grainToken = ((GrainCancellationToken) request.Arguments[i]);
 
-            // Replacing the GrainCancellationToken that came from the wire with locally created one.
-            request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(grainToken);
+                CancellationSourcesExtension cancellationExtension;
+                if (!SiloProviderRuntime.Instance.TryGetExtensionHandler(out cancellationExtension))
+                {
+                    cancellationExtension = new CancellationSourcesExtension();
+                    if (!SiloProviderRuntime.Instance.TryAddExtension(cancellationExtension))
+                    {
+                        logger.Error(
+                            ErrorCode.CancellationExtensionCreationFailed,
+                            string.Format("Could not add cancellation token extension, target: {0}", target));
+                        return;
+                    }
+                }
+
+                // Replacing the GrainCancellationToken that came from the wire with locally created one.
+                request.Arguments[i] = cancellationExtension.GetOrCreateCancellationToken(grainToken);
+            }
         }
     }
 }

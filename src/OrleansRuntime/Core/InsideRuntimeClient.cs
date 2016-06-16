@@ -339,12 +339,7 @@ namespace Orleans.Runtime
                     var request = (InvokeMethodRequest) message.BodyObject;
                     if (request.Arguments != null)
                     {
-                        for (var i = 0; i < request.Arguments.Length; i++)
-                        {
-                            var arg = request.Arguments[i];
-                            if (!(arg is GrainCancellationToken)) continue;
-                            CancellationSourcesExtension.RegisterCancellationToken(target, request, i, logger);
-                        }
+                        CancellationSourcesExtension.RegisterCancellationTokens(target, request, logger);
                     }
 
                     var invoker = invokable.GetInvoker(request.InterfaceId, message.GenericGrainType);

@@ -11,10 +11,10 @@ using Orleans.Serialization;
 namespace Orleans.Async
 {
     /// <summary>
-    /// Grain cancellation token that can be passed thought cross-domain boundaries
+    /// Grain cancellation token
     /// </summary>
     [Serializable]
-    public class GrainCancellationToken : IDisposable
+    public sealed class GrainCancellationToken : IDisposable
     {
         [NonSerialized]
         private readonly CancellationTokenSource _cancellationTokenSource;
@@ -72,7 +72,7 @@ namespace Orleans.Async
 
         internal void AddGrainReference(GrainReference grainReference)
         {
-            _targetGrainReferences.AddOrUpdate(grainReference.GrainId, id => grainReference, (id, ignore) => grainReference);
+            _targetGrainReferences.TryAdd(grainReference.GrainId, grainReference);
         }
 
         public void Dispose()
