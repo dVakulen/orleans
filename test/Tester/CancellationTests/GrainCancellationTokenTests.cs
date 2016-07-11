@@ -23,8 +23,6 @@ namespace UnitTests.CancellationTests
         }
 
         [Theory, TestCategory("Functional"), TestCategory("BVT")]
-        [InlineData(0)]
-        [InlineData(10)]
         [InlineData(300)]
         public async Task GrainTaskCancellation(int delay)
         {
@@ -37,8 +35,6 @@ namespace UnitTests.CancellationTests
         }
 
         [Theory, TestCategory("Functional"), TestCategory("BVT")]
-        [InlineData(0)]
-        [InlineData(10)]
         [InlineData(300)]
         public async Task MultipleGrainsTaskCancellation(int delay)
         {
@@ -131,7 +127,6 @@ namespace UnitTests.CancellationTests
         }
 
         [Theory, TestCategory("Functional"), TestCategory("BVT")]
-        [InlineData(0)]
         [InlineData(10)]
         [InlineData(300)]
         public async Task InterSiloGrainCancellation(int delay)
@@ -140,7 +135,6 @@ namespace UnitTests.CancellationTests
         }
 
         [Theory, TestCategory("Functional"), TestCategory("BVT")]
-        [InlineData(0)]
         [InlineData(10)]
         [InlineData(300)]
         public async Task InterSiloClientCancellationTokenPassing(int delay)
@@ -149,7 +143,6 @@ namespace UnitTests.CancellationTests
         }
 
         [Theory, TestCategory("Functional"), TestCategory("BVT")]
-        [InlineData(0)]
         [InlineData(10)]
         [InlineData(300)]
         public async Task InSiloClientCancellationTokenPassing(int delay)
