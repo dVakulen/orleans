@@ -39,18 +39,27 @@ namespace UnitTests.General
             var grainOfIntFloat1 = GetGrain<IGenericGrain<int, float>>();
             var grainOfIntFloat2 = GetGrain<IGenericGrain<int, float>>();
             var grainOfFloatString = GetGrain<IGenericGrain<float, string>>();
+            for (int i = 0; i < 100; i++)
+            {
+                await grainOfIntFloat1.SetT(123);
+                await grainOfIntFloat2.SetT(456);
+                await grainOfFloatString.SetT(789.0f);
 
-            await grainOfIntFloat1.SetT(123);
-            await grainOfIntFloat2.SetT(456);
-            await grainOfFloatString.SetT(789.0f);
+                var floatResult1 = await grainOfIntFloat1.MapT2U();
+                var floatResult2 = await grainOfIntFloat2.MapT2U();
+                var stringResult = await grainOfFloatString.MapT2U();
 
-            var floatResult1 = await grainOfIntFloat1.MapT2U();
-            var floatResult2 = await grainOfIntFloat2.MapT2U();
-            var stringResult = await grainOfFloatString.MapT2U();
-
-            Assert.Equal(123f, floatResult1);
-            Assert.Equal(456f, floatResult2);
-            Assert.Equal("789", stringResult);
+                Assert.Equal(123f, floatResult1);
+                Assert.Equal(456f, floatResult2);
+                Assert.Equal("789", stringResult);
+            }
+            var gg = GetGrain<IGrainWithNoProperties>();
+            var zz = gg.GetStacks();
+            var g = await zz;
+            var hh = g;
+            var countInst = await gg.GetAxBAAA();
+            var ffff = hh.OrderBy(b => b.Value.Count).Where(v => v.Value.Count > 0).Select(v => new { v.Key, v.Value }).ToList();
+            var ggg = ffff;
         }
 
         /// Multiple GetGrain requests with the same id return the same concrete grain 

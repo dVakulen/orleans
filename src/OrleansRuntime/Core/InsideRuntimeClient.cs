@@ -176,7 +176,8 @@ namespace Orleans.Runtime
 
             if (message.IsExpirableMessage(Config.Globals))
                 message.Expiration = DateTime.UtcNow + ResponseTimeout + Constants.MAXIMUM_CLOCK_SKEW;
-            
+
+            var messageId = message.Id;
             if (!oneWay)
             {
                 var callbackData = new CallbackData(
@@ -184,9 +185,14 @@ namespace Orleans.Runtime
                     TryResendMessage, 
                     context,
                     message,
-                    () => UnRegisterCallback(message.Id),
+                    () =>
+                    {
+                        UnRegisterCallback(messageId);
+                        // todo
+                      //  message.Dispose();
+                    },
                     Config.Globals);
-                callbacks.TryAdd(message.Id, callbackData);
+                callbacks.TryAdd(messageId, callbackData);
                 callbackData.StartTimer(ResponseTimeout);
             }
 
@@ -207,6 +213,7 @@ namespace Orleans.Runtime
             if (request.IsExpired)
             {
                 request.DropExpiredMessage(MessagingStatisticsGroup.Phase.Respond);
+              //  request.Dispose(); disabled
                 return;
             }
 
@@ -272,7 +279,14 @@ namespace Orleans.Runtime
         private void UnRegisterCallback(CorrelationId id)
         {
             CallbackData ignore;
-            callbacks.TryRemove(id, out ignore);
+            if (callbacks.TryRemove(id, out ignore))
+            {
+                if (ignore.Message.Disposed != 1 && ignore.Message.Category != Message.Categories.System)
+                {
+                    ignore.Message.Dispose();
+                }
+            }
+           // 
         }
 
         public void SniffIncomingMessage(Message message)
@@ -315,10 +329,11 @@ namespace Orleans.Runtime
             }
         }
 
-        internal async Task Invoke(IAddressable target, IInvokable invokable, Message message)
+        internal async Task Invoke(IAddressable target, IInvokable invokable, Message message, bool isFromSystemTarget)
         {
             try
             {
+                //isFromSystemTarget = false;
                 // Don't process messages that have already timed out
                 if (message.IsExpired)
                 {
@@ -381,15 +396,34 @@ namespace Orleans.Runtime
                     return;
                 }
 
-                if (message.Direction == Message.Directions.OneWay) return;
+                if (message.Direction == Message.Directions.OneWay)
+                {
+                    if (isFromSystemTarget)
+                    {
+                        message.Dispose();
+                    }
+                 // message.Dispose(); ??
+                    return;
+                }
 
                 SafeSendResponse(message, resultObject);
+                //todo !!! proved 
+                //  if (message. (options & InvokeMethodOptions.OneWay) != 0)
+                //   message.Dispose(); ??
+                if (isFromSystemTarget)
+                {
+                    message.Dispose();
+                }
             }
             catch (Exception exc2)
             {
                 logger.Warn(ErrorCode.Runtime_Error_100329, "Exception during Invoke of message: " + message, exc2);
                 if (message.Direction != Message.Directions.OneWay)
-                    SafeSendExceptionResponse(message, exc2);             
+                    SafeSendExceptionResponse(message, exc2);
+                if (isFromSystemTarget)
+                {
+                    message.Dispose();
+                }
             }
         }
 
@@ -558,12 +592,16 @@ namespace Orleans.Runtime
             {
                 // IMPORTANT: we do not schedule the response callback via the scheduler, since the only thing it does
                 // is to resolve/break the resolver. The continuations/waits that are based on this resolution will be scheduled as work items. 
-                callbackData.DoCallback(message);
+                callbackData.DoCallback(message); 
+                // todo
+              //  message.Dispose();
             }
             else
             {
                 if (logger.IsVerbose) logger.Verbose(ErrorCode.Dispatcher_NoCallbackForResp,
                     "No callback for response message: " + message);
+                // todo
+             //   message.Dispose();
             }
         }
 

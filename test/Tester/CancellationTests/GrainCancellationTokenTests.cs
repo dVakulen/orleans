@@ -40,16 +40,48 @@ namespace UnitTests.CancellationTests
         [InlineData(300)]
         public async Task MultipleGrainsTaskCancellation(int delay)
         {
-            var tcs = new GrainCancellationTokenSource();
-            var grainTasks = Enumerable.Range(0, 5)
-                .Select(i => GrainFactory.GetGrain<ILongRunningTaskGrain<bool>>(Guid.NewGuid())
-                            .LongWait(tcs.Token, TimeSpan.FromSeconds(10)))
-                            .Select(task => Assert.ThrowsAsync<TaskCanceledException>(() => task)).ToList();
-            await Task.Delay(TimeSpan.FromMilliseconds(delay));
-            await tcs.Cancel();
-            await Task.WhenAll(grainTasks);
-        }
+            int i;
 
+            for ( i = 0; i < 15; i++)
+            {
+                var grainOfIntFloat1 = GetGrain<IGenericGrain<int, float>>();
+                var grainOfIntFloat2 = GetGrain<IGenericGrain<int, float>>();
+                var grainOfFloatString = GetGrain<IGenericGrain<float, string>>();
+
+                var aa = GrainFactory.GetGrain < IGenericPingSelf <int>>(Guid.NewGuid());
+
+                var bb = GrainFactory.GetGrain<IGenericPingSelf<int>>(Guid.NewGuid());
+                await aa.PingOther(bb, 1);
+                await grainOfIntFloat1.SetT(123);
+                await grainOfIntFloat2.SetT(456);
+                await grainOfFloatString.SetT(789.0f);
+
+                var floatResult1 = await grainOfIntFloat1.MapT2U();
+                var floatResult2 = await grainOfIntFloat2.MapT2U();
+                var stringResult = await grainOfFloatString.MapT2U();
+
+                Assert.Equal(1, 1);
+            }
+            var gg = GetGrain<IGrainWithNoProperties>();
+
+
+            var zz = gg.GetStacks();
+            var g = await zz;
+            var hh = g;
+            var ffff = hh.OrderBy(b => b.Value.Count).Where(v => v.Value.Count > 0).Select(v => new { v.Key, v.Value }).ToList();
+            var ggg = ffff;
+
+
+            var countInst = await gg.GetAxBAAA();
+            Assert.Equal("a", countInst + " " + i);
+            return;
+          
+
+        }
+        public TGrainInterface GetGrain<TGrainInterface>() where TGrainInterface : IGrainWithIntegerKey
+        {
+            return GrainFactory.GetGrain<TGrainInterface>(GetRandomGrainId());
+        }
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Cancellation")]
         public async Task TokenPassingWithoutCancellation_NoExceptionShouldBeThrown()
         {

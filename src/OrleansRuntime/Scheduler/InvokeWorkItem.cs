@@ -40,12 +40,13 @@ namespace Orleans.Runtime.Scheduler
             try
             {
                 IAddressable grain = activation.GrainInstance;
-                Task task = InsideRuntimeClient.Current.Invoke(grain, activation, message);
+                Task task = InsideRuntimeClient.Current.Invoke(grain, activation, message, false);
                 task.ContinueWith(t =>
                 {
                     // Note: This runs for all outcomes of resultPromiseTask - both Success or Fault
                     activation.DecrementInFlightCount();
                     InsideRuntimeClient.Current.Dispatcher.OnActivationCompletedRequest(activation, message);
+                   // message.Dispose();  //wtf ???
                 }).Ignore();
             }
             catch (Exception exc)

@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using Assert = Microsoft.VisualStudio.TestTools.UnitTesting.Assert;
 using Orleans.Providers.Streams.Common;
+using Orleans.Runtime;
 using Xunit;
 
 namespace UnitTests.OrleansRuntime.Streams
@@ -15,7 +16,7 @@ namespace UnitTests.OrleansRuntime.Streams
             public int MaxAllocated { get; set; }
 
         }
-        private class TestPooledResource : PooledResource<TestPooledResource>
+        private class TestPooledResource : Orleans.Providers.Streams.Common.PooledResource<TestPooledResource>
         {
             private readonly Accumulator accumulator;
 

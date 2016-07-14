@@ -6,6 +6,7 @@ using Orleans.Concurrency;
 using Orleans.Providers;
 using UnitTests.GrainInterfaces;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Reflection;
 using Orleans.Async;
@@ -176,6 +177,44 @@ namespace UnitTests.Grains
     }
     public class GrainWithNoProperties : Grain, IGrainWithNoProperties
     {
+        public Task<Dictionary<string, StackHolder.StackInfo>> GetStacks()
+        {
+            GC.Collect();
+            GC.WaitForFullGCComplete();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            var s = MsgAccesor.holder.Stacks;
+            Dictionary < string, StackHolder.StackInfo > a = new Dictionary<string, StackHolder.StackInfo>();
+            foreach (var f in s)
+            {
+                var h = f.Value;
+                var n = f.Value.OrderByDescending(v => v.Value.Position).Skip(1).Take(1);
+                foreach (var kvp in n)
+                {
+                    if (a.ContainsKey(kvp.Key))
+                    {
+                        a[kvp.Key].Count++;
+                        
+                        a[kvp.Key].IsFinalized = a[kvp.Key].IsFinalized && kvp.Value.IsFinalized;
+                    }
+                    else
+                    {
+                        a[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+            foreach (var stackInfo in a)
+            {
+               GetLogger("Qwerty").Error(42, stackInfo.Value.IsFinalized + " count" + stackInfo.Value.Count + " PPos -  " + stackInfo.Value.Position + Environment.NewLine + stackInfo.Key);
+            }
+            return Task.FromResult(a);
+        }
+
+        public Task<long> GetAxBAAA()
+        {
+            return Task.FromResult(MsgAccesor.InstancesCount);
+        }
+
         public Task<string> GetAxB(int a, int b)
         {
             string retValue = string.Format("{0}x{1}", a, b);

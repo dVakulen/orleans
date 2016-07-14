@@ -407,6 +407,8 @@ namespace Orleans.Runtime
             {
                 context.TrySetException(response.Exception);
             }
+            // todo proved
+            message.Dispose();
         }
 
         private bool GetUnordered()

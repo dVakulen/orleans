@@ -142,7 +142,11 @@ namespace Orleans.Runtime
                 if (unregister != null)
                 {
                     unregister();
-                }     
+                }
+                else
+                {
+                  //  Message.Dispose();
+                }
             }
             if (StatisticsCollector.CollectApplicationRequestsStats)
             {

@@ -49,6 +49,7 @@ namespace UnitTests.MembershipTests
             {
                 Assert.Equal(typeof(SiloUnavailableException), ex.GetBaseException().GetType());
             }
+          //  Assert.False(true);
         }
 
         [Fact, TestCategory("Functional"), TestCategory("Liveness")]
@@ -69,6 +70,7 @@ namespace UnitTests.MembershipTests
             {
                 Assert.Equal(typeof(SiloUnavailableException), ex.GetBaseException().GetType());
             }
+         //   Assert.False(true);
         }
 
     }

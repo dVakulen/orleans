@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Orleans;
 using Orleans.Async;
+using Orleans.Runtime;
 
 namespace UnitTests.GrainInterfaces
 {
@@ -67,7 +68,9 @@ namespace UnitTests.GrainInterfaces
     }
     public interface IGrainWithNoProperties : IGrainWithIntegerKey
     {
+        Task<Dictionary<string, StackHolder.StackInfo>> GetStacks();
         Task<string> GetAxB(int a, int b);
+        Task<long> GetAxBAAA();
     }
 
     public interface IGrainWithListFields : IGrainWithIntegerKey

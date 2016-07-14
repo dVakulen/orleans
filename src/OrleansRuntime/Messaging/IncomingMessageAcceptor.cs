@@ -406,6 +406,7 @@ namespace Orleans.Runtime.Messaging
                     var response = msg.CreateResponseMessage();
                     response.BodyObject = Response.Done;   
                     MessageCenter.SendMessage(response);
+                    msg.Dispose(); // checked// stop!!
                 }
                 return;
             }

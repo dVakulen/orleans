@@ -255,6 +255,7 @@ namespace Orleans.Messaging
                 // If we still can't serialize, drop the message on the floor
                 Log.Warn(ErrorCode.ProxyClient_DroppingMsg, "Unable to serialize message - DROPPING " + msg, ex);
                 msg.ReleaseBodyAndHeaderBuffers();
+                /////    msg.Dispose();
             }
         }
 
@@ -283,11 +284,13 @@ namespace Orleans.Messaging
                 MessagingStatisticsGroup.OnRejectedMessage(msg);
                 Message error = msg.CreateRejectionResponse(Message.RejectionTypes.Unrecoverable, reason);
                 MsgCenter.QueueIncomingMessage(error);
+                /////msg.Dispose();
             }
             else
             {
                 Log.Warn(ErrorCode.ProxyClient_DroppingMsg, "Dropping message: {0}. Reason = {1}", msg, reason);
                 MessagingStatisticsGroup.OnDroppedSentMessage(msg);
+                /////  msg.Dispose();
             }
         }
     }

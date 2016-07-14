@@ -433,7 +433,10 @@ namespace Orleans
                     }
 
                     if (ExpireMessageIfExpired(message, MessagingStatisticsGroup.Phase.Invoke))
+                    {
+                        message.Dispose();
                         continue;
+                    }
 
                     RequestContext.Import(message.RequestContextData);
                     var request = (InvokeMethodRequest)message.BodyObject;
@@ -456,7 +459,9 @@ namespace Orleans
                         caught = exc;
                     }
                     if (caught != null)
+                    {
                         this.ReportException(message, caught);
+                    }
                     else if (message.Direction != Message.Directions.OneWay)
                         await this.SendResponseAsync(message, resultObject);
                 }catch(Exception)
@@ -671,12 +676,15 @@ namespace Orleans
             {
                 logger.Warn(ErrorCode.Runtime_Error_100011, "No callback for response message: " + response);
             }
+
+            //response.Dispose();
         }
 
         private void UnRegisterCallback(CorrelationId id)
         {
             CallbackData ignore;
             callbacks.TryRemove(id, out ignore);
+            ignore.Message.Dispose();
         }
 
         public void Reset(bool cleanup)

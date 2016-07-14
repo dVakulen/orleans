@@ -145,7 +145,10 @@ namespace Orleans.Runtime.Messaging
             else
             {
                 msg.ReleaseBodyAndHeaderBuffers();
-                if (Log.IsVerbose3) Log.Verbose3("Sending queue delay time for: {0} is {1}", msg, DateTime.UtcNow.Subtract((DateTime)msg.GetMetadata(OutboundMessageQueue.QUEUED_TIME_METADATA)));
+                if (Log.IsVerbose3) Log.Verbose3("Sending queue delay time for: {0} is {1}", msg, DateTime.UtcNow.Subtract((DateTime)msg.GetMetadata(OutboundMessageQueue.QUEUED_TIME_METADATA))); 
+            if(msg.Direction == Message.Directions.OneWay) {
+                    msg.Dispose();// proved   // ????? 
+                }
             }
         }
 

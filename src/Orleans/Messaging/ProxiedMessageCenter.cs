@@ -361,7 +361,8 @@ namespace Orleans.Messaging
                 if (logger.IsVerbose) logger.Verbose(ErrorCode.ProxyClient_RejectingMsg, "Rejecting message: {0}. Reason = {1}", msg, reason);
                 MessagingStatisticsGroup.OnRejectedMessage(msg);
                 Message error = msg.CreateRejectionResponse(Message.RejectionTypes.Unrecoverable, reason);
-                QueueIncomingMessage(error);
+                // msg.Dispose(); dropped
+                QueueIncomingMessage(error); 
             }
         }
 

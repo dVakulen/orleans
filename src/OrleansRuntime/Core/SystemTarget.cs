@@ -44,7 +44,7 @@ namespace Orleans.Runtime
         public void HandleNewRequest(Message request)
         {
             running = request;
-            InsideRuntimeClient.Current.Invoke(this, this, request).Ignore();
+            InsideRuntimeClient.Current.Invoke(this, this, request, true).Ignore();
         }
 
         public void HandleResponse(Message response)

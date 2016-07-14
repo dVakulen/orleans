@@ -1,16 +1,115 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using Orleans.CodeGeneration;
 using Orleans.Runtime.Configuration;
 using Orleans.Serialization;
+using PostSharp.Aspects;
+using PostSharp.Aspects.Advices;
 
 namespace Orleans.Runtime
 {
-    internal class Message : IOutgoingMessage
+    [Serializable]
+    public class LoggingAspect : OnMethodBoundaryAspect
     {
+        static LoggingAspect ()
+        {
+            Message.holder = new StackHolder();
+        }
+        public override void OnEntry(MethodExecutionArgs args)
+        {
+            if (Message.holder == null)
+            {
+                Message.holder = new StackHolder();
+            }
+
+            if (args.Instance == null)
+            {
+                return;
+            }
+
+           Message.holder.PushStack((args.Instance as Message).Key, System.Environment.StackTrace);
+        }
+    }
+
+    public class StackHolder
+    {
+        public StackHolder()
+        {
+            Stacks = new ConcurrentDictionary<Guid, ConcurrentDictionary<string, StackInfo>> ();
+        }
+        public class StackInfo
+        {
+            public int Count { get; set; }
+            public int Position { get; set; }
+            public bool IsFinalized { get; set; }
+        }
+
+        public ConcurrentDictionary<Guid, ConcurrentDictionary<string, StackInfo>> Stacks { get; set; }
+
+        public void PushStack(Guid instanceKey, string stack)
+        {
+            ConcurrentDictionary<string, StackInfo> stacks;
+            if (Stacks.ContainsKey(instanceKey))
+            {
+                stacks = Stacks[instanceKey];
+            }
+            else
+            {
+                Stacks[instanceKey] = stacks = new ConcurrentDictionary<string, StackInfo>();
+            }
+
+            if (stacks.ContainsKey(stack))
+            {
+                stacks[stack].Count++;
+            }
+            else
+            {
+                stacks[stack] = new StackInfo()
+                {
+                    Position = stacks.Count+1
+                };
+            }
+        }
+        //public List<string> GetTopStacks(int num)
+        //{
+        //    var aa = Stacks.ToList();
+        //    aa.Reverse();
+        //} 
+    }
+
+    public static class MsgAccesor
+    {
+        public static long InstancesCount;
+        public static StackHolder holder => Message.holder;
+    }
+
+   [LoggingAspect]
+    internal class Message :  PooledResource<Message>, IOutgoingMessage, IDisposable
+    {
+        ~Message()
+        {
+            if (!holder.Stacks.ContainsKey(Key))
+            {
+                return;
+            }
+
+            var zz = holder.Stacks[Key];
+            if (zz != null)
+            {
+                foreach (var stackInfo in zz)
+                {
+                    stackInfo.Value.IsFinalized = true;
+                }
+            }
+        }
+        public Guid Key = Guid.NewGuid();
+        public static StackHolder holder;
+        
         // NOTE:  These are encoded on the wire as bytes for efficiency.  They are only integer enums to avoid boxing
         // This means we can't have over byte.MaxValue of them.
         public enum Header
@@ -81,10 +180,13 @@ namespace Orleans.Runtime
         private ActivationAddress targetAddress;
         private ActivationAddress sendingAddress;
         private static readonly Logger logger;
-        
+        private static readonly IObjectPool<Message> pool;
+
         static Message()
         {
+            holder = new StackHolder();
             logger = LogManager.GetLogger("Message", LoggerType.Runtime);
+            pool = new ConcurrentObjectPool<Message>(() => new Message());
         }
 
         public enum Categories
@@ -428,7 +530,7 @@ namespace Orleans.Runtime
             }
         }
 
-        public Message()
+        public Message() : base(pool)
         {
             // average headers items count is 14 items, and while the Header enum contains 18 entries
             // the closest prime number is 17; assuming that possibility of all 18 headers being at the same time is low enough to
@@ -438,26 +540,18 @@ namespace Orleans.Runtime
             bodyObject = null;
             bodyBytes = null;
             headerBytes = null;
-        }
-
-        private Message(Categories type, Directions subtype)
-            : this()
-        {
-            Category = type;
-            Direction = subtype;
+            Interlocked.Increment(ref MsgAccesor.InstancesCount);
         }
 
         internal static Message CreateMessage(InvokeMethodRequest request, InvokeMethodOptions options)
         {
-            var message = new Message(
-                Categories.Application,
-                (options & InvokeMethodOptions.OneWay) != 0 ? Directions.OneWay : Directions.Request)
-            {
-                Id = CorrelationId.GetNext(),
-                IsReadOnly = (options & InvokeMethodOptions.ReadOnly) != 0,
-                IsUnordered = (options & InvokeMethodOptions.Unordered) != 0,
-                BodyObject = request
-            };
+            var message = pool.Allocate();
+            message.Category = Categories.Application;
+            message.Direction = (options & InvokeMethodOptions.OneWay) != 0 ? Directions.OneWay : Directions.Request;
+            message.Id = CorrelationId.GetNext();
+            message.IsReadOnly = (options & InvokeMethodOptions.ReadOnly) != 0;
+            message.IsUnordered = (options & InvokeMethodOptions.Unordered) != 0;
+            message.BodyObject = request;
 
             if ((options & InvokeMethodOptions.AlwaysInterleave) != 0)
                 message.IsAlwaysInterleave = true;
@@ -467,37 +561,47 @@ namespace Orleans.Runtime
             {
                 message.RequestContextData = contextData;
             }
+
             return message;
         }
 
         // Initializes body and header but does not take ownership of byte.
         // Caller must clean up bytes
-        public Message(List<ArraySegment<byte>> header, List<ArraySegment<byte>> body, bool deserializeBody = false)
+        public static Message CreateMessage(List<ArraySegment<byte>> header, List<ArraySegment<byte>> body, bool deserializeBody = false)
         {
-            metadata = new Dictionary<string, object>();
+            var message = pool.Allocate();
+            message.metadata = new Dictionary<string, object>();
 
             var input = new BinaryTokenStreamReader(header);
-            headers = SerializationManager.DeserializeMessageHeaders(input);
+            var headers = SerializationManager.DeserializeMessageHeaders(input);
+            foreach (var h in headers)
+            {
+                message.headers[h.Key] = h.Value;
+            }
+
             if (deserializeBody)
             {
-                bodyObject = DeserializeBody(body);
+                message.bodyObject = DeserializeBody(body);
             }
             else
             {
-                bodyBytes = body;
+                message.bodyBytes = body;
             }
+
+            return message;
         }
 
         public Message CreateResponseMessage()
         {
-            var response = new Message(this.Category, Directions.Response)
-            {
-                Id = this.Id,
-                IsReadOnly = this.IsReadOnly,
-                IsAlwaysInterleave = this.IsAlwaysInterleave,
-                TargetSilo = this.SendingSilo
-            };
-
+            //Throw();;
+            var response = pool.Allocate();
+            response.Category = Category;
+            response.Direction = Directions.Response;
+            response.Id = this.Id;
+            response.IsReadOnly = this.IsReadOnly;
+            response.IsAlwaysInterleave = this.IsAlwaysInterleave;
+            response.TargetSilo = this.SendingSilo;
+          
             if (this.ContainsHeader(Header.SENDING_GRAIN))
             {
                 response.SetHeader(Header.TARGET_GRAIN, this.GetHeader(Header.SENDING_GRAIN));
@@ -544,6 +648,7 @@ namespace Orleans.Runtime
 
         public Message CreateRejectionResponse(RejectionTypes type, string info, OrleansException ex = null)
         {
+            //Throw();;
             var response = CreateResponseMessage();
             response.Result = ResponseTypes.Rejection;
             response.RejectionType = type;
@@ -555,20 +660,24 @@ namespace Orleans.Runtime
 
         public Message CreatePromptExceptionResponse(Exception exception)
         {
-            return new Message(Category, Directions.Response)
-            {
-                Result = ResponseTypes.Error,
-                BodyObject = Response.ExceptionResponse(exception)
-            };
+            //Throw();;
+            var message = pool.Allocate();
+            message.Category = Category;
+            message.Direction = Directions.Response;
+            message.Result = ResponseTypes.Error;
+            message.BodyObject = Response.ExceptionResponse(exception);
+            return message;
         }
 
         public bool ContainsHeader(Header tag)
         {
+            //Throw();;
             return headers.ContainsKey(tag);
         }
 
         public void RemoveHeader(Header tag)
         {
+            //Throw();;
             lock (headers)
             {
                 headers.Remove(tag);
@@ -579,6 +688,7 @@ namespace Orleans.Runtime
 
         public void SetHeader(Header tag, object value)
         {
+            //Throw();;
             lock (headers)
             {
                 headers[tag] = value;
@@ -587,6 +697,7 @@ namespace Orleans.Runtime
 
         public object GetHeader(Header tag)
         {
+            //Throw();;
             object val;
             bool flag;
             lock (headers)
@@ -598,6 +709,7 @@ namespace Orleans.Runtime
 
         public string GetStringHeader(Header tag)
         {
+            //Throw();;
             object val;
             if (!headers.TryGetValue(tag, out val)) return String.Empty;
 
@@ -607,6 +719,7 @@ namespace Orleans.Runtime
 
         public T GetScalarHeader<T>(Header tag)
         {
+            //Throw();;
             object val;
             if (headers.TryGetValue(tag, out val))
             {
@@ -617,6 +730,7 @@ namespace Orleans.Runtime
 
         public T GetSimpleHeader<T>(Header tag)
         {
+            //Throw();;
             object val;
             if (!headers.TryGetValue(tag, out val) || val == null) return default(T);
 
@@ -625,17 +739,20 @@ namespace Orleans.Runtime
 
         public bool ContainsMetadata(string tag)
         {
+            //Throw();;
             return metadata != null && metadata.ContainsKey(tag);
         }
 
         public void SetMetadata(string tag, object data)
         {
+            //Throw();;
             metadata = metadata ?? new Dictionary<string, object>();
             metadata[tag] = data;
         }
 
         public void RemoveMetadata(string tag)
         {
+            //Throw();;
             if (metadata != null)
             {
                 metadata.Remove(tag);
@@ -644,6 +761,7 @@ namespace Orleans.Runtime
 
         public object GetMetadata(string tag)
         {
+            //Throw();;
             object data;
             if (metadata != null && metadata.TryGetValue(tag, out data))
             {
@@ -659,6 +777,7 @@ namespace Orleans.Runtime
         /// <returns></returns>
         public bool IsDuplicate(Message other)
         {
+            //Throw();;
             return Equals(SendingSilo, other.SendingSilo) && Equals(Id, other.Id);
         }
 
@@ -666,12 +785,14 @@ namespace Orleans.Runtime
 
         public List<ArraySegment<byte>> Serialize(out int headerLength)
         {
+            //Throw();;
             int dummy;
             return Serialize_Impl(out headerLength, out dummy);
         }
 
         private List<ArraySegment<byte>> Serialize_Impl(out int headerLengthOut, out int bodyLengthOut)
         {
+            //Throw();;
             var headerStream = new BinaryTokenStreamWriter();
             lock (headers) // Guard against any attempts to modify message headers while we are serializing them
             {
@@ -719,8 +840,17 @@ namespace Orleans.Runtime
 
         public void ReleaseBodyAndHeaderBuffers()
         {
+            //Throw();;
             ReleaseHeadersOnly();
             ReleaseBodyOnly();
+        }
+
+        void Throw()
+        {
+            if (isRestted)
+            {
+                throw new Exception("FFF" + _callerMemberName + Environment.NewLine +Environment.NewLine + Environment.NewLine + Environment.StackTrace);
+            }
         }
 
         public void ReleaseHeadersOnly()
@@ -744,6 +874,7 @@ namespace Orleans.Runtime
         // For testing and logging/tracing
         public string ToLongString()
         {
+            //Throw();;
             var sb = new StringBuilder();
 
             string debugContex = DebugContext;
@@ -769,7 +900,13 @@ namespace Orleans.Runtime
 
         public override string ToString()
         {
+            ////Throw();;
             string response = String.Empty;
+            if (Disposed == 1)
+            {
+                return response;
+            }
+
             if (Direction == Directions.Response)
             {
                 switch (Result)
@@ -822,6 +959,7 @@ namespace Orleans.Runtime
 
         public string GetTargetHistory()
         {
+            //Throw();;
             var history = new StringBuilder();
             history.Append("<");
             if (ContainsHeader(Header.TARGET_SILO))
@@ -880,6 +1018,45 @@ namespace Orleans.Runtime
             MessagingStatisticsGroup.OnMessageExpired(phase);
             if (logger.IsVerbose2) logger.Verbose2("Dropping an expired message: {0}", this);
             ReleaseBodyAndHeaderBuffers();
+            Dispose();
         }
+
+        private string _callerMemberName = string.Empty;
+
+        private string _previouscallerMemberName = string.Empty;
+        private string _TTTT = string.Empty;
+
+        public override void OnResetState()
+        {
+            if (Disposed == 0)
+            {
+                _callerMemberName = Key + System.Environment.StackTrace;
+            }
+            else
+            {
+                _previouscallerMemberName = Key + Environment.StackTrace;
+            }
+            try
+            {
+                if (!isRestted)
+                {
+                    _TTTT = this.ToLongString();
+                }
+            }
+            catch (Exception)
+            {
+                
+            }
+            isRestted = true;
+            headers?.Clear();
+            metadata?.Clear();
+            bodyObject = null;
+            bodyBytes = null;
+            headerBytes = null;
+            targetAddress = null;
+            sendingAddress = null;
+        }
+
+        public bool isRestted = false;
     }
 }

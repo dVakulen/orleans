@@ -1,30 +1,10 @@
 ﻿
 using System;
 using System.Threading;
+using Orleans.Runtime;
 
 namespace Orleans.Providers.Streams.Common
 {
-    /// <summary>
-    /// Simple object pool Interface.
-    /// Objects allocated should be returned to the pool when disposed.
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
-    public interface IObjectPool<T>
-        where T : IDisposable
-    {
-        /// <summary>
-        /// Allocates a pooled resource
-        /// </summary>
-        /// <returns></returns>
-        T Allocate();
-
-        /// <summary>
-        /// Returns a resource to the pool
-        /// </summary>
-        /// <param name="resource"></param>
-        void Free(T resource);
-    }
-
     /// <summary>
     /// Utility class to support pooled objects by allowing them to track the pook they came from and return to it when disposed
     /// </summary>

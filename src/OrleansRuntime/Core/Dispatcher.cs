@@ -61,6 +61,7 @@ namespace Orleans.Runtime
                 logger.Warn(ErrorCode.Dispatcher_DroppingExpiredMessage, "Dropping an expired message: {0}", message);
                 MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Expired");
                 message.DropExpiredMessage(MessagingStatisticsGroup.Phase.Dispatch);
+                message.Dispose();
                 return;
             }
 
@@ -68,7 +69,9 @@ namespace Orleans.Runtime
             if (message.TargetGrain.IsSystemTarget)
             {
                 MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "ReceiveMessage on system target.");
-                throw new InvalidOperationException("Dispatcher was called ReceiveMessage on system target for " + message);
+                var exMessage = "Dispatcher was called ReceiveMessage on system target for " + message;
+                message.Dispose();
+                throw new InvalidOperationException(exMessage);
             }
 
             if (errorInjection && ShouldInjectError(message))
@@ -564,6 +567,7 @@ namespace Orleans.Runtime
         {
             // create the response
             var message = request.CreateResponseMessage();
+           // request.Dispose();
             message.BodyObject = response;
 
             if (message.TargetGrain.IsSystemTarget)
