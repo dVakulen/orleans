@@ -1,8 +1,8 @@
 
-![Orleans logo](https://github.com/dotnet/orleans/blob/gh-pages/assets/logo_full.png) - 
+![Orleans logo](https://github.com/dotnet/orleans/blob/gh-pages/assets/logo_full.png) 
 
-<p align="center">Distributed Actor Model
-</p>
+=======
+
 
 [![Build status](http://dotnet-ci.cloudapp.net/job/dotnet_orleans/job/innerloop/badge/icon)](http://dotnet-ci.cloudapp.net/job/dotnet_orleans/job/innerloop)
 [![NuGet](https://img.shields.io/nuget/v/Microsoft.Orleans.Core.svg?style=flat)](http://www.nuget.org/profiles/Orleans)
