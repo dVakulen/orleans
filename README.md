@@ -1,6 +1,6 @@
 
-![Orleans logo](https://github.com/dotnet/orleans/blob/gh-pages/assets/logo_full.png) 
-
+<p align="center"><a href="https://github.com/dotnet/orleans/blob/gh-pages/assets/logo_full.png" target="_blank"><img src="https://github.com/dotnet/orleans/raw/gh-pages/assets/logo_full.png" alt="Orleans logo" width="600px"></a> 
+</p>
 =======
 
 
