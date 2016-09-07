@@ -2,6 +2,8 @@ using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Orleans.CodeGeneration;
+using Orleans.Runtime;
 
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
@@ -31,6 +33,9 @@ using System.Runtime.InteropServices;
 [assembly: InternalsVisibleTo("UnitTestGrainInterfaces")]
 [assembly: InternalsVisibleTo("UnitTestGrains")]
 [assembly: InternalsVisibleTo("TesterInternal")]
+[assembly: InternalsVisibleTo("Tester")]
 [assembly: InternalsVisibleTo("TestInternalGrainInterfaces")]
+[assembly: InternalsVisibleTo("TesterGrainInterfaces")]
 [assembly: InternalsVisibleTo("OrleansBenchmarks")]
 [assembly: InternalsVisibleTo("TestInternalGrains")]
+[assembly: InternalsVisibleTo("TestGrainInterfaces")]

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime.Scheduler
@@ -50,7 +51,7 @@ namespace Orleans.Runtime.Scheduler
             applicationTurnsStopped = false;
             MaxPendingItemsLimit = maxPendingItemsLimit;
             workgroupDirectory = new ConcurrentDictionary<ISchedulingContext, WorkItemGroup>();
-            RunQueue = new WorkQueue();
+            RunQueue = new WorkQueue(this, maxActiveThreads);
             logger.Info("Starting OrleansTaskScheduler with {0} Max Active application Threads and 1 system thread.", maxActiveThreads);
             Pool = new WorkerPool(this, maxActiveThreads, injectMoreWorkerThreads);
             IntValueStatistic.FindOrCreate(StatisticNames.SCHEDULER_WORKITEMGROUP_COUNT, () => WorkItemGroupCount);

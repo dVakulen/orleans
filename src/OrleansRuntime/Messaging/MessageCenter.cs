@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Threading;
+using System.Threading.Tasks.Dataflow;
 using Orleans.Messaging;
 using Orleans.Runtime.Configuration;
 
@@ -23,7 +24,9 @@ namespace Orleans.Runtime.Messaging
         internal SocketManager SocketManager;
         internal bool IsBlockingApplicationMessages { get; private set; }
         internal ISiloPerformanceMetrics Metrics { get; private set; }
-        
+
+        public ManualResetEvent Completion { get; } = new ManualResetEvent(false);
+
         public bool IsProxying { get { return Gateway != null; } }
 
         public bool TryDeliverToProxy(Message msg)
@@ -106,6 +109,7 @@ namespace Orleans.Runtime.Messaging
                 log.Error(ErrorCode.Runtime_Error_100110, "Stop failed.", exc);
             }
 
+            Completion.Set();
             try
             {
                 SocketManager.Stop();
@@ -182,9 +186,9 @@ namespace Orleans.Runtime.Messaging
             InboundQueue.PostMessage(error);
         }
 
-        public Message WaitMessage(Message.Categories type, CancellationToken ct)
+        public void AddTargetBlock(Message.Categories type, Action<Message> actionBlock)
         {
-            return InboundQueue.WaitMessage(type);
+           InboundQueue.AddTargetBlock(type, actionBlock);
         }
 
         public void Dispose()

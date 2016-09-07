@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Threading.Tasks.Dataflow;
 
 
 namespace Orleans.Runtime.Messaging
@@ -7,7 +8,8 @@ namespace Orleans.Runtime.Messaging
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Naming", "CA1711:IdentifiersShouldNotHaveIncorrectSuffix")]
     internal class InboundMessageQueue : IInboundMessageQueue
     {
-        private readonly BlockingCollection<Message>[] messageQueues;
+        private readonly ITargetBlock<Message>[] messageQueues;
+        private readonly Action<Message>[] messageHandlers;
         private readonly Logger log;
         private readonly QueueTrackingStatistic[] queueTracking;
 
@@ -16,9 +18,11 @@ namespace Orleans.Runtime.Messaging
             get
             {
                 int n = 0;
-                foreach (var queue in messageQueues)
-                    n += queue.Count;
-                
+                // currently doesn't being used
+
+                //foreach (var queue in messageQueues)
+                //    n += queue.Count;
+
                 return n;
             }
         }
@@ -26,12 +30,17 @@ namespace Orleans.Runtime.Messaging
         internal InboundMessageQueue()
         {
             int n = Enum.GetValues(typeof(Message.Categories)).Length;
-            messageQueues = new BlockingCollection<Message>[n];
+            messageQueues = new ITargetBlock<Message>[n];
             queueTracking = new QueueTrackingStatistic[n];
+            messageHandlers = new Action<Message>[n];
+            for (int g = 0; g < n; g++)
+            {
+                messageHandlers[g]= new Action<Message>(message => log.Error(0, "Message recieved before start"));
+            }
             int i = 0;
             foreach (var category in Enum.GetValues(typeof(Message.Categories)))
             {
-                messageQueues[i] = new BlockingCollection<Message>();
+                messageQueues[i] = new BufferBlock<Message>();
                 if (StatisticsCollector.CollectQueueStats)
                 {
                     var queueName = "IncomingMessageAgent." + category;
@@ -47,7 +56,7 @@ namespace Orleans.Runtime.Messaging
         {
             if (messageQueues == null) return;
             foreach (var q in messageQueues)
-                q.CompleteAdding();
+                q.Complete();
             
             if (!StatisticsCollector.CollectQueueStats) return;
 
@@ -63,29 +72,22 @@ namespace Orleans.Runtime.Messaging
                 queueTracking[(int)msg.Category].OnEnQueueRequest(1, messageQueues[(int)msg.Category].Count, msg);
             }
 #endif
-            messageQueues[(int)msg.Category].Add(msg);
+            messageHandlers[(int)msg.Category](msg);
            
             if (log.IsVerbose3) log.Verbose3("Queued incoming {0} message", msg.Category.ToString());
         }
 
-        public Message WaitMessage(Message.Categories type)
+        public void AddTargetBlock(Message.Categories type, Action<Message> actionBlock)
         {
-            try
-            {
-                Message msg = messageQueues[(int)type].Take();
-
-#if TRACK_DETAILED_STATS
-                if (StatisticsCollector.CollectQueueStats)
-                {
-                    queueTracking[(int)msg.Category].OnDeQueueRequest(msg);
-                }
-#endif
-                return msg;
-            }
-            catch (InvalidOperationException)
-            {
-                return null;
-            }
+            messageHandlers[(int) type] = actionBlock;
         }
+
+
+//#if TRACK_DETAILED_STATS
+//                if (StatisticsCollector.CollectQueueStats)
+//                {
+//                    queueTracking[(int)msg.Category].OnDeQueueRequest(msg);
+//                }
+//#endif
     }
 }

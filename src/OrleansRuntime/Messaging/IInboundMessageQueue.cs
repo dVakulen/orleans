@@ -1,4 +1,7 @@
-﻿namespace Orleans.Runtime.Messaging
+﻿using System;
+using System.Threading.Tasks.Dataflow;
+
+namespace Orleans.Runtime.Messaging
 {
     internal interface IInboundMessageQueue
     {
@@ -8,6 +11,6 @@
 
         void PostMessage(Message message);
 
-        Message WaitMessage(Message.Categories type);
+        void AddTargetBlock(Message.Categories type, Action<Message> actionBlock);
     }
 }

@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using Orleans.CodeGeneration;
 using Orleans.Messaging;
 using Orleans.Providers;
@@ -41,6 +42,8 @@ namespace Orleans
         private readonly GrainId clientId;
         private IGrainTypeResolver grainInterfaceMap;
         private readonly ThreadTrackingStatistic incomingMessagesThreadTimeTracking;
+
+        private readonly ManualResetEvent Completion = new ManualResetEvent(false);
 
         // initTimeout used to be AzureTableDefaultPolicies.TableCreationTimeout, which was 3 min
         private static readonly TimeSpan initTimeout = TimeSpan.FromMinutes(1);
@@ -297,35 +300,59 @@ namespace Orleans
             {
                 incomingMessagesThreadTimeTracking.OnStartExecution();
             }
-            while (listenForMessages)
-            {
-                var message = transport.WaitMessage(Message.Categories.Application, ct);
 
-                if (message == null) // if wait was cancelled
-                    break;
+            var pool = new DedicatedThreadPool(new DedicatedThreadPoolSettings(1));
+            transport.AddTargetBlock(Message.Categories.Application, message => pool.QueueSystemWorkItem(() => HandleMessage(message)));
+            try
+            {
+                Completion.WaitOne();
+
+            }
+            catch (AggregateException)
+            {
+                // run was cancelled
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            if (StatisticsCollector.CollectThreadTimeTrackingStats)
+            {
+                incomingMessagesThreadTimeTracking.OnStopExecution();
+            }
+        }
+
+        private void HandleMessage(Message message)
+        {
+            if (!listenForMessages)
+            {
+                Completion.Set();
+            }
+
 #if TRACK_DETAILED_STATS
                         if (StatisticsCollector.CollectThreadTimeTrackingStats)
                         {
                             incomingMessagesThreadTimeTracking.OnStartProcessing();
                         }
 #endif
-                switch (message.Direction)
+            switch (message.Direction)
+            {
+                case Message.Directions.Response:
                 {
-                    case Message.Directions.Response:
-                        {
-                            ReceiveResponse(message);
-                            break;
-                        }
-                    case Message.Directions.OneWay:
-                    case Message.Directions.Request:
-                        {
-                            this.DispatchToLocalObject(message);
-                            break;
-                        }
-                    default:
-                        logger.Error(ErrorCode.Runtime_Error_100327, String.Format("Message not supported: {0}.", message));
-                        break;
+                    ReceiveResponse(message);
+                    break;
                 }
+                case Message.Directions.OneWay:
+                case Message.Directions.Request:
+                {
+                    this.DispatchToLocalObject(message);
+                    break;
+                }
+                default:
+                    logger.Error(ErrorCode.Runtime_Error_100327, String.Format("Message not supported: {0}.", message));
+                    break;
+            }
+
 #if TRACK_DETAILED_STATS
                         if (StatisticsCollector.CollectThreadTimeTrackingStats)
                         {
@@ -333,11 +360,6 @@ namespace Orleans
                             incomingMessagesThreadTimeTracking.IncrementNumberOfProcessed();
                         }
 #endif
-            }
-            if (StatisticsCollector.CollectThreadTimeTrackingStats)
-            {
-                incomingMessagesThreadTimeTracking.OnStopExecution();
-            }
         }
 
         private void DispatchToLocalObject(Message message)

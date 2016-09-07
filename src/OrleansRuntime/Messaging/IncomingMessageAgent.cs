@@ -1,5 +1,6 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks.Dataflow;
 using Orleans.Runtime.Scheduler;
 
 namespace Orleans.Runtime.Messaging
@@ -39,32 +40,19 @@ namespace Orleans.Runtime.Messaging
                     threadTracking.OnStartExecution();
                 }
 #endif
-                CancellationToken ct = Cts.Token;
-                while (true)
-                {
-                    // Get an application message
-                    var msg = messageCenter.WaitMessage(category, ct);
-                    if (msg == null)
-                    {
-                        if (Log.IsVerbose) Log.Verbose("Dequeued a null message, exiting");
-                        // Null return means cancelled
-                        break;
-                    }
+                var pool = DedicatedThreadPoolTaskScheduler.Instance.Pool;
 
-#if TRACK_DETAILED_STATS
-                    if (StatisticsCollector.CollectThreadTimeTrackingStats)
-                    {
-                        threadTracking.OnStartProcessing();
-                    }
-#endif
-                    ReceiveMessage(msg);
-#if TRACK_DETAILED_STATS
-                    if (StatisticsCollector.CollectThreadTimeTrackingStats)
-                    {
-                        threadTracking.OnStopProcessing();
-                        threadTracking.IncrementNumberOfProcessed();
-                    }
-#endif
+                messageCenter.AddTargetBlock(category, message => pool.QueueSystemWorkItem(() => ReceiveMessage(message)));
+                try
+                {
+                    messageCenter.Completion.WaitOne();
+                }
+                catch (AggregateException)
+                {
+                    // run was cancelled
+                }
+                catch (ObjectDisposedException)
+                {
                 }
             }
             finally
@@ -80,6 +68,20 @@ namespace Orleans.Runtime.Messaging
 
         private void ReceiveMessage(Message msg)
         {
+            if (msg == null)
+            {
+                if (Log.IsVerbose) Log.Verbose("Dequeued a null message, exiting");
+                // Null message means cancelled
+                return;
+            }
+
+#if TRACK_DETAILED_STATS
+                    if (StatisticsCollector.CollectThreadTimeTrackingStats)
+                    {
+                        threadTracking.OnStartProcessing();
+                    }
+#endif
+
             MessagingProcessingStatisticsGroup.OnImaMessageReceived(msg);
 
             ISchedulingContext context;
@@ -152,6 +154,14 @@ namespace Orleans.Runtime.Messaging
                     EnqueueReceiveMessage(msg, null, null);
                 }
             }
+
+#if TRACK_DETAILED_STATS
+                    if (StatisticsCollector.CollectThreadTimeTrackingStats)
+                    {
+                        threadTracking.OnStopProcessing();
+                        threadTracking.IncrementNumberOfProcessed();
+                    }
+#endif
         }
 
         private void EnqueueReceiveMessage(Message msg, ActivationData targetActivation, ISchedulingContext context)

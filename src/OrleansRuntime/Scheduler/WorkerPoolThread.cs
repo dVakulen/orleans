@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 
 
 namespace Orleans.Runtime.Scheduler
@@ -21,7 +22,7 @@ namespace Orleans.Runtime.Scheduler
 
         [ThreadStatic]
         private static WorkerPoolThread current;
-        internal static WorkerPoolThread CurrentWorkerThread { get { return current; } }
+        internal static WorkerPoolThread CurrentWorkerThread { get { return current; }  set { current = value; } }
 
         internal static RuntimeContext CurrentContext { get { return RuntimeContext.Current; } }
 
@@ -102,8 +103,11 @@ namespace Orleans.Runtime.Scheduler
                 WorkerThreadStatisticsNumber = SchedulerStatisticsGroup.RegisterWorkingThread(Name);
         }
 
+        private readonly ActionBlock<IWorkItem> _executor;
         protected override void Run()
         {
+            // not used anymore
+            Thread.Sleep(int.MaxValue);
             try
             {
                 // We can't set these in the constructor because that doesn't run on our thread
@@ -133,9 +137,9 @@ namespace Orleans.Runtime.Scheduler
 #endif
                         // Get some work to do
                         IWorkItem todo;
-
-                        todo = IsSystem ? scheduler.RunQueue.GetSystem(Cts.Token, maxWorkQueueWait) : 
-                            scheduler.RunQueue.Get(Cts.Token, maxWorkQueueWait);
+                        todo = null;
+                        //todo = IsSystem ? scheduler.RunQueue.GetSystem(Cts.Token, maxWorkQueueWait) : 
+                        //    scheduler.RunQueue.Get(Cts.Token, maxWorkQueueWait);
 
 #if TRACK_DETAILED_STATS
                         if (StatisticsCollector.CollectThreadTimeTrackingStats)
@@ -173,7 +177,7 @@ namespace Orleans.Runtime.Scheduler
                                     }
                                 }
 #endif
-                                todo.Execute();
+                                _executor.Post(todo);
                             }
                             catch (ThreadAbortException ex)
                             {
@@ -213,7 +217,7 @@ namespace Orleans.Runtime.Scheduler
                                 if (!IsSystem)
                                     pool.RecordIdlingThread();
                                 
-                                RuntimeContext.ResetExecutionContext();
+                             //   RuntimeContext.ResetExecutionContext();
                                 noWorkCount = 0;
                             }
                         }
@@ -349,6 +353,8 @@ namespace Orleans.Runtime.Scheduler
 
         private bool IsFrozen()
         {
+            // todo
+            return false;
             if (CurrentTask != null)
             {
                 return Utils.Since(currentTaskStarted) > OrleansTaskScheduler.TurnWarningLengthThreshold;

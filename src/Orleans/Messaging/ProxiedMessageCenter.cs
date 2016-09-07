@@ -6,6 +6,7 @@ using System.Net;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
 using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
 
@@ -66,9 +67,10 @@ namespace Orleans.Messaging
         #endregion
         internal GrainId ClientId { get; private set; }
         internal bool Running { get; private set; }
-
         internal readonly GatewayManager GatewayManager;
-        internal readonly BlockingCollection<Message> PendingInboundMessages;
+        internal readonly BufferBlock<Message> PendingInboundMessages;
+
+        internal  Action<Message> MessageHandler;
         private readonly Dictionary<Uri, GatewayConnection> gatewayConnections;
         private int numMessages;
         // The grainBuckets array is used to select the connection to use when sending an ordered message to a grain.
@@ -78,9 +80,11 @@ namespace Orleans.Messaging
         // false, then a new gateway is selected using the gateway manager, and a new connection established if necessary.
         private readonly WeakReference[] grainBuckets;
         private readonly Logger logger;
+        internal bool _initialized;
         private readonly object lockable;
         public SiloAddress MyAddress { get; private set; }
         public IMessagingConfiguration MessagingConfiguration { get; private set; }
+        public  ManualResetEvent Completion { get; } = new ManualResetEvent(false);
         private readonly QueueTrackingStatistic queueTracking;
 
         public ProxiedMessageCenter(ClientConfiguration config, IPAddress localAddress, int gen, GrainId clientId, IGatewayListProvider gatewayListProvider)
@@ -91,7 +95,7 @@ namespace Orleans.Messaging
             Running = false;
             MessagingConfiguration = config;
             GatewayManager = new GatewayManager(config, gatewayListProvider);
-            PendingInboundMessages = new BlockingCollection<Message>();
+            PendingInboundMessages = new BufferBlock<Message>();
             gatewayConnections = new Dictionary<Uri, GatewayConnection>();
             numMessages = 0;
             grainBuckets = new WeakReference[config.ClientSenderBuckets];
@@ -131,7 +135,7 @@ namespace Orleans.Messaging
             
             Utils.SafeExecute(() =>
             {
-                PendingInboundMessages.CompleteAdding();
+                PendingInboundMessages.Complete();
             });
 
             if (StatisticsCollector.CollectQueueStats)
@@ -286,54 +290,17 @@ namespace Orleans.Messaging
             return GetTypeManager(silo, grainFactory).GetImplicitStreamSubscriberTable(silo);
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
-        public Message WaitMessage(Message.Categories type, CancellationToken ct)
+        public void AddTargetBlock(Message.Categories type, Action<Message> actionBlock)
         {
-            try
+            MessageHandler = actionBlock;
+            _initialized = true;
+            IList<Message> msgs;
+            if (PendingInboundMessages.TryReceiveAll(out msgs))
             {
-                if (ct.IsCancellationRequested)
+                foreach (var msg in msgs)
                 {
-                    return null;
+                    MessageHandler(msg);
                 }
-
-                // Don't pass CancellationToken to Take. It causes too much spinning.
-                Message msg = PendingInboundMessages.Take();
-#if TRACK_DETAILED_STATS
-                if (StatisticsCollector.CollectQueueStats)
-                {
-                    queueTracking.OnDeQueueRequest(msg);
-                }
-#endif
-                return msg;
-            }
-#if !NETSTANDARD
-            catch (ThreadAbortException exc)
-            {
-                // Silo may be shutting-down, so downgrade to verbose log
-                logger.Verbose(ErrorCode.ProxyClient_ThreadAbort, "Received thread abort exception -- exiting. {0}", exc);
-                Thread.ResetAbort();
-                return null;
-            }
-#endif
-            catch (OperationCanceledException exc)
-            {
-                logger.Verbose(ErrorCode.ProxyClient_OperationCancelled, "Received operation cancelled exception -- exiting. {0}", exc);
-                return null;
-            }
-            catch (ObjectDisposedException exc)
-            {
-                logger.Verbose(ErrorCode.ProxyClient_OperationCancelled, "Received Object Disposed exception -- exiting. {0}", exc);
-                return null;
-            }
-            catch (InvalidOperationException exc)
-            {
-                logger.Verbose(ErrorCode.ProxyClient_OperationCancelled, "Received Invalid Operation exception -- exiting. {0}", exc);
-                return null;
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ErrorCode.ProxyClient_ReceiveError, "Unexpected error getting an inbound message", ex);
-                return null;
             }
         }
 
@@ -345,7 +312,14 @@ namespace Orleans.Messaging
                 queueTracking.OnEnQueueRequest(1, PendingInboundMessages.Count, msg);
             }
 #endif
-            PendingInboundMessages.Add(msg);
+            if (_initialized)
+            {
+                MessageHandler(msg);
+            }
+            else
+            {
+                PendingInboundMessages.Post(msg);
+            }
         }
 
         private void RejectMessage(Message msg, string reasonFormat, params object[] reasonParams)
@@ -382,7 +356,7 @@ namespace Orleans.Messaging
             throw new NotImplementedException("Reconnect");
         }
 
-#region Random IMessageCenter stuff
+        #region Random IMessageCenter stuff
 
         public int SendQueueLength
         {
@@ -394,7 +368,7 @@ namespace Orleans.Messaging
             get { return 0; }
         }
 
-#endregion
+        #endregion
 
         private ITypeManager GetTypeManager(SiloAddress destination, GrainFactory grainFactory)
         {

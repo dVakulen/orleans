@@ -49,8 +49,16 @@ namespace OrleansBenchmarkGrains.MapReduce
 
         public Task SendAsync(TInput t)
         {
-            _input.Enqueue(t);
-            NotifyOfPendingWork();
+            //for (int i = 0; i < 1000; i++)
+            //{
+            //    var z = i*3%2;
+            //    var ggg = z*4 - 5;
+            //    var h = ggg/2;
+            //    var gfd = h - 14;
+            //    var gfkd = gfd*1.4;
+            //    var gdss = gfkd/2;
+            //}
+            _target.SendAsync(_processor.Process(t));
             return TaskDone.Done;
         }
 

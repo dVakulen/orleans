@@ -26,22 +26,8 @@ namespace UnitTests.StorageTests.Relational.TestDataSets
         {
             new object[]
             {
-                GrainTypeGenerator.GetGrainType<TGrainKey>(),
-                RandomUtilities.GetRandomGrainReference<TGrainKey>(extensionKey: false),
-                new GrainState<TestState1> { State = new TestState1 { A = RandomUtilities.GetRandomCharacters(Symbols, StringLength), B = 1, C = 4 } }
+              
             },
-            new object[]
-            {
-                GrainTypeGenerator.GetGrainType<TGrainKey>(),
-                RandomUtilities.GetRandomGrainReference<TGrainKey>(true),
-                new GrainState<TestState1> { State = new TestState1 { A = RandomUtilities.GetRandomCharacters(Symbols, StringLength), B = 2, C = 5 } }
-            },
-            new object[]
-            {
-                GrainTypeGenerator.GetGrainType<TGrainKey>(),
-                RandomUtilities.GetRandomGrainReference<TGrainKey>(true),
-                new GrainState<TestState1> { State = new TestState1 { A = RandomUtilities.GetRandomCharacters(Symbols, StringLength), B = 3, C = 6 } }
-            }
         };
 
         public IEnumerator<object[]> GetEnumerator()

@@ -33,6 +33,16 @@ namespace OrleansBenchmarks
         // requires benchmark name or 'All' word as first parameter
         static void Main(string[] args)
         {
+            RunBenchmark(
+                  "Running MapReduce benchmark",
+                  () =>
+                  {
+                      var mapReduceBenchmark = new MapReduceBenchmark();
+                      mapReduceBenchmark.BenchmarkSetup();
+                      return mapReduceBenchmark;
+                  },
+                  benchmark => benchmark.Bench().Wait(),
+                  benchmark => benchmark.Teardown());
             if (args.Length > 0 && args[0].Equals("all", StringComparison.InvariantCultureIgnoreCase))
             {
                 Console.WriteLine("Running full benchmarks suite");

@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
+using FluentAssertions.Formatting;
 using Orleans.CodeGeneration;
 using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
@@ -29,7 +31,7 @@ namespace UnitTests.SerializerTests
         [Fact, TestCategory("Functional"), TestCategory("Serialization")]
         public void MessageTest_BinaryRoundTrip()
         {
-            RunTest(1000);
+            RunTest(1);
         }
 
         private void RunTest(int numItems)
@@ -42,6 +44,12 @@ namespace UnitTests.SerializerTests
             resp.SendingGrain = GrainId.NewId();
             resp.TargetGrain = GrainId.NewId();
             resp.IsAlwaysInterleave = true;
+            resp.Direction = Message.Directions.Request;
+            resp.Expiration = DateTime.Today;
+            resp.Category = Message.Categories.Application;
+            resp.SendingActivation = ActivationId.GetActivationId(UniqueKey.NewKey());
+            resp.TargetActivation = ActivationId.GetActivationId(UniqueKey.NewKey());
+            
 
             List<object> requestBody = new List<object>();
             for (int k = 0; k < numItems; k++)
@@ -53,8 +61,16 @@ namespace UnitTests.SerializerTests
 
             string s = resp.ToString();
             output.WriteLine(s);
-
+            int repeats = 200000;
             int dummy = 0;
+            Stopwatch aa = Stopwatch.StartNew();
+            List<ArraySegment<byte>> serialqized = null;
+            for (int i = 0; i < repeats; i++)
+            {
+                serialqized = resp.Serialize(out dummy);
+                var z = serialqized;
+            }
+            var g = serialqized;
             var serialized = resp.Serialize(out dummy);
             int length = serialized.Sum<ArraySegment<byte>>(x => x.Count);
             byte[] data = new byte[length];
@@ -78,7 +94,12 @@ namespace UnitTests.SerializerTests
             var bodyList = new List<ArraySegment<byte>>();
             bodyList.Add(new ArraySegment<byte>(body));
             var resp1 = new Message(headerList, bodyList);
-
+            for (int i = 0; i < repeats; i++)
+            {
+                resp1 = new Message(headerList, bodyList);
+                var gaa = resp1;
+            }
+            Assert.Equal(0, aa.ElapsedMilliseconds);
             //byte[] serialized = resp.FormatForSending();
             //Message resp1 = new Message(serialized, serialized.Length);
             Assert.Equal<Message.Categories>(resp.Category, resp1.Category); //Category is incorrect"
