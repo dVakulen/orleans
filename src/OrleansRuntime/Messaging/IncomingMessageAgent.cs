@@ -12,6 +12,7 @@ namespace Orleans.Runtime.Messaging
         private readonly OrleansTaskScheduler scheduler;
         private readonly Dispatcher dispatcher;
         private readonly Message.Categories category;
+        private ActionBlock<Message> _actionBlock;
 
         internal IncomingMessageAgent(Message.Categories cat, IMessageCenter mc, ActivationDirectory ad, OrleansTaskScheduler sched, Dispatcher dispatcher) :
             base(cat.ToString())
@@ -40,12 +41,21 @@ namespace Orleans.Runtime.Messaging
                     threadTracking.OnStartExecution();
                 }
 #endif
-                var pool = DedicatedThreadPoolTaskScheduler.Instance.Pool;
 
-                messageCenter.AddTargetBlock(category, message => pool.QueueSystemWorkItem(() => ReceiveMessage(message)));
+                _actionBlock = new ActionBlock<Message>(message => ReceiveMessage(message),
+                    new ExecutionDataflowBlockOptions
+                    {
+                        MaxDegreeOfParallelism = scheduler.MaximumConcurrencyLevel,
+                        CancellationToken = Cts.Token,
+                        TaskScheduler = DedicatedThreadPoolTaskScheduler.Instance,
+                        EnsureOrdered = true,
+                        MaxMessagesPerTask = 100
+                    });
+
+                messageCenter.AddTargetBlock(category, _actionBlock);
                 try
                 {
-                    messageCenter.Completion.WaitOne();
+                    _actionBlock.Completion.Wait();
                 }
                 catch (AggregateException)
                 {
