@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using System.Threading.Tasks.Dataflow;
 
 
@@ -9,7 +10,7 @@ namespace Orleans.Runtime.Messaging
     internal class InboundMessageQueue : IInboundMessageQueue
     {
         private readonly ITargetBlock<Message>[] messageQueues;
-        private readonly Action<Message>[] messageHandlers;
+        private readonly WaitCallback [] messageHandlers;
         private readonly Logger log;
         private readonly QueueTrackingStatistic[] queueTracking;
 
@@ -32,11 +33,11 @@ namespace Orleans.Runtime.Messaging
             int n = Enum.GetValues(typeof(Message.Categories)).Length;
             messageQueues = new ITargetBlock<Message>[n];
             queueTracking = new QueueTrackingStatistic[n];
-            messageHandlers = new Action<Message>[n];
-            for (int g = 0; g < n; g++)
-            {
-                messageHandlers[g]= new Action<Message>(message => log.Error(0, "Message recieved before start"));
-            }
+            messageHandlers = new WaitCallback[n];
+            //for (int g = 0; g < n; g++)
+            //{
+            //    messageHandlers[g]= new Action<Message>(message => log.Error(0, "Message recieved before start"));
+            //}
             int i = 0;
             foreach (var category in Enum.GetValues(typeof(Message.Categories)))
             {
@@ -72,12 +73,14 @@ namespace Orleans.Runtime.Messaging
                 queueTracking[(int)msg.Category].OnEnQueueRequest(1, messageQueues[(int)msg.Category].Count, msg);
             }
 #endif
-            messageHandlers[(int)msg.Category](msg);
-           
+            var cc = messageHandlers[(int) msg.Category];
+            ThreadPool.UnsafeQueueUserWorkItem(cc, msg);
+            //messageHandlers[(int)msg.Category](msg);
+           //todo
             if (log.IsVerbose3) log.Verbose3("Queued incoming {0} message", msg.Category.ToString());
         }
 
-        public void AddTargetBlock(Message.Categories type, Action<Message> actionBlock)
+        public void AddTargetBlock(Message.Categories type, WaitCallback actionBlock)
         {
             messageHandlers[(int) type] = actionBlock;
         }
