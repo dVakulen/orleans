@@ -306,7 +306,7 @@ namespace Orleans.Runtime
             if (work == null)
                 throw new ArgumentNullException(nameof(work), "Work item cannot be null.");
 
-            return _workQueue.TryAddSystem(work);
+            return _workQueue.TryAddS(work);
         }
 
         public void Dispose()
@@ -388,7 +388,7 @@ namespace Orleans.Runtime
             private const int CompletedState = 1;
 
             private readonly ConcurrentQueue<Action> _queue = new ConcurrentQueue<Action>();
-            private readonly ConcurrentQueue<Action> _systemQueue = new ConcurrentQueue<Action>();
+            private readonly ConcurrentQueue<Action> _queues = new ConcurrentQueue<Action>();
             private readonly UnfairSemaphore _semaphore = new UnfairSemaphore();
             private int _outstandingRequests;
             private int _isAddingCompleted;
@@ -411,7 +411,7 @@ namespace Orleans.Runtime
 
                 return true;
             }
-            public bool TryAddSystem(Action work)
+            public bool TryAddS(Action work)
             {
                 // If TryAdd returns true, it's garanteed the work item will be executed.
                 // If it returns false, it's also garanteed the work item won't be executed.
@@ -419,7 +419,7 @@ namespace Orleans.Runtime
                 if (IsAddingCompleted)
                     return false;
 
-                _systemQueue.Enqueue(work);
+                _queues.Enqueue(work);
                 EnsureThreadRequested();
 
                 return true;
@@ -429,7 +429,7 @@ namespace Orleans.Runtime
                 while (true)
                 {
                     Action work;
-                    if (_systemQueue.TryDequeue(out work))
+                    if (_queues.TryDequeue(out work))
                     {
                         yield return work;
                         continue;
