@@ -302,11 +302,7 @@ namespace Orleans
             }
 
             var pool = new DedicatedThreadPool(new DedicatedThreadPoolSettings(1));
-            WaitCallback cc = new WaitCallback(state =>
-            {
-                HandleMessage((Message) state);
-            });
-            transport.AddTargetBlock(Message.Categories.Application, cc);
+            transport.AddTargetBlock(Message.Categories.Application, message => pool.QueueSystemWorkItem(() => HandleMessage(message)));
             try
             {
                 Completion.WaitOne();

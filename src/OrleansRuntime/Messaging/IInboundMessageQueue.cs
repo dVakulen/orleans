@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading;
 using System.Threading.Tasks.Dataflow;
 
 namespace Orleans.Runtime.Messaging
@@ -12,6 +11,6 @@ namespace Orleans.Runtime.Messaging
 
         void PostMessage(Message message);
 
-        void AddTargetBlock(Message.Categories type, WaitCallback actionBlock);
+        void AddTargetBlock(Message.Categories type, Action<Message> actionBlock);
     }
 }

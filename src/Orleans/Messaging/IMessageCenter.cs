@@ -17,7 +17,7 @@ namespace Orleans.Runtime
 
         void SendMessage(Message msg);
 
-        void AddTargetBlock(Message.Categories type, WaitCallback actionBlock);
+        void AddTargetBlock(Message.Categories type, Action<Message> actionBlock);
 
         int SendQueueLength { get; }
 

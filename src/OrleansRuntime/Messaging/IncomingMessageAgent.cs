@@ -41,12 +41,8 @@ namespace Orleans.Runtime.Messaging
                 }
 #endif
                 var pool = DedicatedThreadPoolTaskScheduler.Instance.Pool;
-                WaitCallback ccc = state =>
-                {
-                    ReceiveMessage((Message) state);
-                };
-               // ThreadPool.UnsafeQueueUserWorkItem()
-                messageCenter.AddTargetBlock(category, ccc);
+
+                messageCenter.AddTargetBlock(category, message => pool.QueueSystemWorkItem(() => ReceiveMessage(message)));
                 try
                 {
                     messageCenter.Completion.WaitOne();
