@@ -166,10 +166,13 @@ namespace Orleans.Runtime
             CurrentSilo = this;
 
             var startTime = DateTime.UtcNow;
-
+            ThreadPool.SetMaxThreads(32, 1000);
+            ThreadPool.SetMinThreads(4, 200);
             this.siloType = siloType;
             Name = name;
-
+            Task.Run(() => { });
+            //Task.Factory.StartNew(() => {},TaskCreationOptions.)
+                /// ThreadPool.UnsafeQueueUserWorkItem()
             siloTerminatedEvent = new ManualResetEvent(false);
 
             OrleansConfig = config;

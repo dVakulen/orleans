@@ -43,9 +43,9 @@ namespace Orleans.Runtime
             new ExecutionDataflowBlockOptions
             {
                 MaxDegreeOfParallelism = Environment.ProcessorCount,
-                EnsureOrdered = true,
-                TaskScheduler = DedicatedThreadPoolTaskScheduler.Instance,
-                MaxMessagesPerTask = 100
+                EnsureOrdered = false,
+               // TaskScheduler = DedicatedThreadPoolTaskScheduler.Instance,
+                MaxMessagesPerTask = 1
             });
             if (StatisticsCollector.CollectQueueStats)
             {

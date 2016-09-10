@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Orleans.Runtime.Configuration;
 
@@ -18,13 +21,59 @@ namespace Orleans.Runtime
 
     internal class CallbackData : ITimebound, IDisposable
     {
+        private class CallbackTimeouter : IDisposable
+        {
+            //     public readonly Queue<CallbackData> CallbackDatas = new Queue<CallbackData>();
+            public readonly ConcurrentQueue<CallbackData> CallbackDatas = new ConcurrentQueue<CallbackData>();
+            private Timer t;
+
+            public CallbackTimeouter()
+            {
+                int timerPeriod = 10000;
+                t = new Timer(state =>
+                {
+                    var now = DateTime.UtcNow;
+                   // lock (CallbackDatas)
+                    {
+                        if (CallbackDatas.Count == 0)
+                        {
+                            return;
+                        }
+
+                     //   CallbackData callback = CallbackDatas.Peek();
+                     ////   CallbackDatas.TryPeek(out callback);
+                     // //     var callback = CallbackDatas.Peek();
+
+                     //   if (callback != null && callback.dueTime > now)
+                     //   {
+                     //       CallbackData callback1 = null;
+                     //       CallbackDatas.Dequeue();
+                     //       if (callback1 != callback)
+                     //       {
+                     //           // todo
+
+                     //       }
+                     //       callback.OnTimeout();
+                     //   }
+                    }
+                }, null, timerPeriod, timerPeriod);
+            }
+
+            public void Dispose()
+            {
+                t.Dispose();
+            }
+        }
+        
+        private static  CallbackTimeouter callbackTimeouter = new CallbackTimeouter();
         private readonly Action<Message, TaskCompletionSource<object>> callback;
         private readonly Func<Message, bool> resendFunc;
         private readonly Action unregister;
         private readonly TaskCompletionSource<object> context;
 
         private bool alreadyFired;
-        private TimeSpan timeout; 
+        private TimeSpan timeout;
+        private DateTime dueTime;
         private SafeTimer timer;
         private ITimeInterval timeSinceIssued;
         private IMessagingConfiguration config;
@@ -75,6 +124,14 @@ namespace Orleans.Runtime
             {
                 firstPeriod = repeatPeriod = timeout.Divide(config.MaxResendCount + 1);
             }
+            if(firstPeriod > TimeSpan.FromMinutes(5)) return;
+            dueTime = DateTime.UtcNow.Add(firstPeriod);
+            return;
+            if (callbackTimeouter == null) callbackTimeouter = new CallbackTimeouter();
+            callbackTimeouter.CallbackDatas.Enqueue(this);
+            return;
+
+
             // Start time running
             DisposeTimer();
             timer = new SafeTimer(TimeoutCallback, null, firstPeriod, repeatPeriod);
@@ -156,6 +213,7 @@ namespace Orleans.Runtime
 
         private void DisposeTimer()
         {
+            return;
             try
             {
                 var tmp = timer;

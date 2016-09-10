@@ -305,7 +305,7 @@ namespace Orleans
                 new ExecutionDataflowBlockOptions
                 {
                     MaxDegreeOfParallelism = 1,
-                    MaxMessagesPerTask = 100000,
+                    MaxMessagesPerTask = 1,
                     CancellationToken = ct
                 });
 

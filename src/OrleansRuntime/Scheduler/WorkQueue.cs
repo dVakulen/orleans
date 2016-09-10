@@ -26,12 +26,12 @@ namespace Orleans.Runtime.Scheduler
         internal WorkQueue(OrleansTaskScheduler scheduler, int maxActiveThreads)
         {
             _scheduler = scheduler;
+            cc = state => ProcessWorkItem(scheduler, state as IWorkItem);
             mainQueueExecutor = GetWorkItemExecutor(scheduler, maxActiveThreads);
            // DedicatedThreadPools = new DedicatedThreadPool(new DedicatedThreadPoolSettings(4));
             DedicatedThreadPool = DedicatedThreadPoolTaskScheduler.Instance.Pool;
             systemQueueExecutor = GetWorkItemExecutor(scheduler, maxActiveThreads);
             if (!StatisticsCollector.CollectShedulerQueuesStats) return;
-
             mainQueueTracking = new QueueTrackingStatistic("Scheduler.LevelOne.MainQueue");
             systemQueueTracking = new QueueTrackingStatistic("Scheduler.LevelOne.SystemQueue");
             tasksQueueTracking = new QueueTrackingStatistic("Scheduler.LevelOne.TasksQueue");
@@ -40,6 +40,7 @@ namespace Orleans.Runtime.Scheduler
             tasksQueueTracking.OnStartExecution();
         }
 
+        private WaitCallback cc;
         public void Add(IWorkItem workItem)
         {
             workItem.TimeQueued = DateTime.UtcNow;
@@ -53,8 +54,10 @@ namespace Orleans.Runtime.Scheduler
                     if (StatisticsCollector.CollectShedulerQueuesStats)
                         systemQueueTracking.OnEnQueueRequest(1, systemQueue.Count);
 #endif
-                  //   systemQueueExecutor.Post(workItem);
-                    DedicatedThreadPool.QueueSystemWorkItem(() => ProcessWorkItem(_scheduler, workItem));
+                    // systemQueueExecutor.Post(workItem);
+                    ThreadPool.UnsafeQueueUserWorkItem(cc, workItem);
+                    // Task.Run(() => ProcessWorkItem(_scheduler, workItem));
+                    // DedicatedThreadPool.QueueSystemWorkItem(() => ProcessWorkItem(_scheduler, workItem));
                 }
                 else
                 {
@@ -62,8 +65,10 @@ namespace Orleans.Runtime.Scheduler
                     if (StatisticsCollector.CollectShedulerQueuesStats)
                         mainQueueTracking.OnEnQueueRequest(1, mainQueue.Count);
 #endif
-                    // mainQueueExecutor.Post(workItem);
-                    DedicatedThreadPool.QueueUserWorkItem(() => ProcessWorkItem(_scheduler, workItem));
+                    ThreadPool.UnsafeQueueUserWorkItem(cc, workItem);
+                  //  Task.Run(() => ProcessWorkItem(_scheduler, workItem));
+                  //  mainQueueExecutor.Post(workItem);
+                    //   DedicatedThreadPool.QueueUserWorkItem(() => ProcessWorkItem(_scheduler, workItem));
                 }
 #else
 #if TRACK_DETAILED_STATS
@@ -115,8 +120,8 @@ namespace Orleans.Runtime.Scheduler
             return new ActionBlock<IWorkItem>(item => ProcessWorkItem(scheduler, item),
                 new ExecutionDataflowBlockOptions
                 {
-                    MaxDegreeOfParallelism = maxActiveThreads,
-                    EnsureOrdered = true,
+                    MaxDegreeOfParallelism = maxActiveThreads *2,
+                    EnsureOrdered = false,
                 });
         }
 

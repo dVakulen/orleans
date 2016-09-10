@@ -21,8 +21,23 @@ namespace OrleansBenchmarks
                     mapReduceBenchmark.BenchmarkSetup();
                     return mapReduceBenchmark;
                 },
-                benchmark => benchmark.Bench().Wait(),
-                benchmark => benchmark.Teardown());
+                    benchmark =>
+                    {
+                        ss.Start();
+                        benchmark.Bench().Wait();
+                    },
+                    benchmark =>
+                    {ss.Stop();
+                        try
+                        {
+                            benchmark.Teardown();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex);
+                        }
+                        Console.WriteLine(ss.ElapsedMilliseconds + " ElapsedMilliseconds");
+                    });
             },
             ["Serialization"] = () =>
             {
@@ -30,9 +45,11 @@ namespace OrleansBenchmarks
             }
         };
 
+        private static Stopwatch ss;
         // requires benchmark name or 'All' word as first parameter
         static void Main(string[] args)
         {
+             ss = new Stopwatch();
             RunBenchmark(
                   "Running MapReduce benchmark",
                   () =>
@@ -45,6 +62,7 @@ namespace OrleansBenchmarks
                   benchmark => benchmark.Teardown());
             if (args.Length > 0 && args[0].Equals("all", StringComparison.InvariantCultureIgnoreCase))
             {
+                Console.WriteLine(ss.ElapsedMilliseconds + " ElapsedMilliseconds");
                 Console.WriteLine("Running full benchmarks suite");
                 _benchmarks.Select(pair => pair.Value).ToList().ForEach(action => action());
                 return;

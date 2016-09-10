@@ -235,6 +235,8 @@ namespace Orleans.Runtime.Messaging
                 // Then, start a new Accept
                 try
                 {
+                   // AsyncCallback ad = ar => AcceptCallback(ar);
+
                     ima.AcceptingSocket.BeginAccept(AcceptCallback, ima);
                 }
                 catch (Exception ex)
