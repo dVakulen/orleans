@@ -70,7 +70,7 @@ namespace Orleans.Messaging
         internal readonly GatewayManager GatewayManager;
         internal readonly BufferBlock<Message> PendingInboundMessages;
 
-        internal  Action<Message> MessageHandler;
+        internal WaitCallback MessageHandler;
         private readonly Dictionary<Uri, GatewayConnection> gatewayConnections;
         private int numMessages;
         // The grainBuckets array is used to select the connection to use when sending an ordered message to a grain.
@@ -290,7 +290,7 @@ namespace Orleans.Messaging
             return GetTypeManager(silo, grainFactory).GetImplicitStreamSubscriberTable(silo);
         }
 
-        public void AddTargetBlock(Message.Categories type, Action<Message> actionBlock)
+        public void AddTargetBlock(Message.Categories type, WaitCallback actionBlock)
         {
             MessageHandler = actionBlock;
             _initialized = true;

@@ -15,12 +15,15 @@ namespace Orleans.Runtime
         private Action<T> requestHandler;
         private QueueTrackingStatistic queueTracking;
         private DedicatedThreadPool pool = DedicatedThreadPoolTaskScheduler.Instance.Pool;
+        private WaitCallback ccc;
         protected AsynchQueueAgent(string nameSuffix, IMessagingConfiguration cfg)
             : base(nameSuffix)
         {
             config = cfg;
-            requestHandler = new Action<T>(request =>
+            ccc = new WaitCallback(state =>
             {
+               T request = (T)state;
+           // requestHandler = new Action<T>(request =>
 #if TRACK_DETAILED_STATS
                 if (StatisticsCollector.CollectQueueStats)
                 {
@@ -41,7 +44,6 @@ namespace Orleans.Runtime
                 }
 #endif
             });
-
             if (StatisticsCollector.CollectQueueStats)
             {
                 queueTracking = new QueueTrackingStatistic(base.Name);
@@ -56,7 +58,7 @@ namespace Orleans.Runtime
                 queueTracking.OnEnQueueRequest(1, requestQueue.Count, request);
             }
 #endif
-            pool.QueueSystemWorkItem(() => requestHandler(request));
+            ThreadPool.UnsafeQueueUserWorkItem(ccc, request); //.QueueSystemWorkItem(() => requestHandler(request));
         }
 
         protected abstract void Process(T request);

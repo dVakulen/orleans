@@ -186,7 +186,7 @@ namespace Orleans.Runtime.Messaging
             InboundQueue.PostMessage(error);
         }
 
-        public void AddTargetBlock(Message.Categories type, Action<Message> actionBlock)
+        public void AddTargetBlock(Message.Categories type, WaitCallback actionBlock)
         {
            InboundQueue.AddTargetBlock(type, actionBlock);
         }
