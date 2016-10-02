@@ -201,7 +201,7 @@ namespace Tests.GeoClusterTests
                 };
 
                 if (myCount == 0)
-                    gossipStabilizationTime = GetGossipStabilizationTime(silohandles[0].Silo.GlobalConfig);
+                    gossipStabilizationTime = GetGossipStabilizationTime(this.siloHost.Globals);
 
                 WriteLog("Cluster {0} started. [{1}]", clusterId, string.Join(" ", silohandles.Select(s => s.ToString())));
             }
@@ -317,11 +317,11 @@ namespace Tests.GeoClusterTests
             var name = string.Format("Client-{0}-{1}", ClusterId, ClientNumber);
 
             // clients are assigned to silos round-robin
-            var gatewayport = ci.Silos[ClientNumber % ci.Silos.Count].GatewayPort;
+            var gatewayport = ci.Silos[ClientNumber % ci.Silos.Count].NodeConfiguration.ProxyGatewayEndpoint.Port;
 
             WriteLog("Starting {0} connected to {1}", name, gatewayport);
 
-            var clientArgs = new object[] { name, gatewayport.Value, ClusterId, customizer };
+            var clientArgs = new object[] { name, gatewayport, ClusterId, customizer };
             var setup = new AppDomainSetup { ApplicationBase = Environment.CurrentDirectory };
             var clientDomain = AppDomain.CreateDomain(name, null, setup);
 
@@ -373,7 +373,7 @@ namespace Tests.GeoClusterTests
                 foreach (var dest in Clusters[to].Silos)
                 {
                     WriteLog("Blocking {0}->{1}", silo, dest);
-                    silo.Silo.TestHook.BlockSiloCommunication(dest.Endpoint, 100);
+                    silo.TestHook.BlockSiloCommunication(dest.SiloAddress.Endpoint, 100);
                 }
         }
 
@@ -382,7 +382,7 @@ namespace Tests.GeoClusterTests
             foreach (var silo in Clusters[from].Silos)
             {
                 WriteLog("Unblocking {0}", silo);
-                silo.Silo.TestHook.UnblockSiloCommunication();
+                silo.TestHook.UnblockSiloCommunication();
             }
         }
   

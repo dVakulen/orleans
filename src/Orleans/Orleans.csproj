@@ -30,7 +30,7 @@
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis>false</RunCodeAnalysis>
-    <NoWarn>1572,1573,1591</NoWarn>
+    <NoWarn>1591</NoWarn>
     <DocumentationFile>bin\Debug\Orleans.XML</DocumentationFile>
     <Prefer32Bit>false</Prefer32Bit>
     <WarningsAsErrors>4014</WarningsAsErrors>
@@ -77,6 +77,7 @@
     <Compile Include="Async\UnobservedExceptionsHandlerClass.cs" />
     <Compile Include="Async\TaskExtensions.cs" />
     <Compile Include="CodeGeneration\GeneratedAssembly.cs" />
+    <Compile Include="Core\GrainCasterFactory.cs" />
     <Compile Include="Logging\LoggerExtensions.cs" />
     <Compile Include="Logging\LoggerImpl.cs" />
     <Compile Include="Logging\LogFormatter.cs" />
@@ -135,8 +136,15 @@
     <Compile Include="IDs\UniqueKey.cs" />
     <Compile Include="Core\IGrainFactory.cs" />
     <Compile Include="Runtime\IGrainRuntime.cs" />
+    <Compile Include="Serialization\IlBasedFallbackSerializer.cs" />
+    <Compile Include="Serialization\IlCodeGenerationException.cs" />
+    <Compile Include="Serialization\IlBasedSerializers.cs" />
+    <Compile Include="Serialization\IlBasedSerializerGenerator.cs" />
+    <Compile Include="Serialization\IlBasedSerializerTypeChecker.cs" />
+    <Compile Include="Serialization\IlDelegateBuilder.cs" />
     <Compile Include="Serialization\OrleansJsonSerializer.cs" />
     <Compile Include="Serialization\BinaryFormatterSerializer.cs" />
+    <Compile Include="Serialization\ReflectedSerializationMethodInfo.cs" />
     <Compile Include="Streams\Core\StreamIdentity.cs" />
     <Compile Include="Streams\Internal\StreamHandshakeToken.cs" />
     <Compile Include="Streams\PersistentStreams\IDeploymentConfiguration.cs" />

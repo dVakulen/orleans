@@ -88,6 +88,11 @@ namespace Orleans.Runtime.Configuration
         /// The list of serialization providers
         /// </summary>
         List<TypeInfo> SerializationProviders { get; }
+
+        /// <summary>
+        /// Gets the fallback serializer, used as a last resort when no other serializer is able to serialize an object.
+        /// </summary>
+        TypeInfo FallbackSerializationProvider { get; set; }
     }
 
     /// <summary>
@@ -106,7 +111,6 @@ namespace Orleans.Runtime.Configuration
         public int GatewaySenderQueues { get; set; }
         public int ClientSenderBuckets { get; set; }
         public TimeSpan ClientDropTimeout { get; set; }
-        public bool UseJsonFallbackSerializer { get; set; }
 
         public int BufferPoolBufferSize { get; set; }
         public int BufferPoolMaxSize { get; set; }
@@ -123,6 +127,7 @@ namespace Orleans.Runtime.Configuration
         public int MaxForwardCount { get; set; }
 
         public List<TypeInfo> SerializationProviders { get; private set; }
+        public TypeInfo FallbackSerializationProvider { get; set; }
         internal double RejectionInjectionRate { get; set; }
         internal double MessageLossInjectionRate { get; set; }
 
@@ -199,8 +204,6 @@ namespace Orleans.Runtime.Configuration
             {
                 sb.AppendFormat("       Client Sender Buckets: {0}", ClientSenderBuckets).AppendLine();
             }
-            sb.AppendFormat("       Use fallback json serializer: {0}", UseJsonFallbackSerializer)
-                .AppendLine(isSiloConfig ? "" : "   [NOTE: This *MUST* match the setting on the server or nothing will work!]");
             sb.AppendFormat("       Buffer Pool Buffer Size: {0}", BufferPoolBufferSize).AppendLine();
             sb.AppendFormat("       Buffer Pool Max Size: {0}", BufferPoolMaxSize).AppendLine();
             sb.AppendFormat("       Buffer Pool Preallocation Size: {0}", BufferPoolPreallocationSize).AppendLine();
@@ -214,6 +217,7 @@ namespace Orleans.Runtime.Configuration
 
             SerializationProviders.ForEach(sp =>
                 sb.AppendFormat("       Serialization provider: {0}", sp.FullName).AppendLine());
+            sb.AppendFormat("       Fallback serializer: {0}", this.FallbackSerializationProvider?.FullName).AppendLine();
             return sb.ToString();
         }
 
@@ -269,13 +273,6 @@ namespace Orleans.Runtime.Configuration
                     ClientSenderBuckets = ConfigUtilities.ParseInt(child.GetAttribute("ClientSenderBuckets"),
                                                             "Invalid integer value for the ClientSenderBuckets attribute on the Messaging element");
                 }
-            }
-
-            if (child.HasAttribute("UseJsonFallbackSerializer"))
-            {
-                UseJsonFallbackSerializer =
-                    ConfigUtilities.ParseBool(child.GetAttribute("UseJsonFallbackSerializer"),
-                                              "invalid boolean value for the UseJsonFallbackSerializer attribute on the Messaging element");
             }
             
             //--
@@ -334,6 +331,22 @@ namespace Orleans.Runtime.Configuration
                             SerializationProviders.Add(typeinfo);
                         }
                     }
+                }
+
+                var fallbackSerializerNode = child.ChildNodes.OfType<XmlElement>().FirstOrDefault(n => n.Name == "FallbackSerializationProvider");
+                if (fallbackSerializerNode != null)
+                {
+                    var typeName = fallbackSerializerNode.Attributes["type"]?.Value;
+                    if (string.IsNullOrWhiteSpace(typeName))
+                    {
+                        var msg = "The FallbackSerializationProvider element requires a 'type' attribute specifying the fully-qualified type name of the serializer.";
+                        throw new FormatException(msg);
+                    }
+
+                    var type = ConfigUtilities.ParseFullyQualifiedType(
+                        typeName,
+                        "The type specification for the 'type' attribute of the Provider element could not be loaded");
+                    this.FallbackSerializationProvider = type.GetTypeInfo();
                 }
             }
         }
