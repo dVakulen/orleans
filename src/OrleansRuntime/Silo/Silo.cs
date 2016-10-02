@@ -36,7 +36,10 @@ namespace Orleans.Runtime
     /// <summary>
     /// Orleans silo.
     /// </summary>
-    public class Silo : MarshalByRefObject // for hosting multiple silos in app domains of the same process
+    public class Silo
+#if !NETSTANDARD_TODO
+        : MarshalByRefObject  // for hosting multiple silos in app domains of the same process
+#endif
     {
         /// <summary> Standard name for Primary silo. </summary>
         public const string PrimarySiloName = "Primary";
@@ -183,11 +186,11 @@ namespace Orleans.Runtime
                 LogManager.Initialize(nodeConfig);
 
             config.OnConfigChange("Defaults/Tracing", () => LogManager.Initialize(nodeConfig, true), false);
-            MultiClusterRegistrationStrategy.Initialize();
+            MultiClusterRegistrationStrategy.Initialize(config.Globals);
             ActivationData.Init(config, nodeConfig);
             StatisticsCollector.Initialize(nodeConfig);
             
-            SerializationManager.Initialize(globalConfig.UseStandardSerializer, globalConfig.SerializationProviders, globalConfig.UseJsonFallbackSerializer);
+            SerializationManager.Initialize(globalConfig.SerializationProviders, globalConfig.UseJsonFallbackSerializer);
             initTimeout = globalConfig.MaxJoinAttemptTime;
             if (Debugger.IsAttached)
             {
@@ -214,8 +217,8 @@ namespace Orleans.Runtime
 
             logger.Info(ErrorCode.SiloInitializing, "-------------- Initializing {0} silo on host {1} MachineName {2} at {3}, gen {4} --------------",
                 siloType, nodeConfig.DNSHostName, Environment.MachineName, here, generation);
-            logger.Info(ErrorCode.SiloInitConfig, "Starting silo {0} with runtime Version='{1}' .NET version='{2}' Is .NET 4.5={3} OS version='{4}' Config= " + Environment.NewLine + "{5}",
-                name, RuntimeVersion.Current, Environment.Version, ConfigUtilities.IsNet45OrNewer(), Environment.OSVersion, config.ToString(name));
+            logger.Info(ErrorCode.SiloInitConfig, "Starting silo {0} with the following configuration= " + Environment.NewLine + "{1}",
+                name, config.ToString(name));
 
             if (keyStore != null)
             {
@@ -275,7 +278,7 @@ namespace Orleans.Runtime
             // This has to come after the message center //; note that it then gets injected back into the message center.;
             localGrainDirectory = new LocalGrainDirectory(this); 
 
-            RegistrarManager.InitializeGrainDirectoryManager(localGrainDirectory);
+            RegistrarManager.InitializeGrainDirectoryManager(localGrainDirectory, globalConfig.GlobalSingleInstanceNumberRetries);
 
             // Now the activation directory.
             // This needs to know which router to use so that it can keep the global directory in synch with the local one.
@@ -347,9 +350,12 @@ namespace Orleans.Runtime
             logger.Verbose("Creating {0} System Target", "DeploymentLoadPublisher");
             RegisterSystemTarget(DeploymentLoadPublisher.Instance);
 
-            logger.Verbose("Creating {0} System Target", "RemGrainDirectory + CacheValidator");
-            RegisterSystemTarget(LocalGrainDirectory.RemGrainDirectory);
+            logger.Verbose("Creating {0} System Target", "RemoteGrainDirectory + CacheValidator");
+            RegisterSystemTarget(LocalGrainDirectory.RemoteGrainDirectory);
             RegisterSystemTarget(LocalGrainDirectory.CacheValidator);
+
+            logger.Verbose("Creating {0} System Target", "RemoteClusterGrainDirectory");
+            RegisterSystemTarget(LocalGrainDirectory.RemoteClusterGrainDirectory);
 
             logger.Verbose("Creating {0} System Target", "ClientObserverRegistrar + TypeManager");
             clientRegistrar = new ClientObserverRegistrar(SiloAddress, LocalGrainDirectory, LocalScheduler, OrleansConfig);
@@ -607,6 +613,7 @@ namespace Orleans.Runtime
 
         private void ConfigureThreadPoolAndServicePointSettings()
         {
+#if !NETSTANDARD_TODO
             if (nodeConfig.MinDotNetThreadPoolSize > 0)
             {
                 int workerThreads;
@@ -642,6 +649,7 @@ namespace Orleans.Runtime
             ServicePointManager.Expect100Continue = nodeConfig.Expect100Continue;
             ServicePointManager.DefaultConnectionLimit = nodeConfig.DefaultConnectionLimit;
             ServicePointManager.UseNagleAlgorithm = nodeConfig.UseNagleAlgorithm;
+#endif
         }
 
         /// <summary>
@@ -872,7 +880,10 @@ namespace Orleans.Runtime
         /// <summary>
         /// Test hook functions for white box testing.
         /// </summary>
-        public class TestHooks : MarshalByRefObject
+        public class TestHooks
+#if !NETSTANDARD_TODO
+            : MarshalByRefObject
+#endif
         {
             private readonly Silo silo;
             internal bool ExecuteFastKillInProcessExit;
@@ -962,10 +973,19 @@ namespace Orleans.Runtime
             {
                 ExecuteFastKillInProcessExit = false;
             }
- 
-            internal void InjectMultiClusterConfiguration(MultiClusterConfiguration config)
+          
+            // used for testing only: returns directory entries whose type name contains the given string
+            internal IDictionary<GrainId, IGrainInfo> GetDirectoryForTypeNamesContaining(string expr)
             {
-                silo.LocalMultiClusterOracle.InjectMultiClusterConfiguration(config).Wait();
+                var x = new Dictionary<GrainId, IGrainInfo>();
+                foreach (var kvp in silo.localGrainDirectory.DirectoryPartition.GetItems())
+                {
+                    if (kvp.Key.IsSystemTarget || kvp.Key.IsClient || !kvp.Key.IsGrain)
+                        continue;// Skip system grains, system targets and clients
+                    if (silo.catalog.GetGrainTypeName(kvp.Key).Contains(expr))
+                        x.Add(kvp.Key, kvp.Value);
+                }
+                return x;
             }
 
             // store silos for which we simulate faulty communication
@@ -1030,7 +1050,11 @@ namespace Orleans.Runtime
             private static T CheckReturnBoundaryReference<T>(string what, T obj) where T : class
             {
                 if (obj == null) return null;
-                if (obj is MarshalByRefObject || obj is ISerializable)
+                if (
+#if !NETSTANDARD_TODO
+                    obj is MarshalByRefObject ||
+#endif
+                    obj is ISerializable)
                 {
                     // Referernce to the provider can safely be passed across app-domain boundary in unit test process
                     return obj;
@@ -1042,20 +1066,23 @@ namespace Orleans.Runtime
             /// <summary>
             /// Represents a collection of generated assemblies accross an application domain.
             /// </summary>
-            public class GeneratedAssemblies : MarshalByRefObject
+            public class GeneratedAssemblies
+#if !NETSTANDARD_TODO
+            : MarshalByRefObject
+#endif
             {
                 /// <summary>
                 /// Initializes a new instance of the <see cref="GeneratedAssemblies"/> class.
                 /// </summary>
                 public GeneratedAssemblies()
                 {
-                    Assemblies = new Dictionary<string, byte[]>();
+                    Assemblies = new Dictionary<string, GeneratedAssembly>();
                 }
 
                 /// <summary>
                 /// Gets the assemblies which were produced by code generation.
                 /// </summary>
-                public Dictionary<string, byte[]> Assemblies { get; private set; }
+                public Dictionary<string, GeneratedAssembly> Assemblies { get; }
 
                 /// <summary>
                 /// Adds a new assembly to this collection.
@@ -1066,7 +1093,7 @@ namespace Orleans.Runtime
                 /// <param name="value">
                 /// The raw generated assembly.
                 /// </param>
-                public void Add(string key, byte[] value)
+                public void Add(string key, GeneratedAssembly value)
                 {
                     if (!string.IsNullOrWhiteSpace(key))
                     {
@@ -1078,14 +1105,17 @@ namespace Orleans.Runtime
             /// <summary>
             /// Methods for optimizing the code generator.
             /// </summary>
-            public class CodeGeneratorOptimizer : MarshalByRefObject
+            public class CodeGeneratorOptimizer
+#if !NETSTANDARD_TODO
+            : MarshalByRefObject
+#endif
             {
                 /// <summary>
                 /// Adds a cached assembly to the code generator.
                 /// </summary>
                 /// <param name="targetAssemblyName">The assembly which the cached assembly was generated for.</param>
                 /// <param name="cachedAssembly">The generated assembly.</param>
-                public void AddCachedAssembly(string targetAssemblyName, byte[] cachedAssembly)
+                public void AddCachedAssembly(string targetAssemblyName, GeneratedAssembly cachedAssembly)
                 {
                     CodeGeneratorManager.AddGeneratedAssembly(targetAssemblyName, cachedAssembly);
                 }

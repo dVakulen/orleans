@@ -62,16 +62,6 @@ namespace Orleans.Serialization
 
         private static readonly string[] safeFailSerializers = { "Orleans.FSharp" };
 
-        /// <summary>
-        /// Toggles whether or not to use the .NET serializer (true) or the Orleans serializer (false).
-        /// This is usually set through config.
-        /// </summary>
-        internal static bool UseStandardSerializer
-        {
-            get;
-            set;
-        }
-
 #if NETSTANDARD
         // Workaround for CoreCLR where FormatterServices.GetUninitializedObject is not public (but might change in RTM so we could remove this then).
         private static readonly Func<Type, object> getUninitializedObjectDelegate =
@@ -124,6 +114,7 @@ namespace Orleans.Serialization
         private static readonly RuntimeTypeHandle charTypeHandle = typeof(char).TypeHandle;
         private static readonly RuntimeTypeHandle boolTypeHandle = typeof(bool).TypeHandle;
         private static readonly RuntimeTypeHandle objectTypeHandle = typeof(object).TypeHandle;
+        private static readonly RuntimeTypeHandle byteArrayTypeHandle = typeof(byte[]).TypeHandle;
 
         internal static CounterStatistic Copies;
         internal static CounterStatistic Serializations;
@@ -168,10 +159,9 @@ namespace Orleans.Serialization
             }
         }
 
-        internal static void Initialize(bool useStandardSerializer, List<TypeInfo> serializationProviders, bool useJsonFallbackSerializer)
+        internal static void Initialize(List<TypeInfo> serializationProviders, bool useJsonFallbackSerializer)
         {
             RegisterBuiltInSerializers();
-            UseStandardSerializer = useStandardSerializer;
 
 #if NETSTANDARD
             if (!useJsonFallbackSerializer)
@@ -232,7 +222,9 @@ namespace Orleans.Serialization
                 IsBuiltInSerializersRegistered = true;
             }
 
+#if !NETSTANDARD_TODO
             AppDomain.CurrentDomain.AssemblyResolve += OnResolveEventHandler;
+#endif
             registeredTypes = new HashSet<Type>();
             externalSerializers = new List<IExternalSerializer>();
             typeToExternalSerializerDictionary = new ConcurrentDictionary<Type, IExternalSerializer>();
@@ -242,7 +234,6 @@ namespace Orleans.Serialization
             deserializers = new Dictionary<RuntimeTypeHandle, Deserializer>();
             grainRefConstructorDictionary = new ConcurrentDictionary<Type, Func<GrainReference, GrainReference>>();
             logger = LogManager.GetLogger("SerializationManager", LoggerType.Runtime);
-            UseStandardSerializer = false; // Default
 
             // Built-in handlers: Tuples
             Register(typeof(Tuple<>), BuiltInTypes.DeepCopyTuple, BuiltInTypes.SerializeTuple, BuiltInTypes.DeserializeTuple);
@@ -999,7 +990,7 @@ namespace Orleans.Serialization
                     return originalArray;
                 }
                 // A common special case
-                if ((original is byte[]) && (originalArray.Rank == 1))
+                if (t.TypeHandle.Equals(byteArrayTypeHandle) && (originalArray.Rank == 1))
                 {
                     var source = (byte[])original;
                     if (source.Length > LARGE_OBJECT_LIMIT)
@@ -1264,6 +1255,14 @@ namespace Orleans.Serialization
                     stream.Write(SerializationTokenType.ByteArray);
                     stream.Write(array.Length);
                     stream.Write((byte[])array);
+                    return;
+                }
+                if (et.TypeHandle.Equals(sbyteTypeHandle))
+                {
+                    stream.Write(SerializationTokenType.SpecifiedType);
+                    stream.Write(SerializationTokenType.SByteArray);
+                    stream.Write(array.Length);
+                    stream.Write((sbyte[])array);
                     return;
                 }
                 if (et.TypeHandle.Equals(boolTypeHandle))
@@ -1893,6 +1892,7 @@ namespace Orleans.Serialization
             return serializer;
         }
 
+#if !NETSTANDARD_TODO
         private static Assembly OnResolveEventHandler(Object sender, ResolveEventArgs arg)
         {
             // types defined in assemblies loaded by path name (e.g. Assembly.LoadFrom) aren't resolved during deserialization without some help.
@@ -1903,6 +1903,7 @@ namespace Orleans.Serialization
 
             return null;
         }
+#endif
 
         private static object FallbackSerializationDeepCopy(object obj)
         {
@@ -2208,14 +2209,6 @@ namespace Orleans.Serialization
             public DeepCopier DeepCopy { get; private set; }
             public Serializer Serialize { get; private set; }
             public Deserializer Deserialize { get; private set; }
-        }
-
-        public static bool ShouldFindSerializationInfo(Assembly assembly)
-        {
-            // If we're using the .Net serializer, then don't bother with this at all
-            if (UseStandardSerializer) return false;
-            
-            return true;
         }
 
         public static JsonSerializerSettings GetDefaultJsonSerializerSettings()

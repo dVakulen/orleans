@@ -23,16 +23,23 @@ namespace Orleans.Runtime
         private int decodeOffset;
 
         private readonly bool supportForwarding;
+        private bool wtf = false;
         private Logger Log;
 
-        public IncomingMessageBuffer(Logger logger, bool supportForwarding = false, int receiveBufferSize = DEFAULT_RECEIVE_BUFFER_SIZE, int maxSustainedReceiveBufferSize = DEFAULT_MAX_SUSTAINED_RECEIVE_BUFFER_SIZE)
+        public IncomingMessageBuffer(Logger logger, 
+            bool supportForwarding = false,
+            int receiveBufferSize = DEFAULT_RECEIVE_BUFFER_SIZE,
+            int maxSustainedReceiveBufferSize = DEFAULT_MAX_SUSTAINED_RECEIVE_BUFFER_SIZE,
+            IList<ArraySegment<byte>> readBuf = null,
+            byte[] bb = null)
         {
             Log = logger;
             this.supportForwarding = supportForwarding;
             currentBufferSize = receiveBufferSize;
             maxSustainedBufferSize = maxSustainedReceiveBufferSize;
             lengthBuffer = new byte[Message.LENGTH_HEADER_SIZE];
-            readBuffer = BufferPool.GlobalPool.GetMultiBuffer(currentBufferSize);
+            wtf = readBuf is List<ArraySegment<byte>> || bb != null;
+            readBuffer = bb != null ? new List<ArraySegment<byte>>{new ArraySegment<byte>(bb)}: BufferPool.GlobalPool.GetMultiBuffer(currentBufferSize); // readBuf as List<ArraySegment<byte>> ??
             receiveOffset = 0;
             decodeOffset = 0;
             headerLength = 0;
@@ -52,7 +59,7 @@ namespace Orleans.Runtime
 
         public void UpdateReceivedData(int bytesRead)
         {
-            receiveOffset += bytesRead;
+               receiveOffset += bytesRead;
         }
 
         public void Reset()
@@ -146,14 +153,17 @@ namespace Orleans.Runtime
             // drop buffers consumed by messages and adjust offsets
             // TODO: This can be optimized further. Linked lists?
             int consumedBytes = 0;
+            List < ArraySegment < byte >> segms = new List<ArraySegment<byte>>();
             while (readBuffer.Count != 0)
             {
                 ArraySegment<byte> seg = readBuffer[0];
                 if (seg.Count <= decodeOffset - consumedBytes)
                 {
                     consumedBytes += seg.Count;
+                     segms.Add(seg);
                     readBuffer.Remove(seg);
-                    BufferPool.GlobalPool.Release(seg.Array);
+                    if(!wtf)
+                  BufferPool.GlobalPool.Release(seg.Array);
                 }
                 else
                 {
@@ -176,7 +186,8 @@ namespace Orleans.Runtime
                 }
                 if (backfillBytes > 0)
                 {
-                    readBuffer.AddRange(BufferPool.GlobalPool.GetMultiBuffer(backfillBytes));
+                    if (!wtf) readBuffer.AddRange(BufferPool.GlobalPool.GetMultiBuffer(backfillBytes));
+                    //readBuffer.AddRange(segms); // segms BufferPool.GlobalPool.GetMultiBuffer(backfillBytes)
                 }
             }
         }
