@@ -380,7 +380,9 @@ namespace Orleans.Runtime
                 targetActivation.RecordRunning(message);
 
                 MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedOk(message);
-                scheduler.QueueWorkItem(new InvokeWorkItem(targetActivation, message, this), targetActivation.SchedulingContext);
+                var q = new InvokeWorkItem(targetActivation, message, this);
+                q.RequiresTaskCreation = true;
+                scheduler.QueueWorkItem(q, targetActivation.SchedulingContext);
             }
         }
 

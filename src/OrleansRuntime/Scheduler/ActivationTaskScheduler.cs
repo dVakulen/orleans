@@ -42,7 +42,7 @@ namespace Orleans.Runtime.Scheduler
 
         public void RunTask(Task task)
         {
-            RuntimeContext.SetExecutionContext(workerGroup.SchedulingContext, this);
+            RuntimeContext.SetExecutionContext(workerGroup.SchedulingContext, this, true);
             bool done = TryExecuteTask(task);
             if (!done)
                 logger.Warn(ErrorCode.SchedulerTaskExecuteIncomplete4, "RunTask: Incomplete base.TryExecuteTask for Task Id={0} with Status={1}",
@@ -68,6 +68,7 @@ namespace Orleans.Runtime.Scheduler
             if (logger.IsVerbose2) logger.Verbose2(myId + " QueueTask Task Id={0}", task.Id);
 #endif
             // qqq.Post(42);
+            Interlocked.Increment(ref OrleansTaskScheduler.act);
             var todo = new TaskWorkItem(this, task, workerGroup.SchedulingContext);
             workerGroup.EnqueueTask(todo);
         }

@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -333,10 +335,12 @@ namespace UnitTests.SchedulerTests
         [Fact]
         public void Sched_Task_ClosureWorkItem_Wait()
         {
+            OrleansThreadPool.QueueSystemWorkItem(state => { });
             UnitTestSchedulingContext cntx = new UnitTestSchedulingContext();
             OrleansTaskScheduler scheduler = TestInternalHelper.InitializeSchedulerForTesting(cntx);
 
-            const int NumTasks = 10;
+            var sq = Stopwatch.StartNew();
+            const int NumTasks = 1;
 
             ManualResetEvent[] flags = new ManualResetEvent[NumTasks];
             for (int i = 0; i < NumTasks; i++)
@@ -355,21 +359,37 @@ namespace UnitTests.SchedulerTests
             for (int i = 0; i < NumTasks; i++)
             {
                 int taskNum = i; // Capture
-                workItems[i] = new ClosureWorkItem(() =>
+                workItems[i] = new ClosureWorkItem(async () =>
                 {
                     output.WriteLine("Inside ClosureWorkItem-" + taskNum);
-                    tasks[taskNum].Start(scheduler);
-                    bool ok = tasks[taskNum].Wait(TimeSpan.FromMilliseconds(NumTasks * 100));
+
+                    output.WriteLine(sq.ElapsedMilliseconds + " closure1");
+                                tasks[taskNum].Start(scheduler);
+                   
+                    var s = Stopwatch.StartNew(); 
+                //   awa Task.WhenAll(tasks[taskNum])
+                    bool ok = tasks[taskNum].Wait(TimeSpan.FromMilliseconds(NumTasks * 20000));
+
+                    output.WriteLine(s.ElapsedMilliseconds + " closure " + ok);
                     Assert.True(ok, "Wait completed successfully inside ClosureWorkItem-" + taskNum);
                 });
             }
-
-            foreach (var workItem in workItems) scheduler.QueueWorkItem(workItem, cntx);
+            var ia = 0;
+            foreach (var workItem in workItems)
+            {
+                ia++;
+                var dsaasd = Stopwatch.StartNew();
+                scheduler.QueueWorkItem(workItem, cntx);
+                var z = dsaasd.ElapsedMilliseconds;
+                output.WriteLine(sq.ElapsedMilliseconds + "  scheduler.QueueWorkItem(");
+            }
             foreach (var flag in flags) flag.Set();
             for (int i = 0; i < tasks.Length; i++)
             {
-                bool ok = tasks[i].Wait(TimeSpan.FromMilliseconds(NumTasks * 150));
-                Assert.True(ok, "Wait completed successfully for Task-" + i);
+                var s = Stopwatch.StartNew();
+                bool ok = tasks[i].Wait(TimeSpan.FromMilliseconds(NumTasks * 1500000));
+                Assert.True(ok, s.ElapsedMilliseconds +" Wait completed successfully for Task-" + i);
+                output.WriteLine(s.ElapsedMilliseconds);
             }
 
 
@@ -575,11 +595,13 @@ namespace UnitTests.SchedulerTests
             LogContext("Main-task " + Task.CurrentId);
 
             int n = 0;
-
+            var s = Stopwatch.StartNew();
+            ConcurrentQueue<string> qwe = new ConcurrentQueue<string>();
             Action closure = () =>
             {
                 LogContext("ClosureWorkItem-task " + Task.CurrentId);
 
+                qwe.Enqueue("ClosureWorkItem " + Thread.CurrentThread.Name + " end " + s.ElapsedMilliseconds);
                 for (int i = 0; i < 10; i++)
                 {
                     int id = -1;
@@ -587,21 +609,27 @@ namespace UnitTests.SchedulerTests
                     {
                         id = Task.CurrentId.HasValue ? (int)Task.CurrentId : -1;
 
+                        qwe.Enqueue("thread " + Thread.CurrentThread.Name + " end " + s.ElapsedMilliseconds);
+                        output.WriteLine("Sub-task " + id + " st " + s.ElapsedMilliseconds);
                         // ReSharper disable AccessToModifiedClosure
                         LogContext("Sub-task " + id + " n=" + n);
 
                         int k = n;
-                        output.WriteLine("Sub-task " + id + " sleeping");
+                        output.WriteLine("Sub-task " + id + " sleeping ");
                         Thread.Sleep(100);
                         output.WriteLine("Sub-task " + id + " awake");
                         n = k + 1;
+
+                        output.WriteLine("Sub-task " + id + " end " + s.ElapsedMilliseconds);
                         // ReSharper restore AccessToModifiedClosure
                     };
                     Task.Factory.StartNew(action).ContinueWith(tsk =>
                     {
-                        LogContext("Sub-task " + id + "-ContinueWith");
+                        qwe.Enqueue("Sub-task thread " + Thread.CurrentThread.Name + " star " + s.ElapsedMilliseconds);
+                        LogContext("Sub-task " + id + "-ContinueWith " + s.ElapsedMilliseconds);
 
-                        output.WriteLine("Sub-task " + id + " Done");
+                        output.WriteLine("thread " + Thread.CurrentThread.Name);
+                        output.WriteLine("Sub-task " + id + " Done " + s.ElapsedMilliseconds);
                     });
                 }
             };
@@ -614,7 +642,11 @@ namespace UnitTests.SchedulerTests
             output.WriteLine("Main-task sleeping");
             Thread.Sleep(TimeSpan.FromSeconds(2));
             output.WriteLine("Main-task awake");
+            foreach (var q in qwe)
+            {
 
+                output.WriteLine(q);
+            }
             // N should be 10, because all tasks should execute serially
             Assert.True(n != 0, "Work items did not get executed");
             Assert.Equal(10, n);  // "Work items executed concurrently"

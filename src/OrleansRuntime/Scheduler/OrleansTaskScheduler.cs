@@ -175,6 +175,7 @@ namespace Orleans.Runtime.Scheduler
 
             if (workItemGroup == null)
             {
+                Interlocked.Increment(ref tttt);
                 var todo = new TaskWorkItem(this, task, context);
                 RunQueue.Add(todo);
             }
@@ -230,7 +231,7 @@ namespace Orleans.Runtime.Scheduler
             }
             else
 			{
-				Interlocked.Increment(ref reeq);
+                Interlocked.Increment(ref reeq);
 				//OrleansThreadPool.QueueUserWorkItem(state =>
 				//{
 
@@ -246,14 +247,55 @@ namespace Orleans.Runtime.Scheduler
 				//});
 				//workItem.ex
 				// Create Task wrapper for this work item
-				Task t = TaskSchedulerUtils.WrapWorkItemAsTask(workItem, context, workItemGroup.TaskRunner);
-				t.Start(workItemGroup.TaskRunner);
+			    if (RuntimeContext.Current?.ActivationContext == null)
+                {
+                    Interlocked.Increment(ref RuntimeContextCurrentNull);
+                    var g = 1;
+			    }
+			    else
+                {
+                    Interlocked.Increment(ref RuntimeContextCurrent);
+                    var g = 2;
+			    }
 
-				if (TaskScheduler.Current == workItemGroup.TaskRunner)
-				{
+                // ! workitm
+                    if (RuntimeContext.Current?.ActivationContext != null)
+                {
+                    //Task t = TaskSchedulerUtils.WrapWorkItemAsTask(workItem, context, workItemGroup.TaskRunner);
+                    //t.Start(workItemGroup.TaskRunner);
+                    var ffffff = false;
+                    (workItem as WorkItemBase).Metadata = TaskScheduler.Current.ToString() + " Enqueued from " +
+                                      new System.Diagnostics.StackTrace();
+                    workItemGroup.EnqueueTask(workItem);
+                    // if (ffffff)
+                    {
+                        Task.Factory.StartNew(() =>
+                        {
+                        if (TaskScheduler.Current is OrleansTaskScheduler)
+                            {
+                                return;
+                            }
+                            if (TaskScheduler.Current is ActivationTaskScheduler)
+                            {
+                                return;
+                            }
+                            var fg = workItem;
+                        });
+                    }
+                    //if (workItem is InvokeWorkItem)
+                    //{
+                    //    var fsda = workItem;
 
-					Interlocked.Increment(ref equals);
+                    //}
+
+
+                    Interlocked.Increment(ref equals);
 				}
+				else
+				{
+                    Task t = TaskSchedulerUtils.WrapWorkItemAsTask(workItem, context, workItemGroup.TaskRunner);
+                    t.Start(workItemGroup.TaskRunner);
+                }
 			} // TaskScheduler.Current is OrleansTaskScheduler || 
 			var iseee =TaskScheduler.Current is ActivationTaskScheduler;
 	        if (iseee)
@@ -261,17 +303,23 @@ namespace Orleans.Runtime.Scheduler
 
 				Interlocked.Increment(ref reeeeeq);
 			}
-			//Console.WriteLine("Equals + " + equals.ToString()+  " Null: " + qewqeq.ToString() + " Not null: " + reeq.ToString() + " Sched : " + reeeeeq.ToString());
+			Console.WriteLine("this " + tttt.ToString() + "act " + act.ToString() + " Equals + " + equals.ToString()+  " Null: " + qewqeq.ToString() + " Not null: " + reeq.ToString() + " Sched : " + reeeeeq.ToString() + " ContNull " + RuntimeContextCurrentNull.ToString() 
+                + " COnt notnull " + RuntimeContextCurrent.ToString());
         }
 
 	    private static int qewqeq;
+        private static int RuntimeContextCurrentNull;
 
-		private static int reeq;
+        private static int RuntimeContextCurrent;
+
+        private static int reeq;
 		private static int reeeeeq;
 		private static int equals;
 
-		// Only required if you have work groups flagged by a context that is not a WorkGroupingContext
-		public WorkItemGroup RegisterWorkContext(ISchedulingContext context)
+        public static int act;
+        public static int tttt;
+        // Only required if you have work groups flagged by a context that is not a WorkGroupingContext
+        public WorkItemGroup RegisterWorkContext(ISchedulingContext context)
         {
             if (context == null) return null;
 
@@ -373,7 +421,7 @@ namespace Orleans.Runtime.Scheduler
 
             if (workItemGroup == null)
             {
-                RuntimeContext.SetExecutionContext(null, this);
+                RuntimeContext.SetExecutionContext(null, this, true);
                 bool done = TryExecuteTask(task);
                 if (!done)
                     logger.Warn(ErrorCode.SchedulerTaskExecuteIncomplete2, "RunTask: Incomplete base.TryExecuteTask for Task Id={0} with Status={1}",

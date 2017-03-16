@@ -52,6 +52,11 @@ namespace Orleans.Runtime.Messaging
                     OrleansThreadPool.QueueSystemWorkItem(processAction, message);
                 });
 
+                messageCenter.AddShortCicruitTargetBlock(category, message =>
+                {
+                    ReceiveMessage((Message)message);
+                });
+
                 try
                 {
                     messageCenter.Completion.WaitOne();
@@ -179,7 +184,7 @@ namespace Orleans.Runtime.Messaging
 
             if (targetActivation != null) targetActivation.IncrementEnqueuedOnDispatcherCount();
 
-            scheduler.QueueWorkItem(new ClosureWorkItem(() =>
+            var fff = new ClosureWorkItem(() =>
             {
                 try
                 {
@@ -190,7 +195,9 @@ namespace Orleans.Runtime.Messaging
                     if (targetActivation != null) targetActivation.DecrementEnqueuedOnDispatcherCount();
                 }
             },
-            () => "Dispatcher.ReceiveMessage"), context);
+                () => "Dispatcher.ReceiveMessage");
+            fff.RequiresTaskCreation = true;
+            scheduler.QueueWorkItem(fff, context);
         }
     }
 }

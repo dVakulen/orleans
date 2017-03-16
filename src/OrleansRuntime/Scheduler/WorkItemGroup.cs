@@ -11,6 +11,8 @@ namespace Orleans.Runtime.Scheduler
     [DebuggerDisplay("WorkItemGroup Name={Name} State={state}")]
     internal class WorkItemGroup : IWorkItem
     {
+        public bool RequiresTaskCreation { get; set; }
+        public List<string> addedFrom  = new List<string>();
 		public  enum WorkGroupStatus
         {
             Waiting = 0,
@@ -215,6 +217,7 @@ namespace Orleans.Runtime.Scheduler
 #if DEBUG
                 if (log.IsVerbose3) log.Verbose3("Add to RunQueue {0}, #{1}, onto {2}", task, thisSequenceNumber, SchedulingContext);
 #endif
+                this.addedFrom.Add(TaskScheduler.Current.ToString() + " " + Thread.CurrentThread.IsThreadPoolThread + " " + new System.Diagnostics.StackTrace().ToString());
 				masterScheduler.RunQueue.Add(this);
             }
         }

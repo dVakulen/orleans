@@ -692,6 +692,7 @@ namespace Orleans.Serialization
 
         internal static object CopyStringObjectDictionary(object original, ICopyContext context)
         {
+	        return original;
             var dict = (Dictionary<string, object>)original;
             var result = new Dictionary<string, object>(dict.Count, dict.Comparer);
             context.RecordCopy(original, result);

@@ -4,7 +4,8 @@ namespace Orleans.Runtime.Scheduler
 {
     internal abstract class WorkItemBase : IWorkItem
     {
-
+        public bool RequiresTaskCreation { get; set; }
+        public string Metadata { get; set; }
         internal protected WorkItemBase()
         {
         }

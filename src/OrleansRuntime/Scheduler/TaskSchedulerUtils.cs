@@ -15,11 +15,15 @@ namespace Orleans.Runtime.Scheduler
         {
             try
             {
-                RuntimeContext.SetExecutionContext(todo.SchedulingContext, sched);
+                RuntimeContext.SetExecutionContext(todo.SchedulingContext, sched, false);
                 todo.Execute();
             }
             finally
             {
+                if (RuntimeContext.Current.ActivationContext != todo.SchedulingContext)
+                {
+                    var ggg = 1;
+                }
                 RuntimeContext.ResetExecutionContext();
             }
         }

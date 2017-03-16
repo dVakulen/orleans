@@ -68,6 +68,8 @@ namespace Orleans.Runtime
                 s.LingerState = new LingerOption(true, 0);
                 s.NoDelay = true;
                 WriteConnectionPreamble(s, Constants.SiloDirectConnectionId); // Identifies this client as a direct silo-to-silo socket
+                // todo: use async version
+              // s.Blocking = false;
                 // Start an asynch receive off of the socket to detect closure
                 var receiveAsyncEventArgs = new SocketAsyncEventArgs
                 {
