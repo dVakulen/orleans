@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Reflection;
@@ -39,7 +40,10 @@ namespace Orleans.Serialization
             shallowCopyableTypes[typeof(CorrelationId)] = true;
             shallowCopyableTypes[typeof(string)] = true;
             shallowCopyableTypes[typeof(Immutable<>)] = true;
-            shallowCopyableTypes[typeof(CancellationToken)] = true;
+
+			shallowCopyableTypes[typeof(Dictionary<,>)] = true;
+			shallowCopyableTypes[typeof(ConcurrentDictionary<,>)] = true;
+			shallowCopyableTypes[typeof(CancellationToken)] = true;
         }
 
         internal static bool IsOrleansShallowCopyable(this Type t)

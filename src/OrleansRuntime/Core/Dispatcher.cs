@@ -8,7 +8,8 @@ using Orleans.Runtime.GrainDirectory;
 using Orleans.Runtime.Messaging;
 using Orleans.Runtime.Placement;
 using Orleans.Runtime.Scheduler;
-
+using System.Diagnostics;
+using System.Threading;
 
 namespace Orleans.Runtime
 {
@@ -590,8 +591,12 @@ namespace Orleans.Runtime
         {
             try
             {
+                var s = Stopwatch.StartNew();
                 await AddressMessage(message);
+                Interlocked.Add(ref OrleansThreadPool.AddressMsdg, s.ElapsedMilliseconds);
+                s.Restart();
                 TransportMessage(message);
+                Interlocked.Add(ref OrleansThreadPool.TransportMsdg, s.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {

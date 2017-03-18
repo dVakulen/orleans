@@ -119,6 +119,7 @@
     <Compile Include="GrainDirectory\MultiClusterStatus.cs" />
     <Compile Include="LogConsistency\ILogViewAdaptorHost.cs" />
     <Compile Include="Providers\ProviderStateManager.cs" />
+    <Compile Include="Runtime\Class1.cs" />
     <Compile Include="Runtime\IGrainReferenceConverter.cs" />
     <Compile Include="Runtime\IGrainTimer.cs" />
     <Compile Include="Runtime\ILocalSiloDetails.cs" />

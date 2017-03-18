@@ -5,6 +5,7 @@ using System.Linq;
 using BenchmarkDotNet.Running;
 using Benchmarks.MapReduce;
 using Benchmarks.Serialization;
+using OrleansBenchmarks.MapReduce;
 
 namespace Benchmarks
 {
@@ -12,6 +13,10 @@ namespace Benchmarks
     {
         private static readonly Dictionary<string, Action> _benchmarks = new Dictionary<string, Action>
         {
+            ["TimerWheel"] = () =>
+            {
+               // var summary = BenchmarkRunner.Run<TimerWheelBenchmark>();
+            },
             ["MapReduce"] = () =>
             {
                 RunBenchmark(
@@ -36,7 +41,13 @@ namespace Benchmarks
         // requires benchmark name or 'All' word as first parameter
         static void Main(string[] args)
         {
-            _benchmarks["MapReduce"]();
+            for (int i = 0; i < 15; i++)
+            {
+                _benchmarks["MapReduce"]();
+                Console.WriteLine();
+            }
+            Console.WriteLine("D");
+            Console.ReadLine();
         }
 
         private static void RunBenchmark<T>(string name, Func<T> init, Action<T> benchmarkAction, Action<T> tearDown)
@@ -47,7 +58,6 @@ namespace Benchmarks
             benchmarkAction(bench);
             Console.WriteLine($"Elapsed milliseconds: {stopWatch.ElapsedMilliseconds}");
             tearDown(bench);
-            Console.ReadLine();
         }
     }
 }

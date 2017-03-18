@@ -358,6 +358,10 @@ namespace Orleans.Runtime.Messaging
             private readonly MessageFactory messageFactory;
             private readonly CounterStatistic gatewaySends;
             private readonly SerializationManager serializationManager;
+            static GatewaySender()
+            {
+              
+            }
             
             internal GatewaySender(string name, Gateway gateway, MessageFactory messageFactory, SerializationManager serializationManager)
                 : base(name, gateway.MessagingConfiguration)
@@ -371,6 +375,7 @@ namespace Orleans.Runtime.Messaging
 
             protected override void Process(OutgoingClientMessage request)
             {
+                StageStats.Current.setT(GetType());
                 if (Cts.IsCancellationRequested) return;
                 
                 var client = request.Item1;

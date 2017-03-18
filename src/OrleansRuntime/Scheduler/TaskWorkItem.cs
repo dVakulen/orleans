@@ -37,6 +37,7 @@ namespace Orleans.Runtime.Scheduler
 
         public override void Execute()
         {
+            base.Execute();
 #if DEBUG
             if (logger.IsVerbose2) logger.Verbose2("Executing TaskWorkItem for Task Id={0},Name={1},Status={2} on Scheduler={3}", task.Id, Name, task.Status, this.scheduler);
 #endif

@@ -55,7 +55,7 @@ namespace Orleans.Runtime
                 queueTracking.OnEnQueueRequest(1, requestQueue.Count, request);
             }
 #endif
-             OrleansThreadPool.QueueSystemWorkItem(requestHandler, request);
+             OrleansThreadPool.QueueSystemWorkItem(requestHandler, request, typeof(AsynchAgent));
         }
 
         protected abstract void Process(T request);

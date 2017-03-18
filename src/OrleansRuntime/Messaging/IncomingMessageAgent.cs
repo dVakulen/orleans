@@ -13,6 +13,11 @@ namespace Orleans.Runtime.Messaging
         private readonly MessageFactory messageFactory;
         private readonly Message.Categories category;
         private readonly WaitCallback processAction;
+        static IncomingMessageAgent()
+        {
+
+            OrleansThreadPool.RegisterStage(typeof(IncomingMessageAgent));
+        }
 
         internal IncomingMessageAgent(Message.Categories cat, IMessageCenter mc, ActivationDirectory ad, OrleansTaskScheduler sched, Dispatcher dispatcher, MessageFactory messageFactory) :
             base(cat.ToString())
@@ -24,8 +29,10 @@ namespace Orleans.Runtime.Messaging
             this.dispatcher = dispatcher;
             this.messageFactory = messageFactory;
             OnFault = FaultBehavior.RestartOnFault;
+            var t = GetType();
             processAction = message =>
             {
+                StageStats.Current.setT(t);
                 ReceiveMessage((Message)message);
             };
         }
@@ -49,7 +56,7 @@ namespace Orleans.Runtime.Messaging
 
                 messageCenter.AddTargetBlock(category, message =>
                 {
-                    OrleansThreadPool.QueueSystemWorkItem(processAction, message);
+                    OrleansThreadPool.QueueSystemWorkItem(processAction, message,  typeof(IncomingMessageAgent));
                 });
 
                 try

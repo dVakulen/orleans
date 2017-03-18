@@ -5,6 +5,10 @@ namespace Orleans.Runtime
 {
     internal abstract class AsynchAgent : IDisposable
     {
+        static AsynchAgent()
+        {
+            OrleansThreadPool.RegisterStage(typeof(AsynchAgent));
+        }
         public enum FaultBehavior
         {
             CrashOnFault,   // Crash the process if the agent faults
