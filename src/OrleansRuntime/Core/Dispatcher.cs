@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Orleans.Runtime.Configuration;
 using Orleans.Runtime.GrainDirectory;
@@ -617,6 +618,21 @@ namespace Orleans.Runtime
         // Task returned by AsyncSendMessage()
         internal void SendMessage(Message message, ActivationData sendingActivation = null)
         {
+			List<ActivationData> localActivation = null;
+			if(catalog.LocalLookup(message.TargetGrain, out localActivation))
+			{
+				var b = localActivation.FirstOrDefault();
+				if (b != null)
+				{
+					message.TargetAddress = b.Address;
+					HandleIncomingRequest(message, b);
+					
+					return;
+				}
+					
+				//TransportMessage(message);
+				//return;
+			}
             AsyncSendMessage(message, sendingActivation).Ignore();
         }
 

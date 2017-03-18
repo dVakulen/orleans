@@ -4,9 +4,10 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkGrainInterfaces.MapReduce;
+using BenchmarkGrains.MapReduce;
 using Orleans;
 
-namespace BenchmarkGrains.MapReduce
+namespace OrleansBenchmarkGrains.MapReduce
 {
     public class TransformGrain<TInput, TOutput> : DataflowGrain, ITransformGrain<TInput, TOutput>
     {
@@ -27,7 +28,7 @@ namespace BenchmarkGrains.MapReduce
         public Task Initialize(ITransformProcessor<TInput, TOutput> processor)
         {
             if (processor == null) throw new ArgumentNullException(nameof(processor));
-            this._processor = processor;
+            _processor = processor;
             return TaskDone.Done;
         }
 
@@ -38,7 +39,7 @@ namespace BenchmarkGrains.MapReduce
 
         public Task LinkTo(ITargetGrain<TOutput> t)
         {
-            this._target = t;
+            _target = t;
             return TaskDone.Done;
         }
 
@@ -47,11 +48,22 @@ namespace BenchmarkGrains.MapReduce
             throw new NotImplementedException();
         }
 
-        public Task SendAsync(TInput t)
-        {
-            this._input.Enqueue(t);
-            NotifyOfPendingWork();
-            return TaskDone.Done;
+		private static int qewqeq;
+		public async Task SendAsync(TInput t)
+		{
+            //var b = 1;
+            //await Task.Delay(2);
+            //Task.Factory.StartNew(() =>
+            //{
+            //    var qwe = this;
+            //    Task.Factory.StartNew(() =>
+            //    {
+            //        var qwee = 1;
+            //    });
+            //});
+            //Interlocked.Increment(ref qewqeq);
+            //Console.WriteLine(qewqeq);
+            _target.SendAsync(_processor.Process(t));
         }
 
         public Task SendAsync(TInput t, GrainCancellationToken gct)
@@ -61,25 +73,25 @@ namespace BenchmarkGrains.MapReduce
 
         private void NotifyOfPendingWork()
         {
-            if (this._processingStarted) return;
+            if (_processingStarted) return;
 
             var orleansTs = TaskScheduler.Current;
             if (ProcessOnThreadPool)
             {
                 Task.Run(async () =>
                 {
-                    while (!this._proccessingStopped)
+                    while (!_proccessingStopped)
                     {
                         TInput itemToProcess;
-                        if (!this._input.TryDequeue(out itemToProcess))
+                        if (!_input.TryDequeue(out itemToProcess))
                         {
                             await Task.Delay(7);
                             continue;
                         }
 
-                        var processed = this._processor.Process(itemToProcess);
+                        var processed = _processor.Process(itemToProcess);
                         await Task.Factory.StartNew(
-                            async () => await this._target.SendAsync(processed), CancellationToken.None, TaskCreationOptions.None, orleansTs);
+                            async () => await _target.SendAsync(_processor.Process(itemToProcess)), CancellationToken.None, TaskCreationOptions.None, orleansTs);
                     }
                 });
             }
@@ -88,13 +100,13 @@ namespace BenchmarkGrains.MapReduce
                 throw new NotImplementedException();
             }
 
-            this._processingStarted = true;
+            _processingStarted = true;
         }
 
         public override Task OnDeactivateAsync()
         {
-            this._proccessingStopped = true;
-            this._processingStarted = false;
+            _proccessingStopped = true;
+            _processingStarted = false;
             return base.OnDeactivateAsync();
         }
 

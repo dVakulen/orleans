@@ -104,6 +104,7 @@ namespace Orleans.Runtime.Scheduler
             }
             try
             {
+                //   item.Execute();
                 TaskSchedulerUtils.RunWorkItemTask(item, _scheduler);
             }
             catch (Exception ex)

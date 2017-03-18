@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -160,6 +161,7 @@ namespace Orleans.Runtime
         private LimitValue maxEnqueuedRequestsLimit;
         private HashSet<IGrainTimer> timers;
         
+		public static ConcurrentDictionary<GrainId, ActivationData> LocalLookups = new ConcurrentDictionary<GrainId, ActivationData>();
         public ActivationData(
             ActivationAddress addr,
             string genericArguments,
@@ -175,8 +177,7 @@ namespace Orleans.Runtime
             if (null == addr) throw new ArgumentNullException("addr");
             if (null == placedUsing) throw new ArgumentNullException("placedUsing");
             if (null == collector) throw new ArgumentNullException("collector");
-
-            logger = LogManager.GetLogger("ActivationData", LoggerType.Runtime);
+			logger = LogManager.GetLogger("ActivationData", LoggerType.Runtime);
             this.maxRequestProcessingTime = maxRequestProcessingTime;
             this.maxWarningRequestProcessingTime = maxWarningRequestProcessingTime;
             this.nodeConfiguration = nodeConfiguration;
@@ -193,7 +194,8 @@ namespace Orleans.Runtime
 
             GrainReference = GrainReference.FromGrainId(addr.Grain, runtimeClient, genericArguments, Grain.IsSystemTarget ? addr.Silo : null);
             this.SchedulingContext = new SchedulingContext(this);
-        }
+			LocalLookups.TryAdd(addr.Grain, this); //.AddOrUpdate();
+		}
 
         #region Method invocation
 

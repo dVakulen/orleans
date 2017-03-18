@@ -66,7 +66,6 @@ namespace Orleans.Runtime
         private ActivationAddress targetAddress;
         private ActivationAddress sendingAddress;
         private static readonly Logger logger;
-        
         static Message()
         {
             logger = LogManager.GetLogger("Message", LoggerType.Runtime);
@@ -103,6 +102,8 @@ namespace Orleans.Runtime
         }
 
         internal HeadersContainer Headers { get; set; } = new HeadersContainer();
+
+        public bool AllowShortCircuit { get; set; } = true;
 
         public Categories Category
         {

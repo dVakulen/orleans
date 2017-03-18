@@ -134,7 +134,11 @@ namespace Orleans.Runtime.Scheduler
         // will result in a TooManyWaitersException being thrown.
         //private static readonly int MaxWaitingThreads = 500;
 
-
+        private static long tratata;
+        //static Timer qwe = new Timer(o =>
+        //{
+        //    Console.WriteLine("WorkItemGroup execute " + tratata.ToString());
+        //}, null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
         internal WorkItemGroup(OrleansTaskScheduler sched, ISchedulingContext schedulingContext)
         {
             masterScheduler = sched;
@@ -147,7 +151,12 @@ namespace Orleans.Runtime.Scheduler
             totalQueuingDelay = TimeSpan.Zero;
             quantumExpirations = 0;
             TaskRunner = new ActivationTaskScheduler(this);
-            ExecuteAction = Execute;
+            ExecuteAction = () =>
+            {
+              //  var s = Stopwatch.StartNew();
+                Execute();
+               // Interlocked.Add(ref tratata, s.ElapsedMilliseconds);
+            };
             log = IsSystemPriority ? LogManager.GetLogger("Scheduler." + Name + ".WorkItemGroup", LoggerType.Runtime) : appLogger;
 
             if (StatisticsCollector.CollectShedulerQueuesStats)

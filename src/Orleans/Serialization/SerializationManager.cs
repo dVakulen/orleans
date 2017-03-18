@@ -929,6 +929,7 @@ namespace Orleans.Serialization
         /// <returns>Deep copied clone of the original input object.</returns>
         public object DeepCopy(object original)
         {
+	        return original;
             var context = this.serializationContext.Value;
             context.Reset();
             
@@ -963,6 +964,7 @@ namespace Orleans.Serialization
         /// <returns>Deep copied clone of the original input object.</returns>
         public static object DeepCopyInner(object original, ICopyContext context)
         {
+	        return original;
             if (original == null) return null;
             var sm = context.SerializationManager;
 

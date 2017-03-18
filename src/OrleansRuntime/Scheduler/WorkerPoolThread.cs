@@ -104,6 +104,7 @@ namespace Orleans.Runtime.Scheduler
         protected override void Run()
         {
             // not used anymore
+            return;
             Thread.Sleep(int.MaxValue);
             try
             {

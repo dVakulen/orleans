@@ -1082,7 +1082,7 @@ namespace Orleans.Runtime
 
         static OrleansThreadPool()
         {
-            _workerThreads.AddRange(Enumerable.Range(1, Environment.ProcessorCount * 2 )
+            _workerThreads.AddRange(Enumerable.Range(1, 8)
                 .Select(v => new Thread(() =>
                 {
                     while (true)

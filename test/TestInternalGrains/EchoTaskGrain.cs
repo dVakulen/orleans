@@ -147,7 +147,7 @@ namespace UnitTests.Grains
 
             IManagementGrain mgmtGrain = GrainFactory.GetGrain<IManagementGrain>(0);
             var silos = await mgmtGrain.GetHosts();
-
+            await Task.Delay(1556);
             SiloAddress siloAddress = silos.Where(pair => !pair.Key.Equals(mySilo)).Select(pair => pair.Key).First();
             logger.Info("Sending Ping to remote silo {0}", siloAddress);
 

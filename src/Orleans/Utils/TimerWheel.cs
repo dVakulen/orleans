@@ -71,18 +71,24 @@ namespace Orleans.Runtime
             {
                 if (tl != null)
                 {
+	                bool lockTaken = false;
                     try
                     {
+					
                         if (!tl.QueueLock.TryGet())
                         {
                             continue;
                         }
+	                    lockTaken = true;
 
-                        CheckQueue(tl.Queue);
+						CheckQueue(tl.Queue);
                     }
                     finally
                     {
-                        tl.QueueLock.Release();
+	                    if (lockTaken)
+	                    {
+		                    tl.QueueLock.Release();
+	                    };
                     }
                 }
             }
