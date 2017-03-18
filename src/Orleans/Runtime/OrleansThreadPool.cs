@@ -12,6 +12,7 @@
 =============================================================================*/
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -19,6 +20,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using static Orleans.Runtime.OrleansThreadPool;
 
 #pragma warning disable 0420
 
@@ -37,6 +39,203 @@ using System.Threading;
 
 namespace Orleans.Runtime
 {
+    public class StageStats
+    {
+        [ThreadStatic]
+        private static StageStats context;
+
+        public static StageStats Current
+        {
+            get { return context ?? (context = new StageStats()); }
+            set { context = value; }
+        }
+
+        public Type PreviousT;
+        public static ConcurrentDictionary<Type, bool> qwewqewq = new ConcurrentDictionary<Type, bool>();
+        public Type PreviousT2;
+        public void setT(Type t)
+        {
+            if (PreviousT == t)
+            {
+               // ConsequentlyExecutedBySameThread++;
+                if(ConsequentlyExecutedBySameThread < 2)
+                {
+                    ConsequentlyExecutedBySameThread+=1;
+                }
+                else if(ConsequentlyExecutedBySameThread < 3)
+                {
+
+                    ConsequentlyExecutedBySameThread += 2;
+                }
+                else if (ConsequentlyExecutedBySameThread < 5)
+                {
+
+                    ConsequentlyExecutedBySameThread += 3;
+                }
+                else if (ConsequentlyExecutedBySameThread < 7)
+                {
+
+                    ConsequentlyExecutedBySameThread += 4;
+                }
+                else
+                {
+
+                    ConsequentlyExecutedBySameThread += 7;
+                }
+            }
+            else
+            {
+                qwewqewq.TryAdd(t, true);
+                Interlocked.Add(ref OrleansThreadPool.stage1, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 0;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                   //     Interlocked.Add(ref OrleansThreadPool.stage2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+              //  PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public long ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
+    public static class StatsCont
+    {
+        public static ConcurrentQueue<IStats> stats = new ConcurrentQueue<IStats>();
+    }
+    public interface IStats { }
+    public class WaitAndExecTime : IStats
+    {
+        static WaitAndExecTime()
+        {
+            StatsCont.stats.Enqueue(new WaitAndExecTime());
+        }
+
+        public WaitAndExecTime()
+        {
+
+        }
+        public override string ToString()
+        {
+            return base.ToString();
+        }
+        [ThreadStatic]
+        private static WaitAndExecTime context;
+
+        public static WaitAndExecTime Current
+        {
+            get { return context ?? (context = new WaitAndExecTime()); }
+            set { context = value; }
+        }
+
+        public Type PreviousT;
+
+        public Type PreviousT2;
+      
+       
+    }
+
+    public class NameStats
+    {
+        [ThreadStatic]
+        private static NameStats context;
+
+        public static NameStats Current
+        {
+            get { return context ?? (context = new NameStats()); }
+            set { context = value; }
+        }
+
+        public string PreviousT;
+
+        public string PreviousT2;
+        public void setT(string t)
+        {
+            if (PreviousT == t)
+            {
+                ConsequentlyExecutedBySameThread = ConsequentlyExecutedBySameThread * 2;
+            }
+            else
+            {
+                Interlocked.Add(ref OrleansThreadPool.nameStats1, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 1;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                        Interlocked.Add(ref OrleansThreadPool.nameStats2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+                PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public int ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
+
+    public class ContextStats
+    {
+        [ThreadStatic]
+        private static ContextStats context;
+
+        public static ContextStats Current
+        {
+            get { return context ?? (context = new ContextStats()); }
+            set { context = value; }
+        }
+
+        public string PreviousT;
+
+        public string PreviousT2;
+        public void setT(string t)
+        {
+            if (PreviousT == t)
+            {
+                ConsequentlyExecutedBySameThread++;
+            }
+            else
+            {
+                Interlocked.Add(ref OrleansThreadPool.contextStats1, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 0;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                        Interlocked.Add(ref OrleansThreadPool.contextStats2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+                PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public int ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
     internal static class ThreadPoolGlobals
     {
         //Per-appDomain quantum (in ms) for which the thread keeps processing
@@ -50,6 +249,7 @@ namespace Orleans.Runtime
         public static bool enableWorkerTracking;
 
         public static readonly ThreadPoolWorkQueue workQueue = new ThreadPoolWorkQueue();
+        public static readonly ThreadPoolWorkQueue systemworkQueue = new ThreadPoolWorkQueue();
 
         static ThreadPoolGlobals()
         {
@@ -555,6 +755,8 @@ namespace Orleans.Runtime
             queueTail = queueHead = new QueueSegment();
         }
 
+        public readonly UnfairSemaphore _semaphore = new UnfairSemaphore();
+
         public ThreadPoolWorkQueueThreadLocals EnsureCurrentThreadHasQueue()
         {
             if (null == ThreadPoolWorkQueueThreadLocals.threadLocals)
@@ -569,13 +771,14 @@ namespace Orleans.Runtime
             // Note that there is a separate count in the VM which will also be incremented in this case, 
             // which is handled by RequestWorkerThread.
             //
-            int count = numOutstandingThreadRequests;
+            int count = numOutstandingThreadRequests; // todo: try non static
             while (count < ThreadPoolGlobals.processorCount)
             {
                 int prev = Interlocked.CompareExchange(ref numOutstandingThreadRequests, count + 1, count);
                 if (prev == count)
                 {
-                    OrleansThreadPool.RequestWorkerThread();
+                    _semaphore.Release();
+                    //OrleansThreadPool.RequestWorkerThread();
                     break;
                 }
                 count = prev;
@@ -602,20 +805,24 @@ namespace Orleans.Runtime
                 count = prev;
             }
         }
+        public BlockingCollection<IThreadPoolWorkItem> quuu = new BlockingCollection<IThreadPoolWorkItem>();
 
         public void Enqueue(IThreadPoolWorkItem callback, bool forceGlobal)
         {
+            quuu.Add(callback);
+            return;
             ThreadPoolWorkQueueThreadLocals tl = null;
-            if (!forceGlobal)
-                tl = ThreadPoolWorkQueueThreadLocals.threadLocals;
+        //    if (!forceGlobal)
+                //tl = ThreadPoolWorkQueueThreadLocals.threadLocals;
 
 
-            if (null != tl)
+          //  if (null != tl)
             {
-                tl.workStealingQueue.LocalPush(callback);
+              //  tl.workStealingQueue.LocalPush(callback);
             }
-            else
+          //  else
             {
+                //Console.WriteLine(Thread.CurrentThread.IsThreadPoolThread);
                 QueueSegment head = queueHead;
 
                 while (!head.TryEnqueue(callback))
@@ -633,6 +840,35 @@ namespace Orleans.Runtime
             EnsureThreadRequested();
         }
 
+        public void EnqueueWoGlobal(IThreadPoolWorkItem callback, bool forceGlobal)
+        {
+            ThreadPoolWorkQueueThreadLocals tl = null;
+            if (!forceGlobal)
+                tl = ThreadPoolWorkQueueThreadLocals.threadLocals;
+
+
+            if (null != tl)
+            {
+                tl.workStealingQueue.LocalPush(callback);
+            }
+            else
+            {
+                //Console.WriteLine(Thread.CurrentThread.IsThreadPoolThread);
+                QueueSegment head = queueHead;
+
+                while (!head.TryEnqueue(callback))
+                {
+                    Interlocked.CompareExchange(ref head.Next, new QueueSegment(), null);
+
+                    while (head.Next != null)
+                    {
+                        Interlocked.CompareExchange(ref queueHead, head.Next, head);
+                        head = queueHead;
+                    }
+                }
+            }
+        }
+
         internal bool LocalFindAndPop(IThreadPoolWorkItem callback)
         {
             ThreadPoolWorkQueueThreadLocals tl = ThreadPoolWorkQueueThreadLocals.threadLocals;
@@ -643,6 +879,95 @@ namespace Orleans.Runtime
         }
 
         public void Dequeue(ThreadPoolWorkQueueThreadLocals tl, out IThreadPoolWorkItem callback, out bool missedSteal)
+        {
+            callback = null;
+            missedSteal = false;
+            QueueSegment tail = queueTail;
+            while (true)
+            {
+                if (tail.TryDequeue(out callback))
+                {
+                    Debug.Assert(null != callback);
+                    break;
+                }
+
+                if (null == tail.Next || !tail.IsUsedUp())
+                {
+                    break;
+                }
+                else
+                {
+                    Interlocked.CompareExchange(ref queueTail, tail.Next, tail);
+                    tail = queueTail;
+                }
+            }
+            return;
+            WorkStealingQueue wsq = tl.workStealingQueue;
+
+            wsq.LocalPop(out callback);
+
+            if (null == callback)
+            {
+                 tail = queueTail;
+                while (true)
+                {
+                    if (tail.TryDequeue(out callback))
+                    {
+                        Debug.Assert(null != callback);
+                        break;
+                    }
+
+                    if (null == tail.Next || !tail.IsUsedUp())
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        Interlocked.CompareExchange(ref queueTail, tail.Next, tail);
+                        tail = queueTail;
+                    }
+                }
+            }
+            else
+            {
+                Interlocked.Increment(ref OrleansThreadPool.locals);
+            }
+            //dont steal
+            if (null == callback)
+            {
+               // return;
+                WorkStealingQueue[] otherQueues = allThreadQueues.Current;
+                int c = otherQueues.Length;
+                int maxIndex = c - 1;
+                int i = tl.random.Next(c);
+                while (c > 0)
+                {
+                    i = (i < maxIndex) ? i + 1 : 0;
+                    WorkStealingQueue otherQueue = Volatile.Read(ref otherQueues[i]);
+                    if (otherQueue != null &&
+                        otherQueue != wsq &&
+                        otherQueue.TrySteal(out callback, ref missedSteal))
+                    {
+                        Debug.Assert(null != callback);
+                        {
+                            Interlocked.Increment(ref OrleansThreadPool.steals);
+                        }
+                        break;
+                    }
+                    c--;
+                }
+                if (missedSteal)
+                {
+
+                    Interlocked.Increment(ref OrleansThreadPool.fails);
+                }
+            }
+            {
+                Interlocked.Increment(ref OrleansThreadPool.global);
+            }
+
+        }
+        public void DequeueWithoutSteal(ThreadPoolWorkQueueThreadLocals tl, out IThreadPoolWorkItem callback, out bool missedSteal)
         {
             callback = null;
             missedSteal = false;
@@ -672,32 +997,15 @@ namespace Orleans.Runtime
                     }
                 }
             }
-
-            if (null == callback)
+            else
             {
-                WorkStealingQueue[] otherQueues = allThreadQueues.Current;
-                int c = otherQueues.Length;
-                int maxIndex = c - 1;
-                int i = tl.random.Next(c);
-                while (c > 0)
-                {
-                    i = (i < maxIndex) ? i + 1 : 0;
-                    WorkStealingQueue otherQueue = Volatile.Read(ref otherQueues[i]);
-                    if (otherQueue != null &&
-                        otherQueue != wsq &&
-                        otherQueue.TrySteal(out callback, ref missedSteal))
-                    {
-                        Debug.Assert(null != callback);
-                        break;
-                    }
-                    c--;
-                }
+                Interlocked.Increment(ref OrleansThreadPool.locals);
             }
-        }
 
-        static internal bool Dispatch()
+        }
+        static internal bool Dispatch(ThreadPoolWorkQueue queue)
         {
-            var workQueue = ThreadPoolGlobals.workQueue;
+            var workQueue = queue;
         
 
             //
@@ -722,11 +1030,11 @@ namespace Orleans.Runtime
                 //
                 // Set up our thread-local data
                 //
-                ThreadPoolWorkQueueThreadLocals tl = workQueue.EnsureCurrentThreadHasQueue();
+           //     ThreadPoolWorkQueueThreadLocals tl = workQueue.EnsureCurrentThreadHasQueue();
 
                 //
                 // Loop until our quantum expires.
-                while (true)
+               foreach(var w in queue.quuu.GetConsumingEnumerable())
                 {
                     //
                     // Dequeue and EnsureThreadRequested must be protected from ThreadAbortException.  
@@ -736,8 +1044,13 @@ namespace Orleans.Runtime
                     finally
                     {
                         bool missedSteal = false;
-                        workQueue.Dequeue(tl, out workItem, out missedSteal);
+                       // ThreadPoolGlobals.systemworkQueue.DequeueWithoutSteal(tl, out workItem, out missedSteal);
+                      // if(workItem == null)
+                        {
+                           // workQueue.Dequeue(tl, out workItem, out missedSteal);
+                        }
 
+                        workItem = w;
                         if (workItem == null)
                         {
                             //
@@ -1046,24 +1359,63 @@ namespace Orleans.Runtime
 
     public static class OrleansThreadPool
     {
+        public static int global;
+
+        public static int locals;
+        public static int steals;
+        public static long waits;
+        public static int fails;
+        public static int totalExec;
+        public static long consecExec;
+        public static int consecExec2;
+        public static int consecExec3;
+        public static long stage1;
+        public static int stage2;
+
+
+        public static long InsideClientInvokeworkITem;
+        public static long GrainRefInvoke;
+        public static long AddressMsdg;
+        public static long TransportMsdg;
+
+        public static int nameStats1;
+        public static int nameStats2;
+
+
+        public static int contextStats1;
+        public static int contextStats2;
+
         private static readonly List<Thread> _workerThreads = new List<Thread>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool QueueUserWorkItem(WaitCallback callBack, Object state)
+        public static bool QueueUserWorkItem(WaitCallback callBack, Object state, Type que)
         {
+            IThreadPoolWorkItem tpcallBack = new QueueUserWorkItemCallbackDefaultContext(callBack, state);
+
+            stageQueues[que].Enqueue(tpcallBack, false);
+            return true;
 
             return QueueUserWorkItemHelper(callBack, state);
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool QueueSystemWorkItem(WaitCallback callBack, Object state)
+        public static bool QueueSystemWorkItem(WaitCallback callBack, Object state, Type que)
         {
+            IThreadPoolWorkItem tpcallBack = new QueueUserWorkItemCallbackDefaultContext(callBack, state);
+
+            stageQueues[que].Enqueue(tpcallBack, false);
+            return true;
 
             return QueueUserWorkItemHelper(callBack, state);
         }
 
-        private static int gg;
+        public static int gg;
 
-        private static readonly UnfairSemaphore _semaphore = new UnfairSemaphore();
+        public static long waited;
+        public static long exec;
+
+        public static long OuterWorkExecute;
+        public static long InnerWorkExecute;
+      //  private static readonly UnfairSemaphore _semaphore = new UnfairSemaphore();
 
         public static void NotifyWorkItemComplete()
         {
@@ -1072,31 +1424,143 @@ namespace Orleans.Runtime
 
         public static void RequestWorkerThread()
         {
-            _semaphore.Release();
+            //_semaphore.Release();
         }
 
+        [DllImport("kernel32.dll")]
+        static extern uint GetCurrentThreadId();
 
-        static OrleansThreadPool()
+        private static void SetThreadAffinity(int processorIndex)
         {
-            _workerThreads.AddRange(Enumerable.Range(1, Environment.ProcessorCount * 2 )
-                .Select(v => new Thread(() =>
+            // notify the runtime we are going to use affinity
+            Thread.BeginThreadAffinity();
+
+            // we can now safely access the corresponding native thread
+            var processThread = CurrentProcessThread;
+            var affinity = (1 << processorIndex);
+
+            processThread.ProcessorAffinity = new IntPtr(affinity);
+        }
+
+        private static ProcessThread CurrentProcessThread
+        {
+            get
+            {
+                var threadId = GetCurrentThreadId();
+
+                foreach (ProcessThread processThread in Process.GetCurrentProcess().Threads)
                 {
-                    while (true)
+                    if (processThread.Id == threadId)
                     {
-                        try
-                        {
-                            _semaphore.Wait();
-                            ThreadPoolWorkQueue.Dispatch();
-                        }
-                        catch (Exception ex)
+                        return processThread;
+                    }
+                }
+
+                throw new InvalidOperationException(
+                    string.Format("Could not retrieve native thread with ID: {0}, current managed thread ID was {1}",
+                                  threadId, Thread.CurrentThread.ManagedThreadId));
+            }
+        }
+
+        private static void RemoveThreadAffinity()
+        {
+            var processThread = CurrentProcessThread;
+
+            var affinity = (1 << Environment.ProcessorCount) - 1;
+           // processThread.
+            processThread.ProcessorAffinity = new IntPtr(affinity);
+
+            Thread.EndThreadAffinity();
+        }
+        private static ConcurrentDictionary<Type, ThreadPoolWorkQueue> stageQueues = new ConcurrentDictionary<Type, ThreadPoolWorkQueue>();
+        public static void RegisterStage(Type stage)
+        {
+            var queue = new ThreadPoolWorkQueue();
+            if(!stageQueues.TryAdd(stage, queue))
+            {
+                return;
+            }
+            var nn = 
+           Enumerable.Range(0, 8) //Environment.ProcessorCount  +6
+               .Select(v => new Thread(() =>
+               {
+                    ///  Console.WriteLine("Thread " + v + " is on " + GetCurrentThreadId());
+                    // SetThreadAffinity(v);
+                    while (true)
+                   {
+                       try
+                       {
+                        //   var s = Stopwatch.StartNew();
+                         // // queue._semaphore.Wait();
+                     //      Interlocked.Add(ref waited, s.ElapsedMilliseconds);
+                            //  Console.WriteLine("Thread " + v + " is on " + GetCurrentThreadId());
+                      //      s.Restart();
+                           ThreadPoolWorkQueue.Dispatch(queue);
+                         //  Interlocked.Add(ref exec, s.ElapsedMilliseconds);
+                       }
+                       catch (Exception ex)
 #if !NETSTANDARD
-                        when (!(ex is ThreadAbortException))
+                        when ((ex is ThreadAbortException))
 #endif
                         {
                             // todo: normalize logging
 
                             LogManager.GetLogger("OrleansThreadPool").Log(0, Severity.Error, "", null, ex);
                        }
+                       finally
+                       {
+                            //  RemoveThreadAffinity();
+                        }
+                   }
+               })).ToList();
+
+            for (var i = 0; i < nn.Count; i++)
+            {
+                nn[i].Name = $"OrleansThreadPoolThread_{stage.ToString()}_{i.ToString()}";
+                nn[i].IsBackground = true;
+            }
+            _workerThreads.AddRange(nn);
+           nn.ForEach(v => v.Start());
+        }
+        static OrleansThreadPool()
+        {
+            return;
+//            var types = new List<Type>
+//            {
+//                typeof(Orleans.Runtime.Scheduler.WorkQueue)
+//Orleans.Runtime.Messaging.Gateway+GatewaySender
+//Orleans.Runtime.Messaging.IncomingMessageAgent
+//            }
+            _workerThreads.AddRange(Enumerable.Range(0, 32) //Environment.ProcessorCount  +6
+                .Select(v => new Thread(() =>
+                {
+                  ///  Console.WriteLine("Thread " + v + " is on " + GetCurrentThreadId());
+                   // SetThreadAffinity(v);
+                    while (true)
+                    {
+                        try
+                        {
+                            var s = Stopwatch.StartNew();
+                           // queue._semaphore.Wait();
+                            Interlocked.Add(ref waited, s.ElapsedMilliseconds);
+                          //  Console.WriteLine("Thread " + v + " is on " + GetCurrentThreadId());
+                            s.Restart();
+                            //ThreadPoolWorkQueue.Dispatch();
+                            Interlocked.Add(ref exec, s.ElapsedMilliseconds);
+                        }
+                        catch (Exception ex)
+#if !NETSTANDARD
+                        when ((ex is ThreadAbortException))
+#endif
+                        {
+                            // todo: normalize logging
+
+                            LogManager.GetLogger("OrleansThreadPool").Log(0, Severity.Error, "", null, ex);
+                       }
+                        finally
+                        {
+                          //  RemoveThreadAffinity();
+                        }
                     }
                 })).ToList());
 
@@ -1109,23 +1573,29 @@ namespace Orleans.Runtime
             _workerThreads.ForEach(v => v.Start());
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool QueueUserWorkItem(WaitCallback callBack)
-        {
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //public static bool QueueUserWorkItem(WaitCallback callBack)
+        //{
 
-            return QueueUserWorkItemHelper(callBack, null);
-        }
+        //    return QueueUserWorkItemHelper(callBack, null);
+        //}
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool QueueSystemWorkItem(WaitCallback callBack)
-        {
+        //[MethodImpl(MethodImplOptions.AggressiveInlining)]
+        //public static bool QueueSystemWorkItem(WaitCallback callBack)
+        //{
+        //    IThreadPoolWorkItem tpcallBack = new QueueUserWorkItemCallbackDefaultContext(callBack, null);
 
-            return QueueUserWorkItemHelper(callBack, null);
-        }
+        //    ThreadPoolGlobals.systemworkQueue.Enqueue(tpcallBack, false);
+        //    return true;
+
+        //    return QueueUserWorkItemHelper(callBack, null);
+        //}
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool QueueUserWorkItemHelper(WaitCallback callBack, Object state)
         {
+            //     return ThreadPool.UnsafeQueueUserWorkItem(callBack, state);
+            //  return;
             bool success = false;
 
             //
@@ -1258,7 +1728,7 @@ namespace Orleans.Runtime
         // need to be woken.
 
         [StructLayout(LayoutKind.Sequential)]
-        private sealed class UnfairSemaphore
+        public sealed class UnfairSemaphore
         {
             public const int MaxWorker = 0x7FFF;
 

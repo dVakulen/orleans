@@ -774,7 +774,27 @@ namespace Orleans.Runtime
         /// </summary>
         private void Terminate(bool gracefully)
         {
+            var eeee = Console.ForegroundColor ;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine();
+            Console.WriteLine($"global {OrleansThreadPool.global} local {OrleansThreadPool.locals}  " +
+              $"steals {OrleansThreadPool.steals} fails   {OrleansThreadPool.fails} waits  {OrleansThreadPool.waited} running  {OrleansThreadPool.exec} ");
+            Console.ForegroundColor = eeee;
+            Console.WriteLine();
+            Console.WriteLine($" total exec {OrleansThreadPool.totalExec}  consec exec  {OrleansThreadPool.consecExec}  exec2  {OrleansThreadPool.consecExec2} consequent stage 1 = {OrleansThreadPool.stage1}" +
+                $" consequent stage 2 = {OrleansThreadPool.stage2} ");
             string operation = gracefully ? "Shutdown()" : "Stop()";
+       
+            Console.ForegroundColor = ConsoleColor.DarkYellow;
+            foreach(var z  in StageStats.qwewqewq)
+            {
+                Console.WriteLine($"stage type = " + z.Key.ToString());
+            }
+            Console.WriteLine($" InsideClientInvokeworkITem  {OrleansThreadPool.InsideClientInvokeworkITem}    GrainRefInvoke {OrleansThreadPool.GrainRefInvoke} " +
+                $" AddressMsdg {OrleansThreadPool.AddressMsdg} TransportMsdg = {OrleansThreadPool.TransportMsdg}" );
+            Console.WriteLine($" InnerWorkExecute  {OrleansThreadPool.InnerWorkExecute}    OuterWorkExecute {OrleansThreadPool.OuterWorkExecute} " );
+            Console.ForegroundColor = eeee; Console.WriteLine();
+            Console.WriteLine();
             bool stopAlreadyInProgress = false;
             lock (lockable)
             {
