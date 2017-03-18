@@ -13,6 +13,8 @@ using Orleans.Runtime.GrainDirectory;
 using Orleans.Runtime.Scheduler;
 using Orleans.Serialization;
 using Orleans.Streams;
+using System.Diagnostics;
+using System.Threading;
 
 namespace Orleans.Runtime
 {
@@ -315,11 +317,14 @@ namespace Orleans.Runtime
 
                         throw exc;
                     }
-
+                    var s = Stopwatch.StartNew();
                     resultObject = await InvokeWithInterceptors(target, request, invoker);
+                    Interlocked.Add(ref OrleansThreadPool.InsideClientInvokeworkITem, s.ElapsedMilliseconds);
+
                 }
                 catch (Exception exc1)
                 {
+                    throw;
                     if (invokeExceptionLogger.IsVerbose || message.Direction == Message.Directions.OneWay)
                     {
                         invokeExceptionLogger.Warn(ErrorCode.GrainInvokeException,
@@ -338,6 +343,7 @@ namespace Orleans.Runtime
             }
             catch (Exception exc2)
             {
+                throw;
                 logger.Warn(ErrorCode.Runtime_Error_100329, "Exception during Invoke of message: " + message, exc2);
                 if (message.Direction != Message.Directions.OneWay)
                     SafeSendExceptionResponse(message, exc2);

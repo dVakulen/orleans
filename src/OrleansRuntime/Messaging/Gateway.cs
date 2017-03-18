@@ -371,6 +371,7 @@ namespace Orleans.Runtime.Messaging
 
             protected override void Process(OutgoingClientMessage request)
             {
+                StageStats.Current.setT(GetType());
                 if (Cts.IsCancellationRequested) return;
                 
                 var client = request.Item1;

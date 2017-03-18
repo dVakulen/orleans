@@ -40,6 +40,7 @@ namespace Orleans.Runtime.Scheduler
         {
             workItem.TimeQueued = DateTime.UtcNow;
 
+            StageStats.Current.setT(GetType());
             try
             {
 #if PRIORITIZE_SYSTEM_TASKS

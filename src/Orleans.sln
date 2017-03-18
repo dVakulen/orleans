@@ -1,13 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 14
-VisualStudioVersion = 14.0.25420.1
+# Visual Studio 15
+VisualStudioVersion = 15.0.26228.9
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{013DFD29-E1DB-4968-A67B-C2342E6F5B6E}"
 	ProjectSection(SolutionItems) = preProject
 		Build.cmd = Build.cmd
 		Local.testsettings = Local.testsettings
 		Orleans.SDK.targets = Orleans.SDK.targets
+		Performance1.psess = Performance1.psess
 		SetupTestScript.cmd = SetupTestScript.cmd
 		Test.cmd = Test.cmd
 		TestAll.cmd = TestAll.cmd
@@ -143,11 +144,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrleansCodeGenerator", "Orl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OrleansBondUtils", "OrleansBondUtils\OrleansBondUtils.csproj", "{7A6B8051-5D99-483C-B9B7-444ED57918EC}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TestFSharp", "..\test\TestFSharp\TestFSharp.fsproj", "{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}"
-	ProjectSection(ProjectDependencies) = postProject
-		{E782DD19-51F7-4F66-8217-BACAC33767E4} = {E782DD19-51F7-4F66-8217-BACAC33767E4}
-	EndProjectSection
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestInternalGrains", "..\test\TestInternalGrains\TestInternalGrains.csproj", "{4682ABC1-1A51-4794-8012-DA8E59EBC72E}"
 	ProjectSection(ProjectDependencies) = postProject
 		{E782DD19-51F7-4F66-8217-BACAC33767E4} = {E782DD19-51F7-4F66-8217-BACAC33767E4}
@@ -175,8 +171,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestExtensions", "..\test\TestExtensions\TestExtensions.csproj", "{8FD242B4-EDA9-42CD-BA39-E410B98ADD26}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TestInterfaces", "..\test\TestInterfaces\TestInterfaces.csproj", "{AEFF3B6C-7986-4BF9-85F5-2571DECF8959}"
-EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TestFSharpInterfaces", "..\test\TestFSharpInterfaces\TestFSharpInterfaces.fsproj", "{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TesterInternal", "..\test\TesterInternal\TesterInternal.csproj", "{09610024-F5B9-4065-9557-BD9E36A32421}"
 	ProjectSection(ProjectDependencies) = postProject
@@ -230,6 +224,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Consul.Tests", "..\test\Consul.Tests\Consul.Tests.csproj", "{D964FE9E-008A-4EDB-BBD7-8C57185C7A18}"
 EndProject
 Global
+	GlobalSection(Performance) = preSolution
+		HasPerformanceSessions = true
+	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Debug|x64 = Debug|x64
@@ -365,14 +362,6 @@ Global
 		{7A6B8051-5D99-483C-B9B7-444ED57918EC}.Release|Any CPU.Build.0 = Release|Any CPU
 		{7A6B8051-5D99-483C-B9B7-444ED57918EC}.Release|x64.ActiveCfg = Release|Any CPU
 		{7A6B8051-5D99-483C-B9B7-444ED57918EC}.Release|x64.Build.0 = Release|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Debug|x64.Build.0 = Debug|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Release|x64.ActiveCfg = Release|Any CPU
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD}.Release|x64.Build.0 = Release|Any CPU
 		{4682ABC1-1A51-4794-8012-DA8E59EBC72E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{4682ABC1-1A51-4794-8012-DA8E59EBC72E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4682ABC1-1A51-4794-8012-DA8E59EBC72E}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -453,14 +442,6 @@ Global
 		{AEFF3B6C-7986-4BF9-85F5-2571DECF8959}.Release|Any CPU.Build.0 = Release|Any CPU
 		{AEFF3B6C-7986-4BF9-85F5-2571DECF8959}.Release|x64.ActiveCfg = Release|Any CPU
 		{AEFF3B6C-7986-4BF9-85F5-2571DECF8959}.Release|x64.Build.0 = Release|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Debug|x64.Build.0 = Debug|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Release|x64.ActiveCfg = Release|Any CPU
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A}.Release|x64.Build.0 = Release|Any CPU
 		{09610024-F5B9-4065-9557-BD9E36A32421}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{09610024-F5B9-4065-9557-BD9E36A32421}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{09610024-F5B9-4065-9557-BD9E36A32421}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -646,7 +627,6 @@ Global
 		{47E9AE37-4EAE-48D5-A778-2C80E9A6375F} = {F3C3FA92-FC69-4B94-8914-3B70E624B5B5}
 		{8D937706-F6DA-4D33-B0A9-24A260BD3080} = {4CD3AA9E-D937-48CA-BB6C-158E12257D23}
 		{7A6B8051-5D99-483C-B9B7-444ED57918EC} = {F3C3FA92-FC69-4B94-8914-3B70E624B5B5}
-		{CA8DAB68-17E9-48BF-AFA3-9CCFD4B0A3CD} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{4682ABC1-1A51-4794-8012-DA8E59EBC72E} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{2AE67055-F38A-45F0-AEA7-5754F4814EA5} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{F36AB59B-C632-4965-A8FA-411D029C491E} = {F3C3FA92-FC69-4B94-8914-3B70E624B5B5}
@@ -657,7 +637,6 @@ Global
 		{A9C8FFEC-4947-4F04-BA73-1F17B329A55D} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{8FD242B4-EDA9-42CD-BA39-E410B98ADD26} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{AEFF3B6C-7986-4BF9-85F5-2571DECF8959} = {01F3CC7E-F996-411E-AFD6-72673A826549}
-		{2375D7D5-9B30-493F-9C2E-A6B2811A3C5A} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{09610024-F5B9-4065-9557-BD9E36A32421} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{B99C744A-7F62-430C-9255-E64875D39486} = {01F3CC7E-F996-411E-AFD6-72673A826549}
 		{F3C3FA92-FC69-4B94-8914-3B70E624B5B5} = {4CD3AA9E-D937-48CA-BB6C-158E12257D23}

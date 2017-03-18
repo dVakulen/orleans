@@ -37,6 +37,7 @@ namespace Orleans.Runtime.Scheduler
 
         public override void Execute()
         {
+            base.Execute();
 #if TRACK_DETAILED_STATS
             if (StatisticsCollector.CollectGlobalShedulerStats)
             {

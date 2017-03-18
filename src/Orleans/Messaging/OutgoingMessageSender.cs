@@ -19,16 +19,18 @@ namespace Orleans.Messaging
     internal abstract class OutgoingMessageSender : AsynchQueueAgent<Message>
     {
         private readonly SerializationManager serializationManager;
-
+        private Type w ;
         internal OutgoingMessageSender(string nameSuffix, IMessagingConfiguration config, SerializationManager serializationManager)
             : base(nameSuffix, config)
         {
+            w = GetType();
             this.serializationManager = serializationManager;
         }
-
+        
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         protected override void Process(Message msg)
         {
+            StageStats.Current.setT(GetType());
             if (Log.IsVerbose2) Log.Verbose2("Got a {0} message to send: {1}", msg.Direction, msg);
             bool continueSend = PrepareMessageForSend(msg);
             if (!continueSend) return;

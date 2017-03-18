@@ -40,6 +40,7 @@ namespace Orleans.Runtime.Scheduler
 
         public override void Execute()
         {
+            base.Execute();
             try
             {
                 var grain = activation.GrainInstance;

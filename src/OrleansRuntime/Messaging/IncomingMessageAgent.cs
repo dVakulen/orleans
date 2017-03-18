@@ -24,8 +24,10 @@ namespace Orleans.Runtime.Messaging
             this.dispatcher = dispatcher;
             this.messageFactory = messageFactory;
             OnFault = FaultBehavior.RestartOnFault;
+            var t = GetType();
             processAction = message =>
             {
+                StageStats.Current.setT(t);
                 ReceiveMessage((Message)message);
             };
         }

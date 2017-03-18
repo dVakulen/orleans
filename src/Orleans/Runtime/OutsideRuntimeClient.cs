@@ -271,7 +271,9 @@ namespace Orleans
             listeningCts = new CancellationTokenSource();
             var ct = listeningCts.Token;
             listenForMessages = true;
-			transport.AddTargetBlock(Message.Categories.Application, message =>OrleansThreadPool.QueueUserWorkItem(msgHandler, message)); // tdo: dispatch to somewhere
+            var t = GetType();
+			transport.AddTargetBlock(Message.Categories.Application, message => {
+                StageStats.Current.setT(t); OrleansThreadPool.QueueUserWorkItem(msgHandler, message); }); // tdo: dispatch to somewhere
 			//// Keeping this thread handling it very simple for now. Just queue task on thread pool.
 			//Task.Run(
    //             () =>

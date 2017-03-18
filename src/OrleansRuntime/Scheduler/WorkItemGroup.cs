@@ -270,6 +270,8 @@ namespace Orleans.Runtime.Scheduler
         // thread will be in this method at once -- but other asynch threads may still be queueing tasks, etc.
         public void Execute()
         {
+            var s = new Stopwatch();
+            s.Start();
             lock (lockable)
             {
                 if (state == WorkGroupStatus.Shutdown)
@@ -373,6 +375,7 @@ namespace Orleans.Runtime.Scheduler
                 while (((MaxWorkItemsPerTurn <= 0) || (count <= MaxWorkItemsPerTurn)) &&
                     ((ActivationSchedulingQuantum <= TimeSpan.Zero) || (stopwatch.Elapsed < ActivationSchedulingQuantum)));
                 stopwatch.Stop();
+                Interlocked.Add(ref OrleansThreadPool.InnerWorkExecute, stopwatch.ElapsedMilliseconds);
             }
             catch (Exception ex)
             {
@@ -399,6 +402,8 @@ namespace Orleans.Runtime.Scheduler
                     }
                 }
             }
+
+            Interlocked.Add(ref OrleansThreadPool.OuterWorkExecute, s.ElapsedMilliseconds);
         }
 
         #endregion

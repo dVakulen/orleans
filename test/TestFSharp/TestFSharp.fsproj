@@ -63,6 +63,8 @@
     <Compile Include="..\..\src\Build\GlobalAssemblyInfo.fs">
       <Link>GlobalAssemblyInfo.fs</Link>
     </Compile>
+    <Compile Include="IFSharpBaseInterface.fs" />
+    <Compile Include="IFSharpParameters.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Orleans\Orleans.csproj">

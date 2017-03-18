@@ -5,6 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 using Orleans.CodeGeneration;
 using Orleans.Serialization;
+using System.Threading;
+using System.Diagnostics;
 
 namespace Orleans.Runtime
 {
@@ -317,6 +319,7 @@ namespace Orleans.Runtime
         /// </summary>
         protected Task<T> InvokeMethodAsync<T>(int methodId, object[] arguments, InvokeMethodOptions options = InvokeMethodOptions.None, SiloAddress silo = null)
         {
+            var s = Stopwatch.StartNew();
             object[] argsDeepCopy = null;
             if (arguments != null)
             {
@@ -344,6 +347,7 @@ namespace Orleans.Runtime
             }
 
             resultTask = OrleansTaskExtentions.ConvertTaskViaTcs(resultTask);
+            Interlocked.Add(ref OrleansThreadPool.GrainRefInvoke, s.ElapsedMilliseconds);
             return resultTask.Unbox<T>();
         }
 

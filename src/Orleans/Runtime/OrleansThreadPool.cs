@@ -37,6 +37,168 @@ using System.Threading;
 
 namespace Orleans.Runtime
 {
+    public class StageStats
+    {
+        [ThreadStatic]
+        private static StageStats context;
+
+        public static StageStats Current
+        {
+            get { return context ?? (context = new StageStats()); }
+            set { context = value; }
+        }
+
+        public Type PreviousT;
+
+        public Type PreviousT2;
+        public void setT(Type t)
+        {
+            if (PreviousT == t)
+            {
+               // ConsequentlyExecutedBySameThread++;
+                if(ConsequentlyExecutedBySameThread < 2)
+                {
+                    ConsequentlyExecutedBySameThread+=1;
+                }
+                else if(ConsequentlyExecutedBySameThread < 3)
+                {
+
+                    ConsequentlyExecutedBySameThread += 2;
+                }
+                else if (ConsequentlyExecutedBySameThread < 5)
+                {
+
+                    ConsequentlyExecutedBySameThread += 3;
+                }
+                else if (ConsequentlyExecutedBySameThread < 7)
+                {
+
+                    ConsequentlyExecutedBySameThread += 4;
+                }
+                else
+                {
+
+                    ConsequentlyExecutedBySameThread += 7;
+                }
+            }
+            else
+            {
+                Interlocked.Add(ref OrleansThreadPool.stage1, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 0;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                   //     Interlocked.Add(ref OrleansThreadPool.stage2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+              //  PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public long ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
+
+
+    public class NameStats
+    {
+        [ThreadStatic]
+        private static NameStats context;
+
+        public static NameStats Current
+        {
+            get { return context ?? (context = new NameStats()); }
+            set { context = value; }
+        }
+
+        public string PreviousT;
+
+        public string PreviousT2;
+        public void setT(string t)
+        {
+            if (PreviousT == t)
+            {
+                ConsequentlyExecutedBySameThread = ConsequentlyExecutedBySameThread * 2;
+            }
+            else
+            {
+                Interlocked.Add(ref OrleansThreadPool.nameStats1, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 1;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                        Interlocked.Add(ref OrleansThreadPool.nameStats2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+                PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public int ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
+
+    public class ContextStats
+    {
+        [ThreadStatic]
+        private static ContextStats context;
+
+        public static ContextStats Current
+        {
+            get { return context ?? (context = new ContextStats()); }
+            set { context = value; }
+        }
+
+        public string PreviousT;
+
+        public string PreviousT2;
+        public void setT(string t)
+        {
+            if (PreviousT == t)
+            {
+                ConsequentlyExecutedBySameThread++;
+            }
+            else
+            {
+                Interlocked.Add(ref OrleansThreadPool.contextStats1, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 0;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                        Interlocked.Add(ref OrleansThreadPool.contextStats2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+                PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public int ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
     internal static class ThreadPoolGlobals
     {
         //Per-appDomain quantum (in ms) for which the thread keeps processing
@@ -616,6 +778,7 @@ namespace Orleans.Runtime
             }
             else
             {
+                //Console.WriteLine(Thread.CurrentThread.IsThreadPoolThread);
                 QueueSegment head = queueHead;
 
                 while (!head.TryEnqueue(callback))
@@ -672,9 +835,14 @@ namespace Orleans.Runtime
                     }
                 }
             }
+            else
+            {
+                Interlocked.Increment(ref OrleansThreadPool.locals);
+            }
 
             if (null == callback)
             {
+               // return;
                 WorkStealingQueue[] otherQueues = allThreadQueues.Current;
                 int c = otherQueues.Length;
                 int maxIndex = c - 1;
@@ -688,11 +856,23 @@ namespace Orleans.Runtime
                         otherQueue.TrySteal(out callback, ref missedSteal))
                     {
                         Debug.Assert(null != callback);
+                        {
+                            Interlocked.Increment(ref OrleansThreadPool.steals);
+                        }
                         break;
                     }
                     c--;
                 }
+                if (missedSteal)
+                {
+
+                    Interlocked.Increment(ref OrleansThreadPool.fails);
+                }
             }
+            {
+                Interlocked.Increment(ref OrleansThreadPool.global);
+            }
+
         }
 
         static internal bool Dispatch()
@@ -1046,6 +1226,32 @@ namespace Orleans.Runtime
 
     public static class OrleansThreadPool
     {
+        public static int global;
+
+        public static int locals;
+        public static int steals;
+        public static long waits;
+        public static int fails;
+        public static int totalExec;
+        public static long consecExec;
+        public static int consecExec2;
+        public static int consecExec3;
+        public static long stage1;
+        public static int stage2;
+
+
+        public static long InsideClientInvokeworkITem;
+        public static long GrainRefInvoke;
+        public static long AddressMsdg;
+        public static long TransportMsdg;
+
+        public static int nameStats1;
+        public static int nameStats2;
+
+
+        public static int contextStats1;
+        public static int contextStats2;
+
         private static readonly List<Thread> _workerThreads = new List<Thread>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1061,8 +1267,13 @@ namespace Orleans.Runtime
             return QueueUserWorkItemHelper(callBack, state);
         }
 
-        private static int gg;
+        public static int gg;
 
+        public static long waited;
+        public static long exec;
+
+        public static long OuterWorkExecute;
+        public static long InnerWorkExecute;
         private static readonly UnfairSemaphore _semaphore = new UnfairSemaphore();
 
         public static void NotifyWorkItemComplete()
@@ -1075,28 +1286,82 @@ namespace Orleans.Runtime
             _semaphore.Release();
         }
 
+        [DllImport("kernel32.dll")]
+        static extern uint GetCurrentThreadId();
 
+        private static void SetThreadAffinity(int processorIndex)
+        {
+            // notify the runtime we are going to use affinity
+            Thread.BeginThreadAffinity();
+
+            // we can now safely access the corresponding native thread
+            var processThread = CurrentProcessThread;
+
+            var affinity = (1 << processorIndex);
+
+            processThread.ProcessorAffinity = new IntPtr(affinity);
+        }
+
+        private static ProcessThread CurrentProcessThread
+        {
+            get
+            {
+                var threadId = GetCurrentThreadId();
+
+                foreach (ProcessThread processThread in Process.GetCurrentProcess().Threads)
+                {
+                    if (processThread.Id == threadId)
+                    {
+                        return processThread;
+                    }
+                }
+
+                throw new InvalidOperationException(
+                    string.Format("Could not retrieve native thread with ID: {0}, current managed thread ID was {1}",
+                                  threadId, Thread.CurrentThread.ManagedThreadId));
+            }
+        }
+
+        private static void RemoveThreadAffinity()
+        {
+            var processThread = CurrentProcessThread;
+
+            var affinity = (1 << Environment.ProcessorCount) - 1;
+
+            processThread.ProcessorAffinity = new IntPtr(affinity);
+
+            Thread.EndThreadAffinity();
+        }
         static OrleansThreadPool()
         {
-            _workerThreads.AddRange(Enumerable.Range(1, Environment.ProcessorCount * 2 )
+            _workerThreads.AddRange(Enumerable.Range(0, 16) //Environment.ProcessorCount  +6
                 .Select(v => new Thread(() =>
                 {
+                   // SetThreadAffinity(v);
                     while (true)
                     {
                         try
                         {
+                            var s = Stopwatch.StartNew();
                             _semaphore.Wait();
+                            Interlocked.Add(ref waited, s.ElapsedMilliseconds);
+                            s.Restart();
                             ThreadPoolWorkQueue.Dispatch();
+                            Interlocked.Add(ref exec, s.ElapsedMilliseconds);
                         }
                         catch (Exception ex)
 #if !NETSTANDARD
-                        when (!(ex is ThreadAbortException))
+                        when ((ex is ThreadAbortException))
 #endif
                         {
                             // todo: normalize logging
 
                             LogManager.GetLogger("OrleansThreadPool").Log(0, Severity.Error, "", null, ex);
                        }
+                        finally
+                        {
+                          //  RemoveThreadAffinity();
+                        }
                     }
                 })).ToList());
 
@@ -1126,6 +1391,8 @@ namespace Orleans.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool QueueUserWorkItemHelper(WaitCallback callBack, Object state)
         {
+            //     return ThreadPool.UnsafeQueueUserWorkItem(callBack, state);
+            //  return;
             bool success = false;
 
             //

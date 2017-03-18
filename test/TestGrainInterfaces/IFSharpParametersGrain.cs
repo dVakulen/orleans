@@ -1,11 +1,8 @@
-﻿#if !EXCLUDEFSHARP
-using Orleans;
-using UnitTests.FSharpInterfaces;
+﻿using Orleans;
 
 namespace UnitTests.GrainInterfaces
 {
-    public interface IFSharpParametersGrain<T,U> : IGrainWithGuidKey, IFSharpParameters<T>
+    public interface IFSharpParametersGrain<T,U> : IGrainWithGuidKey
     {
     }
 }
-#endif

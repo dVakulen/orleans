@@ -24,6 +24,7 @@ namespace Orleans.Runtime.Scheduler
 
         public override void Execute()
         {
+            base.Execute();
             target.HandleNewRequest(request);
         }
 
