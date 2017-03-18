@@ -9,50 +9,53 @@ using Orleans.Runtime.Scheduler;
 
 namespace Orleans.Runtime
 {
-    internal class ClientObserverRegistrar : SystemTarget, IClientObserverRegistrar
+    internal class ClientObserverRegistrar : SystemTarget, IClientObserverRegistrar, ISiloStatusListener
     {
         private static readonly TimeSpan EXP_BACKOFF_ERROR_MIN = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan EXP_BACKOFF_ERROR_MAX = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan EXP_BACKOFF_STEP = TimeSpan.FromSeconds(1);
 
         private readonly ILocalGrainDirectory grainDirectory;
-        private readonly ISiloMessageCenter messageCenter;
         private readonly SiloAddress myAddress;
         private readonly OrleansTaskScheduler scheduler;
         private readonly ClusterConfiguration orleansConfig;
-        private readonly TraceLogger logger;
-        private GrainTimer clientRefreshTimer;
+        private readonly Logger logger;
         private Gateway gateway;
-       
 
-        internal ClientObserverRegistrar(SiloAddress myAddr, ISiloMessageCenter mc, ILocalGrainDirectory dir, OrleansTaskScheduler scheduler, ClusterConfiguration config)
-            : base(Constants.ClientObserverRegistrarId, myAddr)
+
+        public ClientObserverRegistrar(
+            ILocalSiloDetails siloDetails,
+            ILocalGrainDirectory dir,
+            OrleansTaskScheduler scheduler,
+            ClusterConfiguration config)
+            : base(Constants.ClientObserverRegistrarId, siloDetails.SiloAddress)
         {
             grainDirectory = dir;
-            messageCenter = mc;
-            myAddress = myAddr;
+            myAddress = siloDetails.SiloAddress;
             this.scheduler = scheduler;
             orleansConfig = config;
-            logger = TraceLogger.GetLogger(typeof(ClientObserverRegistrar).Name);
+            logger = LogManager.GetLogger(typeof(ClientObserverRegistrar).Name);
         }
 
         internal void SetGateway(Gateway gateway)
         {
             this.gateway = gateway;
+            // Only start ClientRefreshTimer if this silo has a gateway.
+            // Need to start the timer in the system target context.
+            scheduler.QueueAction(Start, this.SchedulingContext).Ignore();
         }
 
-        public Task Start()
+        private void Start()
         {
             var random = new SafeRandom();
             var randomOffset = random.NextTimeSpan(orleansConfig.Globals.ClientRegistrationRefresh);
-            clientRefreshTimer = GrainTimer.FromTaskCallback(
-                    OnClientRefreshTimer, 
-                    null, 
-                    randomOffset, 
-                    orleansConfig.Globals.ClientRegistrationRefresh, 
-                    "ClientObserverRegistrar.ClientRefreshTimer");
-            clientRefreshTimer.Start();
-            return TaskDone.Done;
+            this.RegisterTimer(
+                this.OnClientRefreshTimer,
+                null,
+                randomOffset,
+                orleansConfig.Globals.ClientRegistrationRefresh,
+                "ClientObserverRegistrar.ClientRefreshTimer");
+            if (logger.IsVerbose) { logger.Verbose("Client registrar service started successfully."); }
         }
 
         internal void ClientAdded(GrainId clientId)
@@ -70,7 +73,7 @@ namespace Orleans.Runtime
         {
             var addr = GetClientActivationAddress(clientId);
             scheduler.QueueTask(
-                () => ExecuteWithRetries(() => grainDirectory.UnregisterAsync(addr, force:true), ErrorCode.ClientRegistrarFailedToUnregister, String.Format("Directory.UnRegisterAsync {0} failed.", addr)), 
+                () => ExecuteWithRetries(() => grainDirectory.UnregisterAsync(addr, Orleans.GrainDirectory.UnregistrationCause.Force), ErrorCode.ClientRegistrarFailedToUnregister, String.Format("Directory.UnRegisterAsync {0} failed.", addr)), 
                 this.SchedulingContext)
                         .Ignore();
         }
@@ -102,6 +105,7 @@ namespace Orleans.Runtime
 
         private async Task OnClientRefreshTimer(object data)
         {
+            if (gateway == null) return;
             try
             {
                 ICollection<GrainId> clients = gateway.GetConnectedClients().ToList();
@@ -117,16 +121,8 @@ namespace Orleans.Runtime
             }
             catch (Exception exc)
             {
-                int actualExceptions = 1;
-                if (exc is AggregateException)
-                {
-                    AggregateException aggregateException = exc as AggregateException;
-                    actualExceptions = aggregateException.InnerExceptions.Count;
-                    exc = aggregateException.InnerExceptions.First();
-                }
                 logger.Error(ErrorCode.ClientRegistrarTimerFailed, 
-                    String.Format("OnClientRefreshTimer has thrown {0} inner exceptions. Printing the first exception:", actualExceptions), 
-                    exc);
+                    String.Format("OnClientRefreshTimer has thrown an exceptions."), exc);
             }
         }
 
@@ -137,7 +133,17 @@ namespace Orleans.Runtime
             // so every GW needs to behave as a different "activation" with a different ActivationId (its not enough that they have different SiloAddress)
             return ActivationAddress.GetAddress(myAddress, clientId, ActivationId.GetClientGWActivation(clientId, myAddress));
         }
-     }
+
+        public void SiloStatusChangeNotification(SiloAddress updatedSilo, SiloStatus status)
+        {
+            if (status != SiloStatus.Dead)
+            {
+                return;
+            }
+
+            scheduler.QueueTask(() => OnClientRefreshTimer(null), SchedulingContext).Ignore();
+        }
+    }
 }
 
 

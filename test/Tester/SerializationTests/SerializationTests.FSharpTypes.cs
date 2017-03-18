@@ -1,32 +1,35 @@
+#if !EXCLUDEFSHARP
 using Microsoft.FSharp.Core;
 using Orleans.Serialization;
+using TestExtensions;
 using UnitTests.FSharpTypes;
-using Assert = Microsoft.VisualStudio.TestTools.UnitTesting.Assert;
 using Xunit;
-
 
 namespace UnitTests.Serialization
 {
     /// <summary>
     /// Summary description for SerializationTests
     /// </summary>
-    public class SerializationTestsFsharpTypes
+    [Collection(TestEnvironmentFixture.DefaultCollection)]
+    public class SerializationTestsFSharpTypes
     {
-        public SerializationTestsFsharpTypes()
+        private readonly TestEnvironmentFixture fixture;
+
+        public SerializationTestsFSharpTypes(TestEnvironmentFixture fixture)
         {
-            SerializationManager.InitializeForTesting();
+            this.fixture = fixture;
         }
 
         void RoundtripSerializationTest<T>(T input)
         {
-            var output = SerializationManager.RoundTripSerializationForTesting(input);
-            Assert.AreEqual(input, output);
+            var output = this.fixture.SerializationManager.RoundTripSerializationForTesting(input);
+            Assert.Equal(input, output);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("FSharp"), TestCategory("Serialization")]
         public void SerializationTests_FSharp_IntOption_Some()
         {
-            RoundtripSerializationTest(FSharpOption<int>.Some(0));
+            RoundtripSerializationTest(FSharpOption<int>.Some(10));
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("FSharp"), TestCategory("Serialization")]
@@ -54,3 +57,4 @@ namespace UnitTests.Serialization
         }
     }
 }
+#endif

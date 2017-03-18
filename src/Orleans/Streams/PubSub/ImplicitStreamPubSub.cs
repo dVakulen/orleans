@@ -7,15 +7,17 @@ namespace Orleans.Streams
 {
     internal class ImplicitStreamPubSub : IStreamPubSub
     {
+        private readonly IInternalGrainFactory grainFactory;
         private readonly ImplicitStreamSubscriberTable implicitTable;
 
-        public ImplicitStreamPubSub(ImplicitStreamSubscriberTable implicitPubSubTable)
+        public ImplicitStreamPubSub(IInternalGrainFactory grainFactory, ImplicitStreamSubscriberTable implicitPubSubTable)
         {
             if (implicitPubSubTable == null)
             {
                 throw new ArgumentNullException("implicitPubSubTable");
             }
 
+            this.grainFactory = grainFactory;
             this.implicitTable = implicitPubSubTable;
         }
 
@@ -24,7 +26,7 @@ namespace Orleans.Streams
             ISet<PubSubSubscriptionState> result = new HashSet<PubSubSubscriptionState>();
             if (String.IsNullOrWhiteSpace(streamId.Namespace)) return Task.FromResult(result);
 
-            IDictionary<Guid, IStreamConsumerExtension> implicitSubscriptions = implicitTable.GetImplicitSubscribers(streamId);
+            IDictionary<Guid, IStreamConsumerExtension> implicitSubscriptions = implicitTable.GetImplicitSubscribers(streamId, this.grainFactory);
             foreach (var kvp in implicitSubscriptions)
             {
                 GuidId subscriptionId = GuidId.GetGuidId(kvp.Key);
@@ -64,11 +66,7 @@ namespace Orleans.Streams
 
         public Task<List<GuidId>> GetAllSubscriptions(StreamId streamId, IStreamConsumerExtension streamConsumer)
         {
-            if (!IsImplicitSubscriber(streamConsumer, streamId))
-            {
-                throw new ArgumentOutOfRangeException(streamId.ToString(), "Only implicit subscriptions are supported.");
-            }
-            return Task.FromResult(new List<GuidId> { GuidId.GetGuidId(streamConsumer.GetPrimaryKey()) });
+            return Task.FromResult(new List<GuidId> { CreateSubscriptionId(streamId, streamConsumer) });
         }
 
         internal bool IsImplicitSubscriber(IAddressable addressable, StreamId streamId)

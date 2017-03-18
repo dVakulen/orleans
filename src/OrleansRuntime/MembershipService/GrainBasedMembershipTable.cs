@@ -1,8 +1,9 @@
-using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Orleans.Concurrency;
 using Orleans.MultiCluster;
 using Orleans.Runtime.Configuration;
+using Orleans.Serialization;
 
 namespace Orleans.Runtime.MembershipService
 {
@@ -11,13 +12,13 @@ namespace Orleans.Runtime.MembershipService
     internal class GrainBasedMembershipTable : Grain, IMembershipTableGrain
     {
         private InMemoryMembershipTable table;
-        private TraceLogger logger;
+        private Logger logger;
 
         public override Task OnActivateAsync()
         {
-            logger = TraceLogger.GetLogger("GrainBasedMembershipTable", TraceLogger.LoggerType.Runtime);
+            logger = LogManager.GetLogger("GrainBasedMembershipTable", LoggerType.Runtime);
             logger.Info(ErrorCode.MembershipGrainBasedTable1, "GrainBasedMembershipTable Activated.");
-            table = new InMemoryMembershipTable();
+            table = new InMemoryMembershipTable(this.ServiceProvider.GetRequiredService<SerializationManager>());
             return TaskDone.Done;
         }
 
@@ -27,7 +28,7 @@ namespace Orleans.Runtime.MembershipService
             return TaskDone.Done;
         }
 
-        public Task InitializeMembershipTable(GlobalConfiguration config, bool tryInitTableVersion, TraceLogger traceLogger)
+        public Task InitializeMembershipTable(GlobalConfiguration config, bool tryInitTableVersion, Logger traceLogger)
         {
             logger.Info("InitializeMembershipTable {0}.", tryInitTableVersion);
             return TaskDone.Done;

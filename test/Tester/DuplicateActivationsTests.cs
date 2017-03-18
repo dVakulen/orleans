@@ -1,36 +1,37 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
-using Orleans;
+using Orleans.Runtime.Configuration;
 using Orleans.TestingHost;
+using TestExtensions;
 using UnitTests.GrainInterfaces;
-using Tester;
 using Xunit;
 
 namespace UnitTests.CatalogTests
 {
-    public class DuplicateActivationsTestsFixture : BaseClusterFixture
+    public class DuplicateActivationsTests : IClassFixture<DuplicateActivationsTests.Fixture>
     {
-        public DuplicateActivationsTestsFixture()
-        : base(new TestingSiloHost(new TestingSiloOptions
-            {
-                AdjustConfig = config =>
-                {
-                    foreach (var nodeConfig in config.Overrides.Values)
-                    {
-                        nodeConfig.MaxActiveThreads = 1;
-                    }
-                },
-            }))
-        {
-        }
-    }
+        private readonly Fixture fixture;
 
-    public class DuplicateActivationsTests : IClassFixture<DuplicateActivationsTestsFixture>
-    {
+        public class Fixture : BaseTestClusterFixture
+        {
+            protected override TestCluster CreateTestCluster()
+            {
+                var options = new TestClusterOptions(2);
+                options.ClusterConfiguration.Globals.ResponseTimeout = TimeSpan.FromMinutes(1);
+                options.ClusterConfiguration.ApplyToAllNodes(nodeConfig => nodeConfig.MaxActiveThreads = 1);
+                return new TestCluster(options);
+            }
+        }
+
+        public DuplicateActivationsTests(Fixture fixture)
+        {
+            this.fixture = fixture;
+        }
 
         [Fact, TestCategory("Catalog"), TestCategory("Functional")]
-        public void DuplicateActivations()
+        public async Task DuplicateActivations()
         {
             const int nRunnerGrains = 100;
             const int nTargetGRain = 10;
@@ -42,11 +43,11 @@ namespace UnitTests.CatalogTests
             var promises = new List<Task>();
             for (int i = 0; i < nRunnerGrains; i++)
             {
-                runnerGrains[i] = GrainClient.GrainFactory.GetGrain<ICatalogTestGrain>(i.ToString(CultureInfo.InvariantCulture));
+                runnerGrains[i] = this.fixture.GrainFactory.GetGrain<ICatalogTestGrain>(i.ToString(CultureInfo.InvariantCulture));
                 promises.Add(runnerGrains[i].Initialize());
             }
 
-            Task.WhenAll(promises).Wait();
+            await Task.WhenAll(promises);
             promises.Clear();
 
             for (int i = 0; i < nRunnerGrains; i++)
@@ -54,7 +55,7 @@ namespace UnitTests.CatalogTests
                 promises.Add(runnerGrains[i].BlastCallNewGrains(nTargetGRain, startingKey, nCallsToEach));
             }
 
-            Task.WhenAll(promises).Wait();
+            await Task.WhenAll(promises);
         }
     }
 }

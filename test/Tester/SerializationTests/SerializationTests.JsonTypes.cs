@@ -1,23 +1,25 @@
 using System;
-using System.Collections.Generic;
-using Assert = Microsoft.VisualStudio.TestTools.UnitTesting.Assert;
-using Xunit;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Orleans.CodeGeneration;
 using Orleans.Serialization;
+using TestExtensions;
 using UnitTests.GrainInterfaces;
+using Xunit;
 
 namespace UnitTests.Serialization
 {
     /// <summary>
     /// Summary description for SerializationTests
     /// </summary>
+    [Collection(TestEnvironmentFixture.DefaultCollection)]
     public class SerializationTestsJsonTypes
     {
-        public SerializationTestsJsonTypes()
+        private readonly TestEnvironmentFixture fixture;
+
+        public SerializationTestsJsonTypes(TestEnvironmentFixture fixture)
         {
-            SerializationManager.InitializeForTesting();
+            this.fixture = fixture;
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
@@ -32,109 +34,49 @@ namespace UnitTests.Serialization
                    }"; 
  
             JObject input = JObject.Parse(json);
-            JObject output = SerializationManager.RoundTripSerializationForTesting(input);
-            Assert.AreEqual(input.ToString(), output.ToString());
+            JObject output = fixture.SerializationManager.RoundTripSerializationForTesting(input);
+            Assert.Equal(input.ToString(), output.ToString());
         }
 
-        [Fact, TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
-        public void SerializationTests_Json_Guid_WithoutConverter()
-        {
-            Xunit.Assert.Throws(typeof(Microsoft.VisualStudio.TestTools.UnitTesting.AssertFailedException), () =>
-            {
-                var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
-                Do_Json_Guid_Test(settings);
-            });
-        }
-
-        [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
-        public void SerializationTests_Json_Guid_WithConverter()
-        {
-            var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.All };
-            settings.Converters.Add(new GuidJsonTestConverter());
-            Do_Json_Guid_Test(settings);
-        }
-
-        private void Do_Json_Guid_Test(JsonSerializerSettings settings)
-        {
-            var dict = new Dictionary<string, object>
-                {
-                    {"key", Guid.NewGuid()},
-                };
-
-            string dictSerialized = JsonConvert.SerializeObject(dict, settings);
-            var dictDeserialized = JsonConvert.DeserializeObject<Dictionary<string, object>>(dictSerialized, settings);
-            var originalGuid = dict["key"];
-            var deserGuid = dictDeserialized["key"];
-
-            Assert.AreEqual(typeof(Guid), originalGuid.GetType());
-            Assert.AreEqual(typeof(Guid), deserGuid.GetType());
-            Assert.AreEqual(originalGuid, deserGuid);
-        }
-
-        private class GuidJsonTestConverter : JsonConverter
-        { 
-            public override bool CanRead { get { return true; } }
-            public override bool CanWrite { get { return true; } }
-
-            public override bool CanConvert(Type objectType)
-            {
-                return objectType.IsAssignableFrom(typeof(Guid)) || objectType.IsAssignableFrom(typeof(Guid?));
-            }
-
-            public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
-            {
-                if (value == null)
-                {
-                    writer.WriteValue(default(string));
-                }
-                else if (value is Guid)
-                {
-                    var guid = (Guid)value;
-                    writer.WriteValue(guid.ToString("N"));
-                }
-            }
-
-            public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-            {
-                var str = reader.Value as string;
-                return str != null ? Guid.Parse(str) : default(Guid);
-            }
-        }
-
-        [RegisterSerializerAttribute]
+#pragma warning disable 618
+        [RegisterSerializer]
+#pragma warning restore 618
         public class JObjectSerializationExample1
         {
-            static JObjectSerializationExample1()
-            {
-                Register();
-            }
-
-            public static object DeepCopier(object original)
+            public static bool RegisterWasCalled;
+            public static object DeepCopier(object original, ICopyContext context)
             {
                 // I assume JObject is immutable, so no need to deep copy.
                 // Alternatively, can copy via JObject.ToString and JObject.Parse().
                 return original;
             }
 
-            public static void Serializer(object untypedInput, BinaryTokenStreamWriter stream, Type expected)
+            public static void Serializer(object untypedInput, ISerializationContext context, Type expected)
             {
-                var input = (JObject)(untypedInput);
+                var input = (JObject)untypedInput;
                 string str = input.ToString();
-                SerializationManager.Serialize(str, stream);
+                context.SerializationManager.Serialize(str, context.StreamWriter);
             }
 
-            public static object Deserializer(Type expected, BinaryTokenStreamReader stream)
+            public static object Deserializer(Type expected, IDeserializationContext context)
             {
-                var str = (string)(SerializationManager.Deserialize(typeof(string), stream));
+                var str = (string)context.SerializationManager.Deserialize(typeof(string), context.StreamReader);
                 return JObject.Parse(str);
             }
 
-            public static void Register()
+            public static void Register(SerializationManager serializationManager)
             {
-                SerializationManager.Register(typeof(JObject), DeepCopier, Serializer, Deserializer);
+                RegisterWasCalled = true;
+                serializationManager.Register(typeof(JObject), DeepCopier, Serializer, Deserializer);
             }
         }
-        
+
+        [Fact, TestCategory("BVT"), TestCategory("Serialization")]
+        public void SerializationTests_RegisterMethod_IsCalled()
+        {
+            Assert.True(JObjectSerializationExample1.RegisterWasCalled);
+        }
+
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
         public void SerializationTests_Json_InnerTypes_TypeNameHandling()
         {
@@ -142,14 +84,14 @@ namespace UnitTests.Serialization
             var str = JsonConvert.SerializeObject(original, JsonSerializationExample2.Settings);
             var jsonDeser = JsonConvert.DeserializeObject<RootType>(str, JsonSerializationExample2.Settings);
             // JsonConvert fully deserializes the object back into RootType and InnerType since we are using TypeNameHandling.All setting.
-            Assert.AreEqual(typeof(InnerType), original.MyDictionary["obj1"].GetType());
-            Assert.AreEqual(typeof(InnerType), jsonDeser.MyDictionary["obj1"].GetType());
-            Assert.AreEqual(original, jsonDeser);
+            Assert.Equal(typeof(InnerType), original.MyDictionary["obj1"].GetType());
+            Assert.Equal(typeof(InnerType), jsonDeser.MyDictionary["obj1"].GetType());
+            Assert.Equal(original, jsonDeser);
 
             // Orleans's SerializationManager also deserializes everything correctly, but it serializes it into its own binary format
-            var orleansDeser = SerializationManager.RoundTripSerializationForTesting(original);
-            Assert.AreEqual(typeof(InnerType), jsonDeser.MyDictionary["obj1"].GetType());
-            Assert.AreEqual(original, orleansDeser);
+            var orleansDeser = this.fixture.SerializationManager.RoundTripSerializationForTesting(original);
+            Assert.Equal(typeof(InnerType), jsonDeser.MyDictionary["obj1"].GetType());
+            Assert.Equal(original, orleansDeser);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
@@ -160,10 +102,10 @@ namespace UnitTests.Serialization
             var jsonDeser = JsonConvert.DeserializeObject<RootType>(str);
             // Here we don't use TypeNameHandling.All setting, therefore the full type information is not preserved.
             // As a result JsonConvert leaves the inner types as JObjects after Deserialization.
-            Assert.AreEqual(typeof(InnerType), original.MyDictionary["obj1"].GetType());
-            Assert.AreEqual(typeof(JObject), jsonDeser.MyDictionary["obj1"].GetType());
+            Assert.Equal(typeof(InnerType), original.MyDictionary["obj1"].GetType());
+            Assert.Equal(typeof(JObject), jsonDeser.MyDictionary["obj1"].GetType());
             // The below Assert actualy fails since jsonDeser has JObjects instead of InnerTypes!
-            // Assert.AreEqual(original, jsonDeser);
+            // Assert.Equal(original, jsonDeser);
     
             // If we now take this half baked object: RootType at the root and JObject in the leaves
             // and pass it through .NET binary serializer it would fail on this object since JObject is not marked as [Serializable]
@@ -175,16 +117,36 @@ namespace UnitTests.Serialization
             // in GrainInterfaces assembly and markled as [Serializable].
             // JObject that is referenced from RootType will be serialized with JsonSerialization_Example2 below.
 
-            var orleansJsonDeser = SerializationManager.RoundTripSerializationForTesting(jsonDeser);
-            Assert.AreEqual(typeof(JObject), orleansJsonDeser.MyDictionary["obj1"].GetType());
+            var orleansJsonDeser = this.fixture.SerializationManager.RoundTripSerializationForTesting(jsonDeser);
+            Assert.Equal(typeof(JObject), orleansJsonDeser.MyDictionary["obj1"].GetType());
             // The below assert fails, but only since JObject does not correctly implement Equals.
-            //Assert.AreEqual(jsonDeser, orleansJsonDeser);
+            //Assert.Equal(jsonDeser, orleansJsonDeser);
+        }
+
+        [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Serialization"), TestCategory("JSON")]
+        public void SerializationTests_Json_POCO()
+        {
+            var obj = new SimplePOCO();
+            var deepCopied = this.fixture.SerializationManager.RoundTripSerializationForTesting(obj);
+            Assert.Equal(typeof(SimplePOCO), deepCopied.GetType());
+        }
+
+        [Serializable]
+        public class SimplePOCO
+        {
+            public int A { get; set; }
+            public int B { get; set; }
         }
 
         /// <summary>
         /// A different way to configure Json serializer.
         /// </summary>
-        [RegisterSerializer]
+        [Serializer(typeof(JObject))]
+        [Serializer(typeof(JArray))]
+        [Serializer(typeof(JToken))]
+        [Serializer(typeof(JValue))]
+        [Serializer(typeof(JProperty))]
+        [Serializer(typeof(JConstructor))]
         public class JsonSerializationExample2
         {
             internal static readonly JsonSerializerSettings Settings = new JsonSerializerSettings
@@ -193,39 +155,26 @@ namespace UnitTests.Serialization
                 TypeNameHandling = TypeNameHandling.All
             };
 
-            static JsonSerializationExample2()
-            {
-                Register();
-            }
-
-            public static object DeepCopier(object original)
+            [CopierMethod]
+            public static object DeepCopier(object original, ICopyContext context)
             {
                 // I assume JObject is immutable, so no need to deep copy.
                 // Alternatively, can copy via JObject.ToString and JObject.Parse().
                 return original;
             }
 
-            public static void Serialize(object obj, BinaryTokenStreamWriter stream, Type expected)
+            [SerializerMethod]
+            public static void Serialize(object obj, ISerializationContext context, Type expected)
             {
                 var str = JsonConvert.SerializeObject(obj, Settings);
-                SerializationManager.Serialize(str, stream);
+                context.SerializationManager.Serialize(str, context.StreamWriter);
             }
 
-            public static object Deserialize(Type expected, BinaryTokenStreamReader stream)
+            [DeserializerMethod]
+            public static object Deserialize(Type expected, IDeserializationContext context)
             {
-                var str = (string)SerializationManager.Deserialize(typeof(string), stream);
+                var str = (string)context.SerializationManager.Deserialize(typeof(string), context.StreamReader);
                 return JsonConvert.DeserializeObject(str, expected);
-            }
-
-            public static void Register()
-            {
-                foreach (var type in new[]
-                    {
-                        typeof(JObject), typeof(JArray), typeof(JToken), typeof(JValue), typeof(JProperty), typeof(JConstructor), 
-                    })
-                {
-                    SerializationManager.Register(type, DeepCopier, Serialize, Deserialize);
-                }
             }
         }
     }

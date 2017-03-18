@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using Orleans.GrainDirectory;
+using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime.GrainDirectory
 {
@@ -9,19 +10,27 @@ namespace Orleans.Runtime.GrainDirectory
     /// </summary>
     internal class RegistrarManager
     {
+        private readonly GrainTypeManager grainTypeManager;
+
         private readonly Dictionary<Type, IGrainRegistrar> registrars = new Dictionary<Type, IGrainRegistrar>();
 
-        public static RegistrarManager Instance { get; private set; }
-
-
-        private RegistrarManager()
+        public RegistrarManager(
+            GrainDirectoryPartition directoryPartition,
+            GlobalSingleInstanceActivationMaintainer gsiActivationMaintainer,
+            GlobalConfiguration globalConfig,
+            Logger logger,
+            IInternalGrainFactory grainFactory,
+            GrainTypeManager grainTypeManager)
         {
-        }
-
-        public static void InitializeGrainDirectoryManager(LocalGrainDirectory router)
-        {
-            Instance = new RegistrarManager();
-            Instance.Register<ClusterLocalRegistration>(new ClusterLocalRegistrar(router.DirectoryPartition));
+            this.grainTypeManager = grainTypeManager;
+            this.Register<ClusterLocalRegistration>(new ClusterLocalRegistrar(directoryPartition));
+            this.Register<GlobalSingleInstanceRegistration>(
+                new GlobalSingleInstanceRegistrar(
+                    directoryPartition,
+                    logger,
+                    gsiActivationMaintainer,
+                    globalConfig.GlobalSingleInstanceNumberRetries,
+                    grainFactory));
         }
 
         private void Register<TStrategy>(IGrainRegistrar directory)
@@ -40,7 +49,7 @@ namespace Orleans.Runtime.GrainDirectory
             {
                 string unusedGrainClass;
                 PlacementStrategy unusedPlacement;
-                GrainTypeManager.Instance.GetTypeInfo(grainId.GetTypeCode(), out unusedGrainClass, out unusedPlacement, out strategy);
+                this.grainTypeManager.GetTypeInfo(grainId.GetTypeCode(), out unusedGrainClass, out unusedPlacement, out strategy);
             }
             else
             {

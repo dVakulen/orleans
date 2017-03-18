@@ -1,9 +1,9 @@
-﻿using Consul;
-using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Consul;
+using Newtonsoft.Json;
 
 namespace Orleans.Runtime.Host
 {
@@ -55,6 +55,9 @@ namespace Orleans.Runtime.Host
         public SiloStatus Status { get; set; }
 
         [JsonProperty]
+        public String SiloName { get; set; }
+
+        [JsonProperty]
         public List<SuspectingSilo> SuspectingSilos { get; set; }
 
         [JsonConstructor]
@@ -83,9 +86,9 @@ namespace Orleans.Runtime.Host
     /// </summary>
     internal class ConsulSiloRegistrationAssembler
     {
-        private static String DeploymentKVPrefix = "orleans";  //Ensures a root KV namespace for orleans in Consul
-        private static Char KeySeparator = '/';
-        internal static String SiloIAmAliveSuffix = "iamalive";
+        private const string DeploymentKVPrefix = "orleans";  //Ensures a root KV namespace for orleans in Consul
+        private const char KeySeparator = '/';
+        internal const string SiloIAmAliveSuffix = "iamalive";
 
         internal static String ParseDeploymentKVPrefix(String deploymentId)
         {
@@ -136,7 +139,8 @@ namespace Orleans.Runtime.Host
                 ProxyPort = entry.ProxyPort,
                 StartTime = entry.StartTime,
                 Status = entry.Status,
-                SuspectingSilos = entry.SuspectTimes.Select(silo => new SuspectingSilo { Id = silo.Item1.ToParsableString(), Time = silo.Item2 }).ToList()
+                SiloName = entry.SiloName,
+                SuspectingSilos = entry.SuspectTimes?.Select(silo => new SuspectingSilo { Id = silo.Item1.ToParsableString(), Time = silo.Item2 }).ToList()
             };
 
             return ret;
@@ -166,12 +170,12 @@ namespace Orleans.Runtime.Host
                 Status = siloRegistration.Status,
                 ProxyPort = siloRegistration.ProxyPort,
                 StartTime = siloRegistration.StartTime,
-                SuspectTimes = siloRegistration.SuspectingSilos.Select(silo => new Tuple<SiloAddress, DateTime>(SiloAddress.FromParsableString(silo.Id), silo.Time)).ToList(),
+                SuspectTimes = siloRegistration.SuspectingSilos?.Select(silo => new Tuple<SiloAddress, DateTime>(SiloAddress.FromParsableString(silo.Id), silo.Time)).ToList(),
                 IAmAliveTime = siloRegistration.IAmAliveTime,
+                SiloName = siloRegistration.SiloName,
 
                 // Optional - only for Azure role so initialised here
                 RoleName = String.Empty,
-                InstanceName = String.Empty,
                 UpdateZone = 0,
                 FaultZone = 0
             };

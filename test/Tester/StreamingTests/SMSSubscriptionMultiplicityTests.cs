@@ -1,87 +1,82 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
-using Xunit;
 using Orleans;
-using Orleans.Providers.Streams.SimpleMessageStream;
+using Orleans.Runtime;
+using Orleans.Runtime.Configuration;
 using Orleans.TestingHost;
-using UnitTests.Tester;
 using Tester;
+using TestExtensions;
+using Xunit;
 
 namespace UnitTests.StreamingTests
 {
-    public class SMSSubscriptionMultiplicityTestsFixture : BaseClusterFixture
+    public class SMSSubscriptionMultiplicityTests : OrleansTestingBase, IClassFixture<SMSSubscriptionMultiplicityTests.Fixture>
     {
-        public const string SMSStreamProviderName = "SMSProvider";
-
-        public SMSSubscriptionMultiplicityTestsFixture()
-            : base(new TestingSiloHost(
-                new TestingSiloOptions
-                {
-                    StartFreshOrleans = true,
-                    SiloConfigFile = new FileInfo("OrleansConfigurationForStreamingUnitTests.xml"),
-                }, new TestingClientOptions()
-                {
-                    AdjustConfig = config =>
-                    {
-                        config.RegisterStreamProvider<SimpleMessageStreamProvider>(SMSStreamProviderName, new Dictionary<string, string>());
-                    },
-                }))
+        public class Fixture : BaseTestClusterFixture
         {
+            public const string StreamProvider = StreamTestsConstants.SMS_STREAM_PROVIDER_NAME;
+
+            protected override TestCluster CreateTestCluster()
+            {
+                var options = new TestClusterOptions(2);
+
+                options.ClusterConfiguration.AddMemoryStorageProvider("PubSubStore");
+
+                options.ClusterConfiguration.AddSimpleMessageStreamProvider(StreamProvider);
+                options.ClientConfiguration.AddSimpleMessageStreamProvider(StreamProvider);
+                return new TestCluster(options);
+            }
         }
-    }
 
-    public class SMSSubscriptionMultiplicityTests : OrleansTestingBase, IClassFixture<SMSSubscriptionMultiplicityTestsFixture>
-    {
-        
         private const string StreamNamespace = "SMSSubscriptionMultiplicityTestsNamespace";
-        private SubscriptionMultiplicityTestRunner runner;
-        
-        public SMSSubscriptionMultiplicityTests()
+        private readonly SubscriptionMultiplicityTestRunner runner;
+        private readonly Fixture fixture;
+
+        public SMSSubscriptionMultiplicityTests(Fixture fixture)
         {
-            runner = new SubscriptionMultiplicityTestRunner(SMSSubscriptionMultiplicityTestsFixture.SMSStreamProviderName, GrainClient.Logger);
+            this.fixture = fixture;
+            runner = new SubscriptionMultiplicityTestRunner(Fixture.StreamProvider, fixture.HostedCluster);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Streaming")]
         public async Task SMSMultipleSubscriptionTest()
         {
-            logger.Info("************************ SMSMultipleSubscriptionTest *********************************");
+            this.fixture.Logger.Info("************************ SMSMultipleSubscriptionTest *********************************");
             await runner.MultipleParallelSubscriptionTest(Guid.NewGuid(), StreamNamespace);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Streaming")]
         public async Task SMSAddAndRemoveSubscriptionTest()
         {
-            logger.Info("************************ SMSAddAndRemoveSubscriptionTest *********************************");
+            this.fixture.Logger.Info("************************ SMSAddAndRemoveSubscriptionTest *********************************");
             await runner.MultipleSubscriptionTest_AddRemove(Guid.NewGuid(), StreamNamespace);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Streaming")]
         public async Task SMSResubscriptionTest()
         {
-            logger.Info("************************ SMSResubscriptionTest *********************************");
+            this.fixture.Logger.Info("************************ SMSResubscriptionTest *********************************");
             await runner.ResubscriptionTest(Guid.NewGuid(), StreamNamespace);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Streaming")]
         public async Task SMSResubscriptionAfterDeactivationTest()
         {
-            logger.Info("************************ ResubscriptionAfterDeactivationTest *********************************");
+            this.fixture.Logger.Info("************************ ResubscriptionAfterDeactivationTest *********************************");
             await runner.ResubscriptionAfterDeactivationTest(Guid.NewGuid(), StreamNamespace);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Streaming")]
         public async Task SMSActiveSubscriptionTest()
         {
-            logger.Info("************************ SMSActiveSubscriptionTest *********************************");
+            this.fixture.Logger.Info("************************ SMSActiveSubscriptionTest *********************************");
             await runner.ActiveSubscriptionTest(Guid.NewGuid(), StreamNamespace);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Streaming")]
         public async Task SMSSubscribeFromClientTest()
         {
-            logger.Info("************************ SMSSubscribeFromClientTest *********************************");
+            this.fixture.Logger.Info("************************ SMSSubscribeFromClientTest *********************************");
             await runner.SubscribeFromClientTest(Guid.NewGuid(), StreamNamespace);
         }
     }

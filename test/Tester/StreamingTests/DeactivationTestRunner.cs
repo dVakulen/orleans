@@ -1,11 +1,11 @@
 using System;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Orleans;
 using Orleans.Runtime;
 using Orleans.Streams;
-using Orleans.TestingHost;
+using Orleans.TestingHost.Utils;
 using UnitTests.GrainInterfaces;
+using Xunit;
 
 namespace UnitTests.StreamingTests
 {
@@ -13,7 +13,7 @@ namespace UnitTests.StreamingTests
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
         private readonly string streamProviderName;
-        private readonly Logger logger;
+        private IClusterClient client;
 
         private class Counter
         {
@@ -31,21 +31,24 @@ namespace UnitTests.StreamingTests
             }
         }
 
-        public DeactivationTestRunner(string streamProviderName, Logger logger)
+        public DeactivationTestRunner(string streamProviderName, IClusterClient client)
         {
             if (string.IsNullOrWhiteSpace(streamProviderName))
             {
-                throw new ArgumentNullException("streamProviderName");
+                throw new ArgumentNullException(nameof(streamProviderName));
             }
+
+            if (client == null) throw new ArgumentNullException(nameof(client));
+
             this.streamProviderName = streamProviderName;
-            this.logger = logger;
+            this.client = client;
         }
 
         public async Task DeactivationTest(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer = this.client.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer = this.client.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             // subscribe (PubSubRendezvousGrain will have one consumer)
             StreamSubscriptionHandle<int> subscriptionHandle = await consumer.BecomeConsumer(streamGuid, streamNamespace, streamProviderName);
@@ -55,7 +58,9 @@ namespace UnitTests.StreamingTests
             await producer.Produce();
 
             var count = await consumer.GetNumberConsumed();
-            Assert.AreEqual(count[subscriptionHandle].Item1, 1, "Consumer grain has not received stream message");
+
+            var consumerGrainReceivedStreamMessage = count[subscriptionHandle].Item1 == 1;
+            Assert.True(consumerGrainReceivedStreamMessage);
 
             //TODO: trigger deactivation programmatically
             await Task.Delay(TimeSpan.FromMilliseconds(130000)); // wait for the PubSubRendezvousGrain and the SampleStreaming_ProducerGrain to be deactivated
@@ -68,16 +73,17 @@ namespace UnitTests.StreamingTests
 
             // consumer grain should continue to receive stream messages:
             count = await consumer.GetNumberConsumed();
-            Assert.AreEqual(count[subscriptionHandle].Item1, 2, "Consumer did not receive stream messages after PubSubRendezvousGrain and SampleStreaming_ProducerGrain reactivation");
+
+            Assert.True(count[subscriptionHandle].Item1 == 2, "Consumer did not receive stream messages after PubSubRendezvousGrain and SampleStreaming_ProducerGrain reactivation");
         }
         public async Task DeactivationTest_ClientConsumer(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var producer = this.client.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
 
             var count = new Counter();
             // get stream and subscribe
-            IStreamProvider streamProvider = GrainClient.GetStreamProvider(streamProviderName);
+            IStreamProvider streamProvider = this.client.GetStreamProvider(streamProviderName);
             var stream = streamProvider.GetStream<int>(streamGuid, streamNamespace);
             StreamSubscriptionHandle<int> subscriptionHandle = await stream.SubscribeAsync((e, t) => count.Increment());
 
@@ -85,7 +91,7 @@ namespace UnitTests.StreamingTests
             await producer.BecomeProducer(streamGuid, streamNamespace, streamProviderName);
             await producer.Produce();
 
-            Assert.AreEqual(count.Value, 1, "Client consumer grain has not received stream message");
+            Assert.Equal(1, count.Value);
 
             //TODO: trigger deactivation programmatically
             await Task.Delay(TimeSpan.FromMilliseconds(130000)); // wait for the PubSubRendezvousGrain and the SampleStreaming_ProducerGrain to be deactivated
@@ -95,7 +101,7 @@ namespace UnitTests.StreamingTests
             await producer.BecomeProducer(streamGuid, streamNamespace, streamProviderName).WithTimeout(Timeout, "BecomeProducer is hung due to deactivation deadlock");
             await producer.Produce().WithTimeout(Timeout, "Produce is hung due to deactivation deadlock");
 
-            Assert.AreEqual(count.Value, 2, "Client consumer grain did not receive stream messages after PubSubRendezvousGrain and SampleStreaming_ProducerGrain reactivation");
+            Assert.Equal(2, count.Value); // Client consumer grain did not receive stream messages after PubSubRendezvousGrain and SampleStreaming_ProducerGrain reactivation
         }
 
     }

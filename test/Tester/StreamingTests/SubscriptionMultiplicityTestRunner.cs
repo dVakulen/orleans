@@ -1,15 +1,14 @@
-using System.ComponentModel.Design;
-using System.IO;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Orleans;
-using Orleans.Runtime;
-using Orleans.Streams;
-using Orleans.TestingHost;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Orleans;
+using Orleans.Runtime;
+using Orleans.Streams;
+using Orleans.TestingHost;
+using Orleans.TestingHost.Utils;
 using UnitTests.GrainInterfaces;
+using Xunit;
 
 namespace UnitTests.StreamingTests
 {
@@ -18,22 +17,24 @@ namespace UnitTests.StreamingTests
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
         private readonly string streamProviderName;
         private readonly Logger logger;
+        private readonly TestCluster testCluster;
 
-        public SubscriptionMultiplicityTestRunner(string streamProviderName, Logger logger)
+        public SubscriptionMultiplicityTestRunner(string streamProviderName, TestCluster testCluster)
         {
             if (string.IsNullOrWhiteSpace(streamProviderName))
             {
                 throw new ArgumentNullException("streamProviderName");
             }
             this.streamProviderName = streamProviderName;
-            this.logger = logger;
+            this.logger = testCluster.Client.Logger;
+            this.testCluster = testCluster;
         }
 
         public async Task MultipleParallelSubscriptionTest(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             // setup two subscriptions
             StreamSubscriptionHandle<int> firstSubscriptionHandle = await consumer.BecomeConsumer(streamGuid, streamNamespace, streamProviderName);
@@ -57,8 +58,8 @@ namespace UnitTests.StreamingTests
         public async Task MultipleLinearSubscriptionTest(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             await producer.BecomeProducer(streamGuid, streamNamespace, streamProviderName);
 
@@ -93,8 +94,8 @@ namespace UnitTests.StreamingTests
         public async Task MultipleSubscriptionTest_AddRemove(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             await producer.BecomeProducer(streamGuid, streamNamespace, streamProviderName);
 
@@ -140,8 +141,8 @@ namespace UnitTests.StreamingTests
         public async Task ResubscriptionTest(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             await producer.BecomeProducer(streamGuid, streamNamespace, streamProviderName);
 
@@ -157,7 +158,7 @@ namespace UnitTests.StreamingTests
             // Resume
             StreamSubscriptionHandle<int> resumeHandle = await consumer.Resume(firstSubscriptionHandle);
 
-            Assert.AreEqual(firstSubscriptionHandle, resumeHandle, "Handle matches");
+            Assert.Equal(firstSubscriptionHandle, resumeHandle);
 
             await producer.StartPeriodicProducing();
             await Task.Delay(TimeSpan.FromMilliseconds(1000));
@@ -172,8 +173,8 @@ namespace UnitTests.StreamingTests
         public async Task ResubscriptionAfterDeactivationTest(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             await producer.BecomeProducer(streamGuid, streamNamespace, streamProviderName);
 
@@ -198,7 +199,7 @@ namespace UnitTests.StreamingTests
             // Resume
             StreamSubscriptionHandle<int> resumeHandle = await consumer.Resume(firstSubscriptionHandle);
 
-            Assert.AreEqual(firstSubscriptionHandle, resumeHandle, "Handle matches");
+            Assert.Equal(firstSubscriptionHandle, resumeHandle);
 
             await producer.StartPeriodicProducing();
             await Task.Delay(TimeSpan.FromMilliseconds(1000));
@@ -215,7 +216,7 @@ namespace UnitTests.StreamingTests
             const int subscriptionCount = 10;
 
             // get producer and consumer
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var consumer = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             // create expected subscriptions
             IEnumerable<Task<StreamSubscriptionHandle<int>>> subscriptionTasks =
@@ -227,11 +228,11 @@ namespace UnitTests.StreamingTests
             IList<StreamSubscriptionHandle<int>> actualSubscriptions = await consumer.GetAllSubscriptions(streamGuid, streamNamespace, streamProviderName);
 
             // validate
-            Assert.AreEqual(subscriptionCount, actualSubscriptions.Count, "Subscription Count");
-            Assert.AreEqual(subscriptionCount, expectedSubscriptions.Count, "Reported subscription Count");
+            Assert.Equal(subscriptionCount, actualSubscriptions.Count);
+            Assert.Equal(subscriptionCount, expectedSubscriptions.Count);
             foreach (StreamSubscriptionHandle<int> subscription in actualSubscriptions)
             {
-                Assert.IsTrue(expectedSubscriptions.Contains(subscription), "Subscription Match");
+                Assert.True(expectedSubscriptions.Contains(subscription), "Subscription Match");
             }
 
             // unsubscribe from one of the subscriptions
@@ -243,11 +244,11 @@ namespace UnitTests.StreamingTests
             actualSubscriptions = await consumer.GetAllSubscriptions(streamGuid, streamNamespace, streamProviderName);
 
             // validate
-            Assert.AreEqual(subscriptionCount-1, actualSubscriptions.Count, "Subscription Count");
-            Assert.AreEqual(subscriptionCount-1, expectedSubscriptions.Count, "Reported subscription Count");
+            Assert.Equal(subscriptionCount-1, actualSubscriptions.Count);
+            Assert.Equal(subscriptionCount-1, expectedSubscriptions.Count);
             foreach (StreamSubscriptionHandle<int> subscription in actualSubscriptions)
             {
-                Assert.IsTrue(expectedSubscriptions.Contains(subscription), "Subscription Match");
+                Assert.True(expectedSubscriptions.Contains(subscription), "Subscription Match");
             }
 
             // unsubscribe from the rest of the subscriptions
@@ -257,7 +258,7 @@ namespace UnitTests.StreamingTests
             actualSubscriptions = await consumer.GetAllSubscriptions(streamGuid, streamNamespace, streamProviderName);
 
             // validate
-            Assert.AreEqual(0, actualSubscriptions.Count, "Subscription Count");
+            Assert.Equal(0, actualSubscriptions.Count);
         }
 
         public async Task TwoIntermitentStreamTest(Guid streamGuid)
@@ -266,8 +267,8 @@ namespace UnitTests.StreamingTests
             const string streamNamespace2 = "streamNamespace2";
 
             // send events on first stream /////////////////////////////
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             await producer.BecomeProducer(streamGuid, streamNamespace1, streamProviderName);
 
@@ -280,8 +281,8 @@ namespace UnitTests.StreamingTests
             await TestingUtils.WaitUntilAsync(lastTry => CheckCounters(producer, consumer, 1, lastTry), Timeout);
 
             // send some events on second stream /////////////////////////////
-            var producer2 = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
-            var consumer2 = GrainClient.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
+            var producer2 = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var consumer2 = this.testCluster.GrainFactory.GetGrain<IMultipleSubscriptionConsumerGrain>(Guid.NewGuid());
 
             await producer2.BecomeProducer(streamGuid, streamNamespace2, streamProviderName);
 
@@ -307,10 +308,10 @@ namespace UnitTests.StreamingTests
         public async Task SubscribeFromClientTest(Guid streamGuid, string streamNamespace)
         {
             // get producer and consumer
-            var producer = GrainClient.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
+            var producer = this.testCluster.GrainFactory.GetGrain<ISampleStreaming_ProducerGrain>(Guid.NewGuid());
             int eventCount = 0;
 
-            var provider = GrainClient.GetStreamProvider(streamProviderName);
+            var provider = this.testCluster.StreamProviderManager.GetStreamProvider(streamProviderName);
             var stream = provider.GetStream<int>(streamGuid, streamNamespace);
             var handle = await stream.SubscribeAsync((e,t) =>
             {
@@ -338,12 +339,12 @@ namespace UnitTests.StreamingTests
             var numConsumed = await consumer.GetNumberConsumed();
             if (assertIsTrue)
             {
-                Assert.IsTrue(numConsumed.Values.All(v => v.Item2 == 0), "Errors");
-                Assert.IsTrue(numProduced > 0, "Events were not produced");
-                Assert.AreEqual(consumerCount, numConsumed.Count, "Incorrect number of consumers");
+                Assert.True(numConsumed.Values.All(v => v.Item2 == 0), "Errors");
+                Assert.True(numProduced > 0, "Events were not produced");
+                Assert.Equal(consumerCount, numConsumed.Count);
                 foreach (int consumed in numConsumed.Values.Select(v => v.Item1))
                 {
-                    Assert.AreEqual(numProduced, consumed, "Produced and consumed counts do not match");
+                    Assert.Equal(numProduced, consumed);
                 }
             }
             else if (numProduced <= 0 || // no events produced?
@@ -382,8 +383,8 @@ namespace UnitTests.StreamingTests
             var numConsumed = eventCount();
             if (assertIsTrue)
             {
-                Assert.IsTrue(numProduced > 0, "Events were not produced");
-                Assert.AreEqual(numProduced, numConsumed, "Produced and consumed counts do not match");
+                Assert.True(numProduced > 0, "Events were not produced");
+                Assert.Equal(numProduced, numConsumed);
             }
             else if (numProduced <= 0 || // no events produced?
                      numProduced != numConsumed)
