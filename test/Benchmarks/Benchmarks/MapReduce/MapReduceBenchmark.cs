@@ -9,6 +9,8 @@ using BenchmarkGrains.MapReduce;
 using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
 using Orleans.TestingHost;
+using System.Diagnostics;
+using System.Management;
 
 namespace Benchmarks.MapReduce
 {
@@ -33,6 +35,69 @@ namespace Benchmarks.MapReduce
         [Benchmark]
         public async Task Bench()
         {
+            List<string> Sockets = new List<string>();
+
+            int PhysicalCPU = 0;
+
+            int LogicalCPU = 0;
+
+
+            //Create WMI Class
+
+            ManagementClass mc = new ManagementClass("Win32_Processor");
+
+            //Populate class with Processor objects
+
+            ManagementObjectCollection moc = mc.GetInstances();
+
+
+            //Iterate through logical processors
+
+            foreach (ManagementObject mo in moc)
+
+            {
+
+                LogicalCPU++;
+
+
+                string SocketDesignation = mo.Properties["SocketDesignation"].Value.ToString();
+
+
+                //We will count the unique SocketDesignations to find
+
+                //the number of physical CPUs in the system.
+
+                if (!Sockets.Contains(SocketDesignation))
+
+                {
+
+                    Sockets.Add(SocketDesignation);
+
+                }
+
+            }
+
+
+            PhysicalCPU = Sockets.Count;
+
+
+            Console.WriteLine(LogicalCPU + " logical CPUs detected.");
+
+            Console.WriteLine(PhysicalCPU + " physical CPUs detected.");
+
+
+            //Are there more logical than physical cpus?
+
+            //If so, obviously we are hyperthreading.
+
+            if (LogicalCPU > PhysicalCPU)
+
+            {
+
+                Console.WriteLine("HyperThreading is enabled.");
+
+            }
+            var stopWatch = Stopwatch.StartNew();
             var pipelines = Enumerable
                 .Range(0, this._pipelineParallelization)
                 .AsParallel()
@@ -42,7 +107,10 @@ namespace Benchmarks.MapReduce
                     await BenchCore();
                 });
 
-            await Task.WhenAll(pipelines);
+            await Task.WhenAll(pipelines); var messages = _repeats * (_intermediateStagesCount + 2) * 2 + _repeats;
+            Console.WriteLine($"Messages: {messages.ToString()}");
+
+            Console.WriteLine($"Throughput: {((float)messages / stopWatch.ElapsedMilliseconds) * 1000} msg per second");
         }
 
         public void Teardown()
@@ -98,32 +166,14 @@ namespace Benchmarks.MapReduce
             while (Interlocked.Increment(ref this._currentRepeat) < this._repeats)
             {
                 await mapper.SendAsync(this._text);
-                while (!resultList.Any() || resultList.First().Count < 84) // rough way of checking of pipeline completition.
+                while (!resultList.Any() || resultList.First().Count < 1) // rough way of checking of pipeline completition.
                 {
                     resultList = await collector.ReceiveAll();
                 }
             }
         }
 
-        private string _text = @"Historically, the world of data and the world of objects" +
-          @" have not been well integrated. Programmers work in C# or Visual Basic" +
-          @" and also in SQL or XQuery. On the one side are concepts such as classes," +
-          @" objects, fields, inheritance, and .NET Framework APIs. On the other side" +
-          @" are tables, columns, rows, nodes, and separate languages for dealing with" +
-          @" them. Data types often require translation between the two worlds; there are" +
-          @" different standard functions. Because the object world has no notion of query, a" +
-          @" query can only be represented as a string without compile-time type checking or" +
-          @" IntelliSense support in the IDE. Transferring data from SQL tables or XML trees to" +
-          @" objects in memory is often tedious and error-prone. Historically, the world of data and the world of objects" +
-          @" have not been well integrated. Programmers work in C# or Visual Basic" +
-          @" and also in SQL or XQuery. On the one side are concepts such as classes," +
-          @" objects, fields, inheritance, and .NET Framework APIs. On the other side" +
-          @" are tables, columns, rows, nodes, and separate languages for dealing with" +
-          @" them. Data types often require translation between the two worlds; there are" +
-          @" different standard functions. Because the object world has no notion of query, a" +
-          @" query can only be represented as a string without compile-time type checking or" +
-          @" IntelliSense support in the IDE. Transferring data from SQL tables or XML trees to" +
-          @" objects in memory is often tedious and error-prone.";
+        private string _text = @"Historically";
     }
 
 }

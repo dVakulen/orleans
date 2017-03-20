@@ -27,6 +27,7 @@ namespace Orleans.Runtime.Scheduler
 
         internal WorkerPool(OrleansTaskScheduler sched, int maxActiveThreads, bool enableWorkerThreadInjection)
         {
+        
             scheduler = sched;
             MaxActiveThreads = maxActiveThreads;
             EnableWorkerThreadInjection = enableWorkerThreadInjection;
