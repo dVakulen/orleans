@@ -19,9 +19,9 @@ namespace OrleansBenchmarks.MapReduce
     public class MapReduceBenchmark
     {
         private static TestCluster _host;
-        private readonly int _intermediateStagesCount = 15;
+        private readonly int _intermediateStagesCount = 150;
         private readonly int _pipelineParallelization = 4;
-        private readonly int _repeats = 50000;
+        private readonly int _repeats = 30000;
         private int _currentRepeat = 0;
 
         [Setup]
@@ -39,9 +39,9 @@ namespace OrleansBenchmarks.MapReduce
         {
             var stopWatch = Stopwatch.StartNew();
             var pipelines = Enumerable
-                .Range(0, 4) // 4  Environment.ProcessorCount
+                .Range(0, 8) // 4  Environment.ProcessorCount
 				.AsParallel()
-                .WithDegreeOfParallelism(4)
+                .WithDegreeOfParallelism(8)
                 .Select(async i =>
                 {
                     await BenchCore();

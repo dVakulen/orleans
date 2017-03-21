@@ -774,6 +774,14 @@ namespace Orleans.Runtime
         /// </summary>
         private void Terminate(bool gracefully)
         {
+            var eeee = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"innerRepeats {OrleansThreadPool.innerRepeats} outerRepeats {OrleansThreadPool.outerRepeats}  innerMarkRepeats {OrleansThreadPool.innerMarkRepeats} outerMarkRepeats {OrleansThreadPool.outerMarkRepeats}   ");
+
+            Console.WriteLine();
+            // Console.WriteLine($"waitSwitches {OrleansThreadPool.waitSwitches} workSwitches {OrleansThreadPool.workSwitches}  executed items {OrleansThreadPool.ExecutedItems}  ");
+            Console.ForegroundColor = eeee;
+            Console.WriteLine();
             string operation = gracefully ? "Shutdown()" : "Stop()";
             bool stopAlreadyInProgress = false;
             lock (lockable)

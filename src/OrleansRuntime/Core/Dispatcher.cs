@@ -622,7 +622,7 @@ namespace Orleans.Runtime
 			if(catalog.LocalLookup(message.TargetGrain, out localActivation))
 			{
 				var b = localActivation.FirstOrDefault();
-				if (b != null)
+				if (b != null && b.GrainInstance != null)
 				{
 					message.TargetAddress = b.Address;
 					HandleIncomingRequest(message, b);
