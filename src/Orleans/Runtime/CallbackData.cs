@@ -92,6 +92,7 @@ namespace Orleans.Runtime
             }
 
             TimeSpan firstPeriod = timeout;
+            return;
             if (config.ResendOnTimeout && config.MaxResendCount > 0)
             {
                 resendPeriod = firstPeriod = timeout.Divide(config.MaxResendCount + 1);

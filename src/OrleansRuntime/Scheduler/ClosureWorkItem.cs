@@ -37,6 +37,8 @@ namespace Orleans.Runtime.Scheduler
 
         public override void Execute()
         {
+            var b = new TimeTracker("Closure").Track();
+
 #if TRACK_DETAILED_STATS
             if (StatisticsCollector.CollectGlobalShedulerStats)
             {
@@ -44,6 +46,7 @@ namespace Orleans.Runtime.Scheduler
             }
 #endif
             continuation();
+            b.StopTrack(); 
         }
 
         public override WorkItemType ItemType { get { return WorkItemType.Closure; } }

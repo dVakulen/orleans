@@ -71,7 +71,7 @@ namespace Orleans.Runtime
         internal void HandleNewRequest(Message request)
         {
             running = request;
-            this.RuntimeClient.Invoke(this, this, request).Ignore();
+            this.RuntimeClient.Invoke(this, this, request, () => { });
         }
 
         internal void HandleResponse(Message response)

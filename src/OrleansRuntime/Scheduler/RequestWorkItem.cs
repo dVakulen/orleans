@@ -24,7 +24,9 @@ namespace Orleans.Runtime.Scheduler
 
         public override void Execute()
         {
+            var b = new TimeTracker("Request").Track();
             target.HandleNewRequest(request);
+            b.StopTrack();
         }
 
         #endregion

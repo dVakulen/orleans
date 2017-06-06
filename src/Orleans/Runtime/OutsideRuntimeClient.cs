@@ -271,23 +271,23 @@ namespace Orleans
             listeningCts = new CancellationTokenSource();
             var ct = listeningCts.Token;
             listenForMessages = true;
-            transport.AddShortCicruitTargetBlock(Message.Categories.Application, message => ThreadPool.QueueUserWorkItem(msgHandler, message)); // tdo: dispatch to somewhere
+         //   transport.AddShortCicruitTargetBlock(Message.Categories.Application, message => ThreadPool.QueueUserWorkItem(msgHandler, message)); // tdo: dispatch to somewhere
 
-            transport.AddTargetBlock(Message.Categories.Application, message => ThreadPool.QueueUserWorkItem(msgHandler, message)); // tdo: dispatch to somewhere
-			//// Keeping this thread handling it very simple for now. Just queue task on thread pool.
-			//Task.Run(
-   //             () =>
-   //             {
-   //                 try
-   //                 {
-   //                     RunClientMessagePump(ct);
-   //                 }
-   //                 catch (Exception exc)
-   //                 {
-   //                     logger.Error(ErrorCode.Runtime_Error_100326, "RunClientMessagePump has thrown exception", exc);
-   //                 }
-   //             },
-   //             ct).Ignore();
+        //    transport.AddTargetBlock(Message.Categories.Application, message => ThreadPool.QueueUserWorkItem(msgHandler, message)); // tdo: dispatch to somewhere
+                                                                                                                                    //// Keeping this thread handling it very simple for now. Just queue task on thread pool.
+            Task.Run(
+                () =>
+                {
+                    try
+                    {
+                        RunClientMessagePump(ct);
+                    }
+                    catch (Exception exc)
+                    {
+                        logger.Error(ErrorCode.Runtime_Error_100326, "RunClientMessagePump has thrown exception", exc);
+                    }
+                },
+                ct).Ignore();
             grainInterfaceMap = await transport.GetTypeCodeMap(this.InternalGrainFactory);
             
             await ClientStatistics.Start(statisticsProviderManager, transport, clientId)
@@ -303,16 +303,83 @@ namespace Orleans
             }
             while (listenForMessages)
             {
-				Thread.Sleep(int.MaxValue);
-                //if (HandleMessage(ct)) break;
+                var message = transport.WaitMessage(Message.Categories.Application, ct);
+
+                if (message == null) // if wait was cancelled
+                    break;
+#if TRACK_DETAILED_STATS
+                        if (StatisticsCollector.CollectThreadTimeTrackingStats)
+                        {
+                            incomingMessagesThreadTimeTracking.OnStartProcessing();
+                        }
+#endif
+
+                // when we receive the first message, we update the
+                // clientId for this client because it may have been modified to
+                // include the cluster name
+                if (!firstMessageReceived)
+                {
+                    firstMessageReceived = true;
+                    if (!handshakeClientId.Equals(message.TargetGrain))
+                    {
+                        clientId = message.TargetGrain;
+                        transport.UpdateClientId(clientId);
+                        CurrentActivationAddress = ActivationAddress.GetAddress(transport.MyAddress, clientId, CurrentActivationAddress.Activation);
+                    }
+                    else
+                    {
+                        clientId = handshakeClientId;
+                    }
+                }
+
+                switch (message.Direction)
+                {
+                    case Message.Directions.Response:
+                        {
+                            ReceiveResponse(message);
+                            break;
+                        }
+                    case Message.Directions.OneWay:
+                    case Message.Directions.Request:
+                        {
+                            this.DispatchToLocalObject(message);
+                            break;
+                        }
+                    default:
+                        logger.Error(ErrorCode.Runtime_Error_100327, String.Format("Message not supported: {0}.", message));
+                        break;
+                }
+#if TRACK_DETAILED_STATS
+                        if (StatisticsCollector.CollectThreadTimeTrackingStats)
+                        {
+                            incomingMessagesThreadTimeTracking.OnStopProcessing();
+                            incomingMessagesThreadTimeTracking.IncrementNumberOfProcessed();
+                        }
+#endif
             }
             if (StatisticsCollector.CollectThreadTimeTrackingStats)
             {
                 incomingMessagesThreadTimeTracking.OnStopExecution();
             }
         }
+        //    private void RunClientMessagePump(CancellationToken ct)
+        //    {
+        //        if (StatisticsCollector.CollectThreadTimeTrackingStats)
+        //        {
+        //            incomingMessagesThreadTimeTracking.OnStartExecution();
+        //        }
+        //        while (listenForMessages)
+        //        {
+        //Thread.Sleep(int.MaxValue);
+        //            //if (HandleMessage(ct)) break;
+        //        }
+        //        if (StatisticsCollector.CollectThreadTimeTrackingStats)
+        //        {
+        //            incomingMessagesThreadTimeTracking.OnStopExecution();
+        //        }
+        //    }
 
-	    private bool HandleMessage(Message m)
+        private bool HandleMessage(Message m)
 	    {
 		    var message = m;
 

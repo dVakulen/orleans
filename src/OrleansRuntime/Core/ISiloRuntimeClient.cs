@@ -54,6 +54,6 @@ namespace Orleans.Runtime
         void DeactivateOnIdle(ActivationId id);
 
         OrleansTaskScheduler Scheduler { get; }
-        Task Invoke(IAddressable target, IInvokable invokable, Message message);
+        void Invoke(IAddressable target, IInvokable invokable, Message message, Action on);
     }
 }

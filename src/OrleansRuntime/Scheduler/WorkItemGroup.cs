@@ -193,8 +193,11 @@ namespace Orleans.Runtime.Scheduler
         /// <param name="task">The work item to add.</param>
         public void EnqueueTask(IWorkItem task)
         {
-            lock (lockable)
+            var ddd = new TimeTracker("WorkItemGroupEnqueueTaskContention").Track();
+           
+                lock (lockable)
             {
+                ddd.StopTrack();
 #if DEBUG
                 if (log.IsVerbose2) log.Verbose2("EnqueueWorkItem {0} into {1} when TaskScheduler.Current={2}", task, SchedulingContext, TaskScheduler.Current);
 #endif
@@ -286,12 +289,21 @@ namespace Orleans.Runtime.Scheduler
         // Execute one or more turns for this activation. 
         // This method is always called in a single-threaded environment -- that is, no more than one
         // thread will be in this method at once -- but other asynch threads may still be queueing tasks, etc.
+      //  private InterlockedExchangeLock lockkk = new InterlockedExchangeLock();
         public void Execute()
         {
-               lock (lockable)
+            var b = new TimeTracker("WorkItemGroup").Track();
+            //if (!lockkk.TryGet())
+            //{
+            //    StatsCont.TrackNamed("Contention in item group ", 1);
+            //}
+            var ddd = new TimeTracker("WorkItemGroupContention").Track();
+            lock (lockable)
             {
+                ddd.StopTrack();
                 if (state == WorkGroupStatus.Shutdown)
                 {
+                   // lockkk.Release();
                     if (!IsActive) return;  // Don't mind if no work has been queued to this work group yet.
 
                     ReportWorkGroupProblemWithBacktrace(
@@ -301,6 +313,8 @@ namespace Orleans.Runtime.Scheduler
                 }
                 state = WorkGroupStatus.Running;
             }
+
+        ///    lockkk.Release();
 
             var thread = Thread.CurrentThread;
 
@@ -312,8 +326,14 @@ namespace Orleans.Runtime.Scheduler
                 stopwatch.Start();
                 do
                 {
+                  //  if (!lockkk.TryGet())
+                    {
+                  //      StatsCont.TrackNamed("Contention in inner loop item group ", 1);
+                    }
+                    ddd.Track();
                     lock (lockable)
                     {
+                        ddd.StopTrack();
                         if (state == WorkGroupStatus.Shutdown)
                         {
                             if (WorkItemCount > 0)
@@ -337,8 +357,10 @@ namespace Orleans.Runtime.Scheduler
 
                     // Get the first Work Item on the list
                     IWorkItem task;
+                    ddd.Track();
                     lock (lockable)
                     {
+                        ddd.StopTrack();
                         if (workItems.Count > 0)
                             task = workItems.Dequeue();
                         else // If the list is empty, then we're done
@@ -361,7 +383,9 @@ namespace Orleans.Runtime.Scheduler
                         if (StatisticsCollector.CollectTurnsStats)
                             SchedulerStatisticsGroup.OnTurnExecutionStartsByWorkGroup(workItemGroupStatisticsNumber, thread.WorkerThreadStatisticsNumber, SchedulingContext);
 #endif
+                        var ew = new TimeTracker("WorkItemInner").Track();
                         task.Execute();
+                        ew.StopTrack();
                     }
                     catch (Exception ex)
                     {
@@ -385,6 +409,7 @@ namespace Orleans.Runtime.Scheduler
                             log.Warn(ErrorCode.SchedulerTurnTooLong3, "Task {0} in WorkGroup {1} took elapsed time {2:g} for execution, which is longer than {3}. Running on thread {4}",
                                task.ToString(), SchedulingContext.ToString(), taskLength, OrleansTaskScheduler.TurnWarningLengthThreshold, thread.Name ?? string.Empty);
                         }
+                      //  lockkk.Release();
                     }
                     count++;
                 }
@@ -401,8 +426,11 @@ namespace Orleans.Runtime.Scheduler
                 // Now we're not Running anymore. 
                 // If we left work items on our run list, we're Runnable, and need to go back on the silo run queue; 
                 // If our run list is empty, then we're waiting.
+
+                ddd.Track();
                 lock (lockable)
                 {
+                    ddd.StopTrack();
                     if (state != WorkGroupStatus.Shutdown)
                     {
                         if (WorkItemCount > 0)
@@ -416,6 +444,7 @@ namespace Orleans.Runtime.Scheduler
                     }
                 }
               }
+            b.StopTrack();
         }
 
         private void ScheduleExecution()

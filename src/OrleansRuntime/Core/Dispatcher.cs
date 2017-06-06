@@ -245,11 +245,13 @@ namespace Orleans.Runtime
                     MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedError(message, "Ivalid");
                     return;
                 }
+
                 MessagingProcessingStatisticsGroup.OnDispatcherMessageProcessedOk(message);
                 if (Transport.TryDeliverToProxy(message)) return;
 
-               this.catalog.RuntimeClient.ReceiveResponse(message);
+                this.catalog.RuntimeClient.ReceiveResponse(message);
             }
+
         }
 
         /// <summary>
@@ -622,7 +624,7 @@ namespace Orleans.Runtime
 			if(catalog.LocalLookup(message.TargetGrain, out localActivation))
 			{
 				var b = localActivation.FirstOrDefault();
-				if (b != null)
+				if (b != null && b.GrainInstance != null)
 				{
 					message.TargetAddress = b.Address;
 					HandleIncomingRequest(message, b);

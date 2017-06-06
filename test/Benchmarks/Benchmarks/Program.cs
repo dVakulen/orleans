@@ -41,7 +41,7 @@ namespace Benchmarks
         // requires benchmark name or 'All' word as first parameter
         static void Main(string[] args)
         {
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 7; i++)
             {
                 _benchmarks["MapReduce"]();
             }

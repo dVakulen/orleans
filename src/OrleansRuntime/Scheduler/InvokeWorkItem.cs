@@ -40,6 +40,7 @@ namespace Orleans.Runtime.Scheduler
 
         public override void Execute()
         {
+            var b = new TimeTracker("Invoke").Track();
             try
             {
                 var grain = activation.GrainInstance;
@@ -50,8 +51,8 @@ namespace Orleans.Runtime.Scheduler
                     this.dispatcher.OnActivationCompletedRequest(activation, message);
                 };
 
-               runtimeClient.Invoke(grain, this.activation, this.message)
-                    .ContinueWithOptimized(onTaskFinish, onTaskFinish, onTaskFinish);
+                runtimeClient.Invoke(grain, this.activation, this.message, onTaskFinish);
+                   // .ContinueWithOptimized(onTaskFinish, onTaskFinish, onTaskFinish);
 
                 //task.ContinueWithOptimized(onTaskFinish, onTaskFinish, onTaskFinish);
             }
@@ -63,6 +64,7 @@ namespace Orleans.Runtime.Scheduler
                 activation.DecrementInFlightCount();
                 this.dispatcher.OnActivationCompletedRequest(activation, message);
             }
+            b.StopTrack();
         }
 
         #endregion

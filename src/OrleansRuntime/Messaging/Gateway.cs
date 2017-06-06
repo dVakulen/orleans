@@ -463,6 +463,8 @@ namespace Orleans.Runtime.Messaging
                 }
             }
 
+
+          //  private static SemaphoreSlim shhh = new SemaphoreSlim(1);
             private bool Send(Message msg, Socket sock)
             {
                 if (Cts.IsCancellationRequested) return false;
@@ -495,6 +497,7 @@ namespace Orleans.Runtime.Messaging
                 bool exceptionSending = false;
                 bool countMismatchSending = false;
                 string sendErrorStr;
+              //  shhh.Wait();
                 try
                 {
                     bytesSent = sock.Send(data);
@@ -521,6 +524,7 @@ namespace Orleans.Runtime.Messaging
                     sendErrorStr = String.Format("Exception sending to client at {0}: {1}", remoteEndpoint, exc);
                     Log.Warn(ErrorCode.GatewayExceptionSendingToClient, sendErrorStr, exc);
                 }
+              //  shhh.Release();
                 MessagingStatisticsGroup.OnMessageSend(msg.TargetSilo, msg.Direction, bytesSent, headerLength, SocketDirection.GatewayToClient);
                 bool sendError = exceptionSending || countMismatchSending;
                 if (sendError)

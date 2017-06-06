@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.CodeGeneration;
@@ -63,7 +64,7 @@ namespace Orleans.Runtime
             tryResendMessage = msg => this.Dispatcher.TryResendMessage(msg);
             unregisterCallback = msg => UnRegisterCallback(msg.Id);
         }
-        
+
         public IServiceProvider ServiceProvider { get; }
 
         /// <inheritdoc />
@@ -92,17 +93,17 @@ namespace Orleans.Runtime
 
         private Dispatcher Dispatcher => this.dispatcher ?? (this.dispatcher = this.ServiceProvider.GetRequiredService<Dispatcher>());
 
-		#region Implementation of IRuntimeClient
+        #region Implementation of IRuntimeClient
 
-		public void SendRequest<T>(
-			GrainReference target,
-			InvokeMethodRequest request,
-			TaskCompletionSource<T> context,
-			Action<Message, TaskCompletionSource<T>> callback,
-			string debugContext,
-			InvokeMethodOptions options,
-			string genericArguments = null)
-		{
+        public void SendRequest<T>(
+            GrainReference target,
+            InvokeMethodRequest request,
+            TaskCompletionSource<T> context,
+            Action<Message, TaskCompletionSource<T>> callback,
+            string debugContext,
+            InvokeMethodOptions options,
+            string genericArguments = null)
+        {
             var message = this.messageFactory.CreateMessage(request, options);
             SendRequestMessage(target, message, context, callback, debugContext, options, genericArguments);
         }
@@ -192,15 +193,18 @@ namespace Orleans.Runtime
                 callbackData.RegisterTimeout(ResponseTimeout);
             }
 
-            if (targetGrainId.IsSystemTarget)
-            {
-                // Messages to system targets bypass the task system and get sent "in-line"
-                this.Dispatcher.TransportMessage(message);
-            }
-            else
-            {
-                this.Dispatcher.SendMessage(message, sendingActivation);
-            }
+         //   OrleansThreadPool.QueueUserWorkItem((w) =>{
+                if (targetGrainId.IsSystemTarget)
+                {
+                    // Messages to system targets bypass the task system and get sent "in-line"
+                    this.Dispatcher.TransportMessage(message);
+                }
+                else
+                {
+                    this.Dispatcher.SendMessage(message, sendingActivation);
+                }
+            //}, null);
+           
         }
 
         private void SendResponse(Message request, Response response)
@@ -266,7 +270,7 @@ namespace Orleans.Runtime
             }
         }
 
-        public async Task Invoke(IAddressable target, IInvokable invokable, Message message)
+        public void Invoke(IAddressable target, IInvokable invokable, Message message, Action on)
         {
             try
             {
@@ -288,7 +292,7 @@ namespace Orleans.Runtime
                 object resultObject;
                 try
                 {
-                    var request = (InvokeMethodRequest) message.GetDeserializedBody(this.SerializationManager);
+                    var request = (InvokeMethodRequest)message.GetDeserializedBody(this.SerializationManager);
                     if (request.Arguments != null)
                     {
                         CancellationSourcesExtension.RegisterCancellationTokens(target, request, logger, this);
@@ -316,7 +320,21 @@ namespace Orleans.Runtime
                         throw exc;
                     }
 
-                    resultObject = await InvokeWithInterceptors(target, request, invoker);
+                    Action<Task> onSuccess = (t) =>
+                    {
+
+                        if (message.Direction == Message.Directions.OneWay) return;
+
+                        SafeSendResponse(message, (t as Task<object>).Result);
+                        on();
+                    };
+                    InvokeWithInterceptors(target, request, invoker).ContinueWithOptimized(onSuccess, () =>
+                    {
+
+                        SafeSendExceptionResponse(message, new Exception("WW"));
+                    }, () =>
+
+                        SafeSendExceptionResponse(message, new Exception("WW")));
                 }
                 catch (Exception exc1)
                 {
@@ -332,9 +350,9 @@ namespace Orleans.Runtime
                     return;
                 }
 
-                if (message.Direction == Message.Directions.OneWay) return;
+                //if (message.Direction == Message.Directions.OneWay) return;
 
-                SafeSendResponse(message, resultObject);
+                //SafeSendResponse(message, resultObject);
             }
             catch (Exception exc2)
             {
@@ -416,7 +434,7 @@ namespace Orleans.Runtime
 
         private static readonly Lazy<Func<Exception, Exception>> prepForRemotingLazy =
             new Lazy<Func<Exception, Exception>>(CreateExceptionPrepForRemotingMethod);
-        
+
         private static Func<Exception, Exception> CreateExceptionPrepForRemotingMethod()
         {
             var methodInfo = typeof(Exception).GetMethod(
@@ -580,7 +598,7 @@ namespace Orleans.Runtime
         {
             get { return MySilo; }
         }
-        
+
 
         public void Reset(bool cleanup)
         {

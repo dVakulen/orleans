@@ -12,6 +12,7 @@
 =============================================================================*/
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -37,6 +38,444 @@ using System.Threading;
 
 namespace Orleans.Runtime
 {
+    public static class StatsCont
+    {
+        public class TimeContainer
+        {
+            public long Time;
+        }
+        public static ConcurrentDictionary<string, TimeContainer> timestats = new ConcurrentDictionary<string, TimeContainer>();
+        public static void TrackNamed(string name, long value)
+        {
+            TimeContainer v;
+            if(!timestats.TryGetValue(name, out v))
+            {
+                v = new TimeContainer();
+                timestats.TryAdd(name,v);
+            }
+
+            Interlocked.Add(ref v.Time, value);
+        }
+        public static ConcurrentQueue<IStats> stats = new ConcurrentQueue<IStats>();
+    }
+    public interface IStats { }
+    public class WaitAndExecTime : IStats
+    {
+        static WaitAndExecTime()
+        {
+          //  StatsCont.stats.Enqueue(new WaitAndExecTime());
+        }
+
+        public WaitAndExecTime()
+        {
+
+            StatsCont.stats.Enqueue(this);
+        }
+        public override string ToString()
+        {
+            var q = currentProcessThread.TotalProcessorTime - totalstartUsage;
+            var qqq= currentProcessThread.UserProcessorTime - userstartUsage;
+            Console.WriteLine("Totals cpu " + q.TotalMilliseconds + " total user cpu " + qqq);
+            return base.ToString();
+        }
+        [ThreadStatic]
+        private static WaitAndExecTime context;
+
+        public static WaitAndExecTime Current
+        {
+            get { return context ?? (context = new WaitAndExecTime()); }
+            set { context = value; }
+        }
+
+        public Type PreviousT;
+
+        public Type PreviousT2;
+        ProcessThread currentProcessThread;
+        ProcessThread CurrentProcessThread
+        {
+            get
+            {
+                return currentProcessThread ?? (currentProcessThread = OrleansThreadPool.CurrentProcessThread);
+            }
+        }
+        TimeSpan totalstartUsage;
+        TimeSpan userstartUsage;
+        public void Track()
+        {
+            totalstartUsage = CurrentProcessThread.TotalProcessorTime;
+            userstartUsage = CurrentProcessThread.UserProcessorTime;
+        }
+    }
+
+    public class WaitExecTimeStats : ExecTimeStats
+    {
+        private static long elapsed;
+
+        public override long Elapsed => elapsed;
+
+
+        public override void AddTime(long ms)
+        {
+            Interlocked.Add(ref elapsed, ms);
+        }
+        public override string ToString()
+        {
+            return "Wait" + base.ToString();
+
+        }
+
+        static WaitExecTimeStats()
+        {
+            StatsCont.stats.Enqueue(new WaitExecTimeStats());
+        }
+    }
+    public abstract class TimeStatsContainer
+    {
+
+        public static long elapsed;
+
+        public static string Name;
+    }
+
+    public class WorkItemTimeStats : ExecTimeStats
+    {
+        private static long elapsed;
+        TimeStatsContainer cc;
+        public override long Elapsed => elapsed;
+      
+
+        public override void AddTime(long ms)
+        {
+            Interlocked.Add(ref elapsed, ms);
+        }
+        public override string ToString()
+        {
+            return "Wait" + base.ToString();
+
+        }
+
+        static WorkItemTimeStats()
+        {
+           // StatsCont.stats.Enqueue(new WorkItemTimeStats());
+        }
+    }
+
+    public class QueueExecTimeStats : ExecTimeStats
+    {
+        private static long elapsed;
+
+        public override long Elapsed => elapsed;
+
+
+        public override void AddTime(long ms)
+        {
+            Interlocked.Add(ref elapsed, ms);
+        }
+        public override string ToString()
+        {
+            return "Queue" + base.ToString();
+
+        }
+        static QueueExecTimeStats()
+        {
+            StatsCont.stats.Enqueue(new QueueExecTimeStats());
+        }
+    }
+    public class EnsureThreadExecTimeStats : ExecTimeStats
+    {
+        private static long elapsed;
+
+        public override long Elapsed => elapsed;
+
+
+        public override void AddTime(long ms)
+        {
+            Interlocked.Add(ref elapsed, ms);
+        }
+        public override string ToString()
+        {
+            return "EnsureThread" + base.ToString();
+
+        }
+        static EnsureThreadExecTimeStats()
+        {
+            StatsCont.stats.Enqueue(new EnsureThreadExecTimeStats());
+        }
+    }
+
+    public class EnsureThreadExecInnerTimeStats : ExecTimeStats
+    {
+        private static long elapsed;
+
+        public override long Elapsed => elapsed;
+
+
+        public override void AddTime(long ms)
+        {
+            Interlocked.Add(ref elapsed, ms);
+        }
+        public override string ToString()
+        {
+            return "EnsureThreadExecInnerTimeStats" + base.ToString();
+
+        }
+        static EnsureThreadExecInnerTimeStats()
+        {
+            StatsCont.stats.Enqueue(new EnsureThreadExecInnerTimeStats());
+        }
+    }
+    public class DeQueueExecTimeStats : ExecTimeStats
+    {
+        private static long elapsed;
+
+        public override long Elapsed => elapsed;
+
+
+        public override void AddTime(long ms)
+        {
+            Interlocked.Add(ref elapsed, ms);
+        }
+        public override string ToString()
+        {
+            return "DeQueue" + base.ToString();
+
+        }
+
+
+        static DeQueueExecTimeStats()
+        {
+            StatsCont.stats.Enqueue(new DeQueueExecTimeStats());
+        }
+    }
+
+    public abstract class ExecTimeStats : IStats
+    {
+
+        public abstract long Elapsed { get; }
+
+        public abstract void AddTime(long ms);
+        //protected static void Register()
+        //{
+
+        //    StatsCont.stats.Enqueue(Activator.CreateInstance(Ge));
+        //}
+        //static ExecTimeStats()
+        //{
+        //    StatsCont.stats.Enqueue(new ExecTimeStats());
+        //}
+        //public ExecTimeStats()
+        //{
+
+        //    StatsCont.stats.Enqueue(this);
+        //}
+        public override string ToString()
+        {
+          return " Total ms " + Elapsed;
+        }
+        //[ThreadStatic]
+        //private static WaitAndExecTime context;
+
+        //public static WaitAndExecTime Current
+        //{
+        //    get { return context ?? (context = new WaitAndExecTime()); }
+        //    set { context = value; }
+        //}
+
+        private Stopwatch s;
+      
+        public void Track()
+        {
+            s = Stopwatch.StartNew();
+        }
+        public void StopTrack()
+        {
+          //  AddTime(s.ElapsedMilliseconds);
+        }
+
+    }
+
+    public class TimeTracker
+    {
+        public string Name;
+        public TimeTracker(string n)
+        {
+            Name = n;
+        }
+        private Stopwatch s = new Stopwatch();
+        public TimeTracker Track()
+        {
+            s.Restart();
+            return this;
+        }
+        public void StopTrack()
+        {
+      //      StatsCont.TrackNamed(Name, s.ElapsedMilliseconds);
+        }
+        long localCOunt;
+        public void StopTrackLocally()
+        {
+            localCOunt += s.ElapsedMilliseconds;
+        //  StatsCont.TrackNamed(Name, s.ElapsedMilliseconds);
+        }
+        public void FlushLocalCount()
+        {
+           
+
+           // StatsCont.TrackNamed(Name, localCOunt);
+            localCOunt = 0;
+
+        }
+    }
+
+    public class WaitSwitchesStats
+    {
+        [ThreadStatic]
+        private static WaitSwitchesStats context;
+
+        public static WaitSwitchesStats Current
+        {
+            get { return context ?? (context = new WaitSwitchesStats()); }
+            set { context = value; }
+        }
+
+        public int PreviousT;
+
+        public int PreviousT2;
+        public void setT(int t)
+        {
+            Interlocked.Increment(ref OrleansThreadPool.waitSwitches);
+            return;
+            if (PreviousT != t)
+            {
+                PreviousT = t;
+                Interlocked.Increment(ref OrleansThreadPool.waitSwitches);
+                return;
+                ConsequentlyExecutedBySameThread++;
+                if (ConsequentlyExecutedBySameThread < 2)
+                {
+                    ConsequentlyExecutedBySameThread += 1;
+                }
+                else if (ConsequentlyExecutedBySameThread < 3)
+                {
+
+                    ConsequentlyExecutedBySameThread += 2;
+                }
+                else if (ConsequentlyExecutedBySameThread < 5)
+                {
+
+                    ConsequentlyExecutedBySameThread += 3;
+                }
+                else if (ConsequentlyExecutedBySameThread < 7)
+                {
+
+                    ConsequentlyExecutedBySameThread += 4;
+                }
+                else
+                {
+
+                    ConsequentlyExecutedBySameThread += 7;
+                }
+            }
+            else
+            {
+                return;
+                Interlocked.Add(ref OrleansThreadPool.waitSwitches, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 0;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                        //     Interlocked.Add(ref OrleansThreadPool.stage2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+                //  PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public long ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
+    public class SwitchesStats
+    {
+        [ThreadStatic]
+        private static SwitchesStats context;
+
+        public static SwitchesStats Current
+        {
+            get { return context ?? (context = new SwitchesStats()); }
+            set { context = value; }
+        }
+
+        public int PreviousT;
+
+        public int PreviousT2;
+        public void setT(int t)
+        {
+            if (PreviousT != t)
+            {
+                PreviousT = t;
+                Interlocked.Increment(ref OrleansThreadPool.workSwitches);
+                return;
+                ConsequentlyExecutedBySameThread++;
+                return;
+                if (ConsequentlyExecutedBySameThread < 2)
+                {
+                    ConsequentlyExecutedBySameThread += 1;
+                }
+                else if (ConsequentlyExecutedBySameThread < 3)
+                {
+
+                    ConsequentlyExecutedBySameThread += 2;
+                }
+                else if (ConsequentlyExecutedBySameThread < 5)
+                {
+
+                    ConsequentlyExecutedBySameThread += 3;
+                }
+                else if (ConsequentlyExecutedBySameThread < 7)
+                {
+
+                    ConsequentlyExecutedBySameThread += 4;
+                }
+                else
+                {
+
+                    ConsequentlyExecutedBySameThread += 7;
+                }
+            }
+            else
+            {
+                return;
+              //  Interlocked.Add(ref OrleansThreadPool.stage1, ConsequentlyExecutedBySameThread);
+                ConsequentlyExecutedBySameThread = 0;
+                if (PreviousT2 == t)
+                {
+                    ConsequentlyExecutedBySameThread2++;
+                }
+                else
+                {
+                    //     if (curr.ConsequentlyExecutedBySameThread > 0)
+                    {
+                        //     Interlocked.Add(ref OrleansThreadPool.stage2, ConsequentlyExecutedBySameThread2);
+                    }
+                    ConsequentlyExecutedBySameThread2 = 0;
+                }
+
+                //  PreviousT2 = PreviousT;
+                PreviousT = t;
+            }
+        }
+
+        public long ConsequentlyExecutedBySameThread;
+        public int ConsequentlyExecutedBySameThread2;
+    }
     internal static class ThreadPoolGlobals
     {
         //Per-appDomain quantum (in ms) for which the thread keeps processing
@@ -570,17 +1009,27 @@ namespace Orleans.Runtime
             // Note that there is a separate count in the VM which will also be incremented in this case, 
             // which is handled by RequestWorkerThread.
             //
+            var b = new EnsureThreadExecTimeStats();
+            b.Track();
+           // Interlocked.
+            Interlocked.Increment(ref OrleansThreadPool.outerRepeats);
             int count = numOutstandingThreadRequests;
             while (count < ThreadPoolGlobals.processorCount)
             {
+                var qwb = new EnsureThreadExecInnerTimeStats();
+                qwb.Track();
+                Interlocked.Increment(ref OrleansThreadPool.innerRepeats);
                 int prev = Interlocked.CompareExchange(ref numOutstandingThreadRequests, count + 1, count);
                 if (prev == count)
                 {
                     OrleansThreadPool.RequestWorkerThread();
+                    qwb.StopTrack();
                     break;
                 }
                 count = prev;
+                qwb.StopTrack();
             }
+            b.StopTrack();
         }
 
 
@@ -592,9 +1041,12 @@ namespace Orleans.Runtime
             // Note that there is a separate count in the VM which has already been decremented by the VM
             // by the time we reach this point.
             //
+
+            Interlocked.Increment(ref OrleansThreadPool.outerMarkRepeats);
             int count = numOutstandingThreadRequests;
             while (count > 0)
             {
+                Interlocked.Increment(ref OrleansThreadPool.innerMarkRepeats);
                 int prev = Interlocked.CompareExchange(ref numOutstandingThreadRequests, count - 1, count);
                 if (prev == count)
                 {
@@ -699,8 +1151,17 @@ namespace Orleans.Runtime
         static internal bool Dispatch()
         {
             var workQueue = ThreadPoolGlobals.workQueue;
-        
 
+
+            var bqwe = new TimeTracker("DispatchInner");
+
+            var DispatchV2 = new TimeTracker("DispatchV2").Track();
+            var DispatchStage0 = new TimeTracker("DispatchStage0");
+            var DispatchStage1 = new TimeTracker("DispatchStage1");
+            var DispatchStage2 = new TimeTracker("DispatchStage2");
+            var DispatchStage3 = new TimeTracker("DispatchStage3");
+            var DispatchInnerV2 = new TimeTracker("DispatchInnerV2").Track();
+            var DequeueStat = new TimeTracker("DequeueStat");
             //
             // Update our records to indicate that an outstanding request for a thread has now been fulfilled.
             // From this point on, we are responsible for requesting another thread if we stop working for any
@@ -709,9 +1170,9 @@ namespace Orleans.Runtime
             // Note that if this thread is aborted before we get a chance to request another one, the VM will
             // record a thread request on our behalf.  So we don't need to worry about getting aborted right here.
             //
+            DispatchStage0.Track();
             workQueue.MarkThreadRequestSatisfied();
-
-
+            DispatchStage0.StopTrack();
             //
             // Assume that we're going to need another thread if this one returns to the VM.  We'll set this to 
             // false later, but only if we're absolutely certain that the queue is empty.
@@ -720,94 +1181,105 @@ namespace Orleans.Runtime
             IThreadPoolWorkItem workItem = null;
             try
             {
-                //
                 // Set up our thread-local data
                 //
+                //var MarkThreadRequestSatisfied = new TimeTracker("EnsureCurrentThreadHasQueue").Track();
+                DispatchStage1.Track();
                 ThreadPoolWorkQueueThreadLocals tl = workQueue.EnsureCurrentThreadHasQueue();
-                if (tl.workStealingQueue.AddingComplete)
+              //  MarkThreadRequestSatisfied.StopTrack();
+               // if (tl.workStealingQueue.AddingComplete)
                 {
-                    return false;
+                 //   return false;
                 }
+                DispatchStage1.StopTrack();
                 //
                 // Loop until our quantum expires.
-                while (true)
+                try { }
+                finally
                 {
-                    //
-                    // Dequeue and EnsureThreadRequested must be protected from ThreadAbortException.  
-                    // These are fast, so this will not delay aborts/AD-unloads for very long.
-                    //
-                    try { }
-                    finally
+                    while (true)
                     {
-                        bool missedSteal = false;
-                        workQueue.Dequeue(tl, out workItem, out missedSteal);
+                        DispatchStage2.Track();
+                        DispatchInnerV2.Track();
+                        //
+                        //
+                        // Dequeue and EnsureThreadRequested must be protected from ThreadAbortException.  
+                        // These are fast, so this will not delay aborts/AD-unloads for very long.
+                        //
+                        try { }
+                        finally
+                        {
+                            bool missedSteal = false;
 
+                            DequeueStat.Track();
+                            workQueue.Dequeue(tl, out workItem, out missedSteal);
+                            DequeueStat.StopTrackLocally();
+                            if (workItem == null)
+                            {
+                                //
+                                // No work.  We're going to return to the VM once we leave this protected region.
+                                // If we missed a steal, though, there may be more work in the queue.
+                                // Instead of looping around and trying again, we'll just request another thread.  This way
+                                // we won't starve other AppDomains while we spin trying to get locks, and hopefully the thread
+                                // that owns the contended work-stealing queue will pick up its own workitems in the meantime, 
+                                // which will be more efficient than this thread doing it anyway.
+                                //
+                                needAnotherThread = missedSteal;
+                            }
+                            else
+                            {
+                                //
+                                // If we found work, there may be more work.  Ask for another thread so that the other work can be processed
+                                // in parallel.  Note that this will only ask for a max of #procs threads, so it's safe to call it for every dequeue.
+                                // // todo: for now this isn't needed, as threads arent being requested from VM
+                                // workQueue.EnsureThreadRequested();
+                            }
+                        }
+                        DispatchStage2.StopTrackLocally();
+                        DispatchStage3.Track();
                         if (workItem == null)
                         {
-                            //
-                            // No work.  We're going to return to the VM once we leave this protected region.
-                            // If we missed a steal, though, there may be more work in the queue.
-                            // Instead of looping around and trying again, we'll just request another thread.  This way
-                            // we won't starve other AppDomains while we spin trying to get locks, and hopefully the thread
-                            // that owns the contended work-stealing queue will pick up its own workitems in the meantime, 
-                            // which will be more efficient than this thread doing it anyway.
-                            //
-                            needAnotherThread = missedSteal;
+                            // Tell the VM we're returning normally, not because Hill Climbing asked us to return.
+                            break;
                         }
                         else
                         {
                             //
-                            // If we found work, there may be more work.  Ask for another thread so that the other work can be processed
-                            // in parallel.  Note that this will only ask for a max of #procs threads, so it's safe to call it for every dequeue.
-                            // // todo: for now this isn't needed, as threads arent being requested from VM
-                            // workQueue.EnsureThreadRequested();
+                            // Execute the workitem outside of any finally blocks, so that it can be aborted if needed.
+                            //
+                            Interlocked.Increment(ref OrleansThreadPool.ExecutedItems);
+
+                            bqwe.Track();
+                            SwitchesStats.Current.setT((int)OrleansThreadPool.GetCurrentProcessorNumber());
+                            workItem.ExecuteWorkItem();
+                            SwitchesStats.Current.setT(OrleansThreadPool.GetCurrentProcessorNumber());
+                            bqwe.StopTrackLocally();
+
+                            workItem = null;
+
+                            // 
+                            // Notify the VM that we executed this workitem.  This is also our opportunity to ask whether Hill Climbing wants
+                            // us to return the thread to the pool or not.
+                            // todo : for hill climbing 
+                            //if (!ThreadPool.NotifyWorkItemComplete())
+                            //	return false;
                         }
-                    }
-
-                    if (workItem == null)
-                    {
-                        // Tell the VM we're returning normally, not because Hill Climbing asked us to return.
-                        return true;
-                    }
-                    else
-                    {
-                        //
-                        // Execute the workitem outside of any finally blocks, so that it can be aborted if needed.
-                        //
-
-                        workItem.ExecuteWorkItem();
-                        workItem = null;
-
-                        // 
-                        // Notify the VM that we executed this workitem.  This is also our opportunity to ask whether Hill Climbing wants
-                        // us to return the thread to the pool or not.
-                        // todo : for hill climbing 
-                        //if (!ThreadPool.NotifyWorkItemComplete())
-                        //	return false;
+                        DispatchStage3.StopTrackLocally();
+                        DispatchInnerV2.StopTrackLocally();
                     }
                 }
-            }
-#if !NETSTANDARD
-            catch (ThreadAbortException tae)
-            {
-                //
-                // This is here to catch the case where this thread is aborted between the time we exit the finally block in the dispatch
-                // loop, and the time we execute the work item.  QueueUserWorkItemCallback uses this to update its accounting of whether
-                // it was executed or not (in debug builds only).  Task uses this to communicate the ThreadAbortException to anyone
-                // who waits for the task to complete.
-                //
-                workItem?.MarkAborted(tae);
 
-                //
-                // In this case, the VM is going to request another thread on our behalf.  No need to do it twice.
-                // //todo: it wount, thus added EnsureThreadRequested
-                needAnotherThread = false;
-                workQueue.EnsureThreadRequested();
-                // throw;  //no need to explicitly rethrow a ThreadAbortException, and doing so causes allocations on amd64.
+
             }
-#endif
+
             finally
             {
+                DispatchStage2.FlushLocalCount();
+                DispatchStage3.FlushLocalCount();
+                DispatchInnerV2.FlushLocalCount();
+                DispatchV2.StopTrack();
+                bqwe.FlushLocalCount();
+                DequeueStat.FlushLocalCount();
                 //
                 // If we are exiting for any reason other than that the queue is definitely empty, ask for another
                 // thread to pick up where we left off.
@@ -817,7 +1289,7 @@ namespace Orleans.Runtime
             }
 
             // we can never reach this point, but the C# compiler doesn't know that, because it doesn't know the ThreadAbortException will be reraised above.
-            Debug.Assert(false);
+         //   Debug.Assert(false);
             return true;
         }
 
@@ -1050,6 +1522,9 @@ namespace Orleans.Runtime
 
     public static class OrleansThreadPool
     {
+        public static long waitSwitches;
+        public static long ExecutedItems;
+        public static long workSwitches;
         private static readonly List<Thread> _workerThreads = new List<Thread>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1073,28 +1548,90 @@ namespace Orleans.Runtime
         {
             Interlocked.Decrement(ref gg);
         }
+        public static long innerRepeats;
 
+        public static long innerMarkRepeats;
+        public static long outerMarkRepeats;
+        public static long outerRepeats;
         public static void RequestWorkerThread()
         {
             _semaphore.Release();
         }
 
+        [DllImport("kernel32.dll")]
+        static extern uint GetCurrentThreadId();
+        [DllImport("kernel32.dll")]
+        public static extern int GetCurrentProcessorNumber();
+        private static void SetThreadAffinity(int processorIndex)
+        {
+            // notify the runtime we are going to use affinity
+            Thread.BeginThreadAffinity();
+
+            // we can now safely access the corresponding native thread
+            var processThread = CurrentProcessThread;
+
+            var affinity = (1 << processorIndex);
+           // affinity = processorIndex;
+            processThread.ProcessorAffinity = new IntPtr(affinity);
+           // processThread.IdealProcessor = affinity;// new IntPtr(affinity);
+        }
+
+        public static ProcessThread CurrentProcessThread
+        {
+            get
+            {
+                var threadId = GetCurrentThreadId();
+
+                foreach (ProcessThread processThread in Process.GetCurrentProcess().Threads)
+                {
+                    if (processThread.Id == threadId)
+                    {
+                        return processThread;
+                    }
+                }
+
+                throw new InvalidOperationException(
+                    string.Format("Could not retrieve native thread with ID: {0}, current managed thread ID was {1}",
+                                  threadId, Thread.CurrentThread.ManagedThreadId));
+            }
+        }
+
+        private static void RemoveThreadAffinity()
+        {
+            var processThread = CurrentProcessThread;
+
+            var affinity = (1 << Environment.ProcessorCount) - 1;
+            // processThread.
+            processThread.ProcessorAffinity = new IntPtr(affinity);
+
+            Thread.EndThreadAffinity();
+        }
 
         static OrleansThreadPool()
         {
-            _workerThreads.AddRange(Enumerable.Range(1, 8)
+            _workerThreads.AddRange(Enumerable.Range(0, Environment.ProcessorCount * 2)
                 .Select(v => new Thread(() =>
                 {
+                    //SetThreadAffinity(v);
+                   // new WaitAndExecTime().Track();
                     while (true)
                     {
                         try
                         {
-                            _semaphore.Wait();
+                            var b = new WaitExecTimeStats();
+                            b.Track();
+                              _semaphore.Wait();
+                            b.StopTrack();
+                            var ew = new TimeTracker("Dispatch").Track();
+                            //WaitSwitchesStats.Current.setT((int)GetCurrentProcessorNumber());
                             if (!ThreadPoolWorkQueue.Dispatch())
-                            { 
+                            {
+                                ew.StopTrack();
                                 // todo: need to drain local queue into global one if environment still running
                                 return;
                             }
+                            ew.StopTrack();
+                            SwitchesStats.Current.setT((int)GetCurrentProcessorNumber());
                         }
                         catch (Exception ex)
 #if !NETSTANDARD
@@ -1112,6 +1649,7 @@ namespace Orleans.Runtime
             {
                 _workerThreads[i].Name = $"OrleansThreadPoolThread_{i.ToString()}";
                 _workerThreads[i].IsBackground = true;
+                _workerThreads[i].Priority = ThreadPriority.Highest; 
             }
 
             _workerThreads.ForEach(v => v.Start());
@@ -1157,8 +1695,22 @@ namespace Orleans.Runtime
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool QueueUserWorkItemHelper(WaitCallback callBack, Object state)
         {
+          //  return ThreadPool.UnsafeQueueUserWorkItem(callBack, state);
+            //if (!Thread.CurrentThread.IsThreadPoolThread)
+            //{
+            //    if (RuntimeContext.Current == null)
+            //    {
+            //        RuntimeContext.Current = new RuntimeContext
+            //        {
+            //            Scheduler = new O
+            //        };
+            //    }
+            //    callBack(state);
+            //    return true;
+            //}
             bool success = false;
-
+            var b =  new QueueExecTimeStats();
+            b.Track();
             //
             // If we are able to create the workitem, we need to get it in the queue without being interrupted
             // by a ThreadAbortException.
@@ -1172,6 +1724,7 @@ namespace Orleans.Runtime
                 success = true;
             }
 
+            b.StopTrack();
             return success;
         }
 

@@ -6,9 +6,12 @@ using System.Threading.Tasks;
 using BenchmarkGrainInterfaces.MapReduce;
 using BenchmarkGrains.MapReduce;
 using Orleans;
+using Orleans.Concurrency;
 
 namespace OrleansBenchmarkGrains.MapReduce
 {
+    [Reentrant]
+  //  [StatelessWorker]
     public class TransformGrain<TInput, TOutput> : DataflowGrain, ITransformGrain<TInput, TOutput>
     {
         private ITransformProcessor<TInput, TOutput> _processor;
@@ -50,20 +53,40 @@ namespace OrleansBenchmarkGrains.MapReduce
 
 		private static int qewqeq;
 		public async Task SendAsync(TInput t)
-		{
-            //var b = 1;
-            //await Task.Delay(2);
-            //Task.Factory.StartNew(() =>
+        {
+            //var repeatsq = 50;
+            //CountdownEvent qweqweqwe = new CountdownEvent(repeatsq);
+            ////var b = 1;
+            ////await Task.Delay(2);
+            ////Task.Factory.StartNew(() =>
+            ////{
+            ////    var qwe = this;
+            ////    Task.Factory.StartNew(() =>
+            ////    {
+            ////        var qwee = 1;
+            ////    });
+            ////});
+            ////Interlocked.Increment(ref qewqeq);
+            ////Console.WriteLine(qewqeq);
+            //var tqc = new TaskCompletionSource<int>();
+            //for (int i = 0; i < repeatsq ; i++)
             //{
-            //    var qwe = this;
-            //    Task.Factory.StartNew(() =>
-            //    {
-            //        var qwee = 1;
+            //    //   await SomeAsyncTask().ConfigureScheduler(aweqweqw);
+            //    //    slim.Release();
+            //    //   // await slim.WaitAsync();
+            //    //    await Task.Delay(0);
+            //    Task.Factory.StartNew(() => {
+            //       /// if(TaskScheduler.Current is ActivationTa)
+            //        qweqweqwe.Signal();
+            //        if (qweqweqwe.IsSet)
+            //        {
+            //            tqc.SetResult(3);
+            //        }
             //    });
-            //});
-            //Interlocked.Increment(ref qewqeq);
-            //Console.WriteLine(qewqeq);
-            _target.SendAsync(_processor.Process(t));
+            //}
+            //await tqc.Task;
+            //qweqweqwe.Wait();
+             await   _target.SendAsync(_processor.Process(t));
         }
 
         public Task SendAsync(TInput t, GrainCancellationToken gct)

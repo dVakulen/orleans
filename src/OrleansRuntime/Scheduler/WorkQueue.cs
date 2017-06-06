@@ -24,7 +24,10 @@ namespace Orleans.Runtime.Scheduler
             _scheduler = scheduler;
             processAction = item =>
             {
+                var b = new TimeTracker("WorkQueuePRoces (Total workitems sum ").Track();
                 ProcessWorkItem((IWorkItem) item);
+
+              b.StopTrack();
             };
             if (!StatisticsCollector.CollectShedulerQueuesStats) return;
 
