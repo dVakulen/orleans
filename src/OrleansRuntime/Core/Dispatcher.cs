@@ -359,7 +359,7 @@ namespace Orleans.Runtime
             if (!invocationInfoAccessor.TryGetInvocationInfoList(incoming, out callChain))
             {
                 // first call
-                return true;
+                return false;
             }
 
             ActivationId nextActivationId = incoming.TargetActivation;

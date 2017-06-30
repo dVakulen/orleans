@@ -55,19 +55,7 @@ namespace UnitTests.General
                 List<Tuple<long, bool>> callChain = new List<Tuple<long, bool>>();
                 callChain.Add(new Tuple<long, bool>(grainId, true));
                 callChain.Add(new Tuple<long, bool>(grainId, true));
-
-                try
-                {
-                    await firstGrain.CallNext_1(callChain, 1);
-                }
-                catch (Exception exc)
-                {
-                    Exception baseExc = exc.GetBaseException();
-                    this.fixture.Logger.Info(baseExc.Message);
-                    Assert.Equal(typeof(DeadlockException), baseExc.GetType());
-                    DeadlockException deadlockExc = (DeadlockException)baseExc;
-                    Assert.Equal(callChain.Count, deadlockExc.CallChain.Count());
-                }
+                await firstGrain.CallNext_1(callChain, 1);
             }
         }
 
@@ -89,7 +77,7 @@ namespace UnitTests.General
             }
         }
 
-        // 3) Deadlock C, A, C, A
+        // 3) Allowed reentrancy C, A, C, A
         [Fact, TestCategory("Functional"), TestCategory("Deadlock")]
         public async Task DeadlockDetection_3()
         {
@@ -104,19 +92,7 @@ namespace UnitTests.General
                 callChain.Add(new Tuple<long, bool>(grainId, true));
                 callChain.Add(new Tuple<long, bool>(cBase + grainId, false));
                 callChain.Add(new Tuple<long, bool>(grainId, true));
-
-                try
-                {
-                    await firstGrain.CallNext_1(callChain, 1);
-                }
-                catch (Exception exc)
-                {
-                    Exception baseExc = exc.GetBaseException();
-                    this.fixture.Logger.Info(baseExc.Message);
-                    Assert.Equal(typeof(DeadlockException), baseExc.GetType());
-                    DeadlockException deadlockExc = (DeadlockException)baseExc;
-                    Assert.Equal(callChain.Count, deadlockExc.CallChain.Count());
-                }
+                await firstGrain.CallNext_1(callChain, 1);
             }
         }
 
