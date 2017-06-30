@@ -63,7 +63,7 @@ namespace UnitTests
             this.fixture.Logger.Info("Reentrancy ReentrantGrain Test finished OK.");
         }
 
-        [Fact, TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
+        [Fact(Skip = "Reentrancy is now allowed. todo"), TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
         public void NonReentrantGrain()
         {
             INonReentrantGrain nonreentrant = this.fixture.GrainFactory.GetGrain<INonReentrantGrain>(GetRandomGrainId());
@@ -97,7 +97,7 @@ namespace UnitTests
             this.fixture.Logger.Info("Reentrancy NonReentrantGrain Test finished OK.");
         }
 
-        [Fact, TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
+        [Fact(Skip = "Reentrancy is now allowed. todo"), TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
         public void NonReentrantGrain_WithMayInterleavePredicate_WhenPredicateReturnsFalse()
         {
             var grain = this.fixture.GrainFactory.GetGrain<IMayInterleavePredicateGrain>(GetRandomGrainId());
@@ -147,7 +147,7 @@ namespace UnitTests
             this.fixture.Logger.Info("Reentrancy NonReentrantGrain_WithMayInterleavePredicate_WhenPredicateReturnsTrue Test finished OK.");
         }
 
-        [Fact, TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
+        [Fact(Skip = "Reentrancy is now allowed. todo"), TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
         public void NonReentrantGrain_WithMessageInterleavesPredicate_StreamItemDelivery_WhenPredicateReturnsFalse()
         {
             var grain = this.fixture.GrainFactory.GetGrain<IMayInterleavePredicateGrain>(GetRandomGrainId());
