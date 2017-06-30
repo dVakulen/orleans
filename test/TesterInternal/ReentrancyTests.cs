@@ -217,7 +217,7 @@ namespace UnitTests
             this.fixture.Logger.Info("Reentrancy NonReentrantGrain_WithMayInterleavePredicate_WhenPredicateThrows Test finished OK.");
         }
 
-        [Fact, TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
+        [Fact(Skip = "Reentrancy with itself is now allowed. Needs call chain longer than 2 calls"), TestCategory("Functional"), TestCategory("Tasks"), TestCategory("Reentrancy")]
         public void UnorderedNonReentrantGrain()
         {
             IUnorderedNonReentrantGrain unonreentrant = this.fixture.GrainFactory.GetGrain<IUnorderedNonReentrantGrain>(GetRandomGrainId());
