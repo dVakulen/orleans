@@ -46,7 +46,7 @@ namespace Orleans.Runtime
             else
             {
                 // for 1 object there's no need in list allocation and transfering through the wire, 
-                // has to be avays in sync with retrieving part
+                // has to be always in sync with retrieving part
                 RequestContext.Set(RequestContext.CALL_CHAIN_REQUEST_CONTEXT_HEADER, thisInvocation);
             }
         }
