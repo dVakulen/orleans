@@ -40,6 +40,7 @@ namespace Orleans.Runtime
         private readonly GrainTypeManager typeManager;
         private readonly MessageFactory messageFactory;
         private readonly List<IGrainCallFilter> siloInterceptors;
+        private readonly RequestInvocationInfoAccessor invocationInfoAccessor;
 
         public InsideRuntimeClient(
             ILocalSiloDetails siloDetails,
@@ -66,6 +67,7 @@ namespace Orleans.Runtime
             tryResendMessage = msg => this.Dispatcher.TryResendMessage(msg);
             unregisterCallback = msg => UnRegisterCallback(msg.Id);
             this.siloInterceptors = new List<IGrainCallFilter>(registeredInterceptors);
+            invocationInfoAccessor = new RequestInvocationInfoAccessor(config);
         }
         
         public IServiceProvider ServiceProvider { get; }
@@ -282,12 +284,10 @@ namespace Orleans.Runtime
                 }
 
                 RequestContext.Import(message.RequestContextData);
-                if (Config.Globals.PerformDeadlockDetection && !message.TargetGrain.IsSystemTarget)
-                {
-                    UpdateDeadlockInfoInRequestContext(new RequestInvocationHistory(message));
-                    // RequestContext is automatically saved in the msg upon send and propagated to the next hop
-                    // in RuntimeClient.CreateMessage -> RequestContext.ExportToMessage(message);
-                }
+
+                // RequestContext is automatically saved in the msg upon send and propagated to the next hop
+                // in RuntimeClient.CreateMessage -> RequestContext.ExportToMessage(message);
+                invocationInfoAccessor.AddInvokationInfo(message);
 
                 object resultObject;
                 try
@@ -434,24 +434,6 @@ namespace Orleans.Runtime
                         "Exception trying to send an exception. Ignoring and not trying to send again. Exc: " + exc2.Message, exc2);
                 }
             }
-        }
-
-        // assumes deadlock information was already loaded into RequestContext from the message
-        private static void UpdateDeadlockInfoInRequestContext(RequestInvocationHistory thisInvocation)
-        {
-            IList prevChain;
-            object obj = RequestContext.Get(RequestContext.CALL_CHAIN_REQUEST_CONTEXT_HEADER);
-            if (obj != null)
-            {
-                prevChain = ((IList)obj);
-            }
-            else
-            {
-                prevChain = new List<RequestInvocationHistory>();
-                RequestContext.Set(RequestContext.CALL_CHAIN_REQUEST_CONTEXT_HEADER, prevChain);
-            }
-            // append this call to the end of the call chain. Update in place.
-            prevChain.Add(thisInvocation);
         }
 
         public void ReceiveResponse(Message message)

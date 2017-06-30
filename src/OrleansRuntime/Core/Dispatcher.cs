@@ -33,6 +33,7 @@ namespace Orleans.Runtime
         private readonly bool errorInjection;
         private readonly double errorInjectionRate;
         private readonly SafeRandom random;
+        private readonly RequestInvocationInfoAccessor invocationInfoAccessor;
 
         internal Dispatcher(
             OrleansTaskScheduler scheduler, 
@@ -60,6 +61,7 @@ namespace Orleans.Runtime
             errorInjection = rejectionInjectionRate > 0.0d || messageLossInjectionRate > 0.0d;
             errorInjectionRate = rejectionInjectionRate + messageLossInjectionRate;
             random = new SafeRandom();
+            invocationInfoAccessor = new RequestInvocationInfoAccessor(config);
         }
 
         #region Receive path
@@ -337,9 +339,42 @@ namespace Orleans.Runtime
                    catalog.CanInterleave(targetActivation.ActivationId, incoming)
                 || incoming.IsAlwaysInterleave
                 || targetActivation.Running == null
-                || (targetActivation.Running.IsReadOnly && incoming.IsReadOnly);
+                || (targetActivation.Running.IsReadOnly && incoming.IsReadOnly)
+                || IsCallChainReentrancyAllowed(incoming);
 
             return canInterleave;
+        }
+
+        /// <summary>
+        /// Allow reentrancy for calls to grains that are already part of the call chain.
+        /// Designed for such cases as: grain A calls grain B, and while executing the invoked method B calls back to A. 
+        /// Also covers A -> A communications
+        /// https://github.com/dotnet/orleans/issues/3184
+        /// </summary>
+        /// <param name="incoming"></param>
+        /// <returns></returns>
+        private bool IsCallChainReentrancyAllowed(Message incoming)
+        {
+            IList callChain;
+            if (!invocationInfoAccessor.TryGetInvokationInfoList(incoming, out callChain))
+            {
+                // first call
+                return true;
+            }
+
+            ActivationId nextActivationId = incoming.TargetActivation;
+            var itemsLenght = callChain.Count - 1;
+            const int allowedReentrantCallChainLength = 2;
+            for (var i = itemsLenght; i >= itemsLenght - allowedReentrantCallChainLength && i >= 0; i--)
+            {
+                var prevId = ((RequestInvocationInfo)callChain[i]).ActivationId;
+                if(prevId.Equals(nextActivationId))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -349,18 +384,17 @@ namespace Orleans.Runtime
         /// <param name="message">Message to analyze</param>
         private void CheckDeadlock(Message message)
         {
-            var requestContext = message.RequestContextData;
-            object obj;
-            if (requestContext == null ||
-                !requestContext.TryGetValue(RequestContext.CALL_CHAIN_REQUEST_CONTEXT_HEADER, out obj) ||
-                obj == null) return; // first call in a chain
+            IList prevChain;
+            if (!invocationInfoAccessor.TryGetInvokationInfoList(message, out prevChain))
+            {
+                return;
+            }
 
-            var prevChain = ((IList)obj);
             ActivationId nextActivationId = message.TargetActivation;
             // check if the target activation already appears in the call chain.
             foreach (object invocationObj in prevChain)
             {
-                var prevId = ((RequestInvocationHistory)invocationObj).ActivationId;
+                var prevId = ((RequestInvocationInfo)invocationObj).ActivationId;
                 if (!prevId.Equals(nextActivationId) || catalog.CanInterleave(nextActivationId, message)) continue;
 
                 var newChain = new List<RequestInvocationHistory>();

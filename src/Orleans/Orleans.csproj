@@ -103,6 +103,7 @@
     <Compile Include="LogConsistency\ConnectionIssues.cs" />
     <Compile Include="LogConsistency\IConnectionIssueListener.cs" />
     <Compile Include="Messaging\MessageFactory.cs" />
+    <Compile Include="Messaging\RequestInvocationInfoAccessor.cs" />
     <Compile Include="MultiCluster\IMultiClusterGatewayInfo.cs" />
     <Compile Include="CodeGeneration\CodeGeneratorManager.cs" />
     <Compile Include="CodeGeneration\GrainState.cs" />

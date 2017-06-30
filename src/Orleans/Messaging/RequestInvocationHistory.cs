@@ -2,24 +2,34 @@ using System;
 
 namespace Orleans.Runtime
 {
+    [Serializable]
+    internal class RequestInvocationInfo
+    {
+        public RequestInvocationInfo(Message message)
+        {
+            ActivationId = message.TargetActivation;
+        }
+
+        public ActivationId ActivationId { get; }
+    }
+
     // used for tracking request invocation history for deadlock detection.
     [Serializable]
-    internal sealed class RequestInvocationHistory
+    internal sealed class RequestInvocationHistory : RequestInvocationInfo
     {
-        public GrainId GrainId { get; private set; }
-        public ActivationId ActivationId { get; private set; }
-        public string DebugContext { get; private set; }
+        public GrainId GrainId { get; }
 
-        internal RequestInvocationHistory(Message message)
+        public string DebugContext { get; }
+
+        internal RequestInvocationHistory(Message message) : base(message)
         {
             GrainId = message.TargetGrain;
-            ActivationId = message.TargetActivation;
             DebugContext = message.DebugContext;
         }
 
         public override string ToString()
         {
-            return String.Format("RequestInvocationHistory {0}:{1}:{2}", GrainId, ActivationId, DebugContext);
+            return $"RequestInvocationHistory {GrainId}:{ActivationId}:{DebugContext}";
         }
     }
 }
