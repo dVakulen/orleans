@@ -356,7 +356,7 @@ namespace Orleans.Runtime
         private bool IsCallChainReentrancyAllowed(Message incoming)
         {
             IList callChain;
-            if (!invocationInfoAccessor.TryGetInvokationInfoList(incoming, out callChain))
+            if (!invocationInfoAccessor.TryGetInvocationInfoList(incoming, out callChain))
             {
                 // first call
                 return true;
@@ -385,7 +385,7 @@ namespace Orleans.Runtime
         private void CheckDeadlock(Message message)
         {
             IList prevChain;
-            if (!invocationInfoAccessor.TryGetInvokationInfoList(message, out prevChain))
+            if (!invocationInfoAccessor.TryGetInvocationInfoList(message, out prevChain))
             {
                 return;
             }

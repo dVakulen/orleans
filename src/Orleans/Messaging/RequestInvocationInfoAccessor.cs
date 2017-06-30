@@ -51,7 +51,7 @@ namespace Orleans.Runtime
             }
         }
 
-        public bool TryGetInvokationInfoList(Message message, out IList invokationInfoList)
+        public bool TryGetInvocationInfoList(Message message, out IList invokationInfoList)
         {
             invokationInfoList = null;
             var requestContext = message.RequestContextData;
