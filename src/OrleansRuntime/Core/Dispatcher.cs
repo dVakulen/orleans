@@ -346,13 +346,13 @@ namespace Orleans.Runtime
         }
 
         /// <summary>
-        /// Allow reentrancy for calls to grains that are already part of the call chain.
+        /// CHecks whether reentrancy is allowed for calls to grains that are already part of the call chain.
         /// Designed for such cases as: grain A calls grain B, and while executing the invoked method B calls back to A. 
         /// Also covers A -> A communications
         /// https://github.com/dotnet/orleans/issues/3184
         /// </summary>
-        /// <param name="incoming"></param>
-        /// <returns></returns>
+        /// <param name="incoming">Message to analyze</param>
+        /// <returns>Whether reentancy is allowed</returns>
         private bool IsCallChainReentrancyAllowed(Message incoming)
         {
             IList callChain;
@@ -363,9 +363,11 @@ namespace Orleans.Runtime
             }
 
             ActivationId nextActivationId = incoming.TargetActivation;
-            var itemsLenght = callChain.Count - 1;
+            var callChainLenght = callChain.Count - 1;
             const int allowedReentrantCallChainLength = 2;
-            for (var i = itemsLenght; i >= itemsLenght - allowedReentrantCallChainLength && i >= 0; i--)
+
+            // check if the target activation already appears in the call chain.
+            for (var i = callChainLenght; i >= callChainLenght - allowedReentrantCallChainLength && i >= 0; i--)
             {
                 var prevId = ((RequestInvocationInfo)callChain[i]).ActivationId;
                 if(prevId.Equals(nextActivationId))
