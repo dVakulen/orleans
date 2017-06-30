@@ -64,12 +64,16 @@ namespace Orleans.Runtime
             if (list != null)
             {
                 invokationInfoList = list;
-                return true;
+            }
+            else
+            {
+                invokationInfoList = new List<RequestInvocationInfo>
+                {
+                    (RequestInvocationInfo)obj
+                };
             }
 
-            // only one info entry in request context, deadlock is impossible,
-            // as call to itself is now allowed
-            return false;
+            return true;
         }
     }
 }

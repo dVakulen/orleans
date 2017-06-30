@@ -55,7 +55,19 @@ namespace UnitTests.General
                 List<Tuple<long, bool>> callChain = new List<Tuple<long, bool>>();
                 callChain.Add(new Tuple<long, bool>(grainId, true));
                 callChain.Add(new Tuple<long, bool>(grainId, true));
-                await firstGrain.CallNext_1(callChain, 1);
+
+                try
+                {
+                    await firstGrain.CallNext_1(callChain, 1);
+                }
+                catch (Exception exc)
+                {
+                    Exception baseExc = exc.GetBaseException();
+                    this.fixture.Logger.Info(baseExc.Message);
+                    Assert.Equal(typeof(DeadlockException), baseExc.GetType());
+                    DeadlockException deadlockExc = (DeadlockException)baseExc;
+                    Assert.Equal(callChain.Count, deadlockExc.CallChain.Count());
+                }
             }
         }
 
