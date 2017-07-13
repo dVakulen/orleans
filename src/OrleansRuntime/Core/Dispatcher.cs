@@ -401,7 +401,7 @@ namespace Orleans.Runtime
 
                 var newChain = new List<RequestInvocationHistory>();
                 newChain.AddRange(prevChain.Cast<RequestInvocationHistory>());
-                newChain.Add(new RequestInvocationHistory(message.TargetGrain, message.TargetActivation, message.DebugContext));
+                newChain.Add(new RequestInvocationHistory(message));
                 
                 throw new DeadlockException(newChain);
             }
