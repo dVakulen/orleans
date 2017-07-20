@@ -264,6 +264,8 @@ namespace Orleans.Runtime
 
         #endregion
 
+        public Guid CurrentCallChainId { get; set; }
+            
         public ISchedulingContext SchedulingContext { get; }
 
         public string GrainTypeName
@@ -311,7 +313,7 @@ namespace Orleans.Runtime
             var contextFactory = sp.GetRequiredService<GrainActivationContextFactory>();
             contextFactory.Context = context;
         }
-
+        
         public IStorageProvider StorageProvider { get; set; }
 
         private Streams.StreamDirectory streamDirectory;
@@ -475,6 +477,7 @@ namespace Orleans.Runtime
             // This logic only works for non-reentrant activations
             // Consider: Handle long request detection for reentrant activations.
             Running = message;
+            CurrentCallChainId = Guid.Empty.Equals(message.CallChainId) ? Guid.NewGuid() : message.CallChainId;
             currentRequestStartTime = DateTime.UtcNow;
         }
 

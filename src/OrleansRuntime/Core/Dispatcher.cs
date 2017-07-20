@@ -243,7 +243,7 @@ namespace Orleans.Runtime
                     "Attempt to invoke Dispatcher.SendRejectionMessage() for a message that isn't a rejection.");
             }
         }
-
+        
         private void ReceiveResponse(Message message, ActivationData targetActivation)
         {
             lock (targetActivation)
@@ -335,12 +335,53 @@ namespace Orleans.Runtime
         public bool CanInterleave(ActivationData targetActivation, Message incoming)
         {
             bool canInterleave = 
-                   catalog.CanInterleave(targetActivation.ActivationId, incoming)
-                || incoming.IsAlwaysInterleave
+                   incoming.IsAlwaysInterleave
                 || targetActivation.Running == null
-                || (targetActivation.Running.IsReadOnly && incoming.IsReadOnly);
+                || (targetActivation.Running.IsReadOnly && incoming.IsReadOnly)
+                || catalog.CanInterleave(targetActivation.ActivationId, incoming)
+                || IsCallChainReentrancyAllowed(targetActivation, incoming);
 
             return canInterleave;
+        }
+
+        /// <summary>
+        /// Checks whether reentrancy is allowed for calls to grains that are already part of the call chain.
+        /// Designed for such cases as: grain A calls grain B, and while executing the invoked method B calls back to A. 
+        /// Also covers A -> A communications
+        /// https://github.com/dotnet/orleans/issues/3184
+        /// </summary>
+        /// <param name="targetActivation"></param>
+        /// <param name="incoming">Message to analyze</param>
+        /// <returns>Whether reentancy is allowed</returns>
+        private bool IsCallChainReentrancyAllowed(ActivationData targetActivation, Message incoming)
+        {
+            var targetChainId = targetActivation.CurrentCallChainId;
+            var incomingChainId = incoming.CallChainId;
+            if (targetChainId.Equals(Guid.Empty) || incomingChainId.Equals(Guid.Empty))
+            {
+                return false;
+            }
+
+            if (!targetChainId.Equals(incomingChainId))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private void EnsureCallChainIdIsSet(ActivationData sendingActivation, Message outgoing)
+        {
+            if (sendingActivation == null)
+            {
+                return;
+            }
+
+            outgoing.CallChainId = sendingActivation.CurrentCallChainId;
+            if (outgoing.CallChainId.Equals(Guid.Empty))
+            {
+                throw new Exception("wtf");
+            }
         }
 
         /// <summary>
@@ -614,6 +655,7 @@ namespace Orleans.Runtime
         /// <param name="sendingActivation"></param>
         public Task AsyncSendMessage(Message message, ActivationData sendingActivation = null)
         {
+            EnsureCallChainIdIsSet(sendingActivation, message);
             Action<Exception> onAddressingFailure = ex =>
             {
                 if (ShouldLogError(ex))
