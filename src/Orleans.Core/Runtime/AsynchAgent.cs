@@ -137,23 +137,6 @@ namespace Orleans.Runtime
                 t.Abort(stateInfo);
         }
 
-        public void Join(TimeSpan timeout)
-        {
-            try
-            {
-                var agentThread = t;
-                if (agentThread != null)
-                {
-                    bool joined = agentThread.Join((int)timeout.TotalMilliseconds);
-                    Log.Verbose("{0} the agent thread {1} after {2} time.", joined ? "Joined" : "Did not join", Name, timeout);
-                }
-            }catch(Exception exc)
-            {
-                // ignore. Just make sure Join does not throw.
-                Log.Verbose("Ignoring error during Join: {0}", exc);
-            }
-        }
-
         protected abstract void Run();
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
@@ -171,6 +154,7 @@ namespace Orleans.Runtime
                 CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
                 CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
                 CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
+                // to be dispatched
                 agent.Run();
             }
             catch (Exception exc)
