@@ -63,10 +63,9 @@ namespace UnitTests.OrleansRuntime.Streams
             }
         }
 
-
         private class TestCacheDataAdapter : ICacheDataAdapter<TestQueueMessage, TestCachedMessage>
         {
-            public Action<IDisposable> PurgeAction { private get; set; }
+            public Action<FixedSizeBuffer> OnBlockAllocated { set; private get; }
 
             public StreamPosition QueueMessageToCachedMessage(ref TestCachedMessage cachedMessage, TestQueueMessage queueMessage, DateTime dequeueTimeUtc)
             {
@@ -75,6 +74,16 @@ namespace UnitTests.OrleansRuntime.Streams
                 cachedMessage.SequenceNumber = queueMessage.SequenceToken.SequenceNumber;
                 cachedMessage.EventIndex = queueMessage.SequenceToken.EventIndex;
                 return streamPosition;
+            }
+
+            public DateTime? GetMessageEnqueueTimeUtc(ref TestCachedMessage message)
+            {
+                return null;
+            }
+
+            public DateTime? GetMessageDequeueTimeUtc(ref TestCachedMessage message)
+            {
+                return null;
             }
 
             public IBatchContainer GetBatchContainer(ref TestCachedMessage cachedMessage)
@@ -96,11 +105,6 @@ namespace UnitTests.OrleansRuntime.Streams
                 IStreamIdentity streamIdentity = new StreamIdentity(queueMessage.StreamGuid, null);
                 StreamSequenceToken sequenceToken = queueMessage.SequenceToken;
                 return new StreamPosition(streamIdentity, sequenceToken);
-            }
-
-            public bool ShouldPurge(ref TestCachedMessage cachedMessage, ref TestCachedMessage newestCachedMessage, IDisposable purgeRequest, DateTime nowUtc)
-            {
-                throw new NotImplementedException();
             }
         }
 

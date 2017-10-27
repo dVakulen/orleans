@@ -38,7 +38,7 @@ namespace Tests.GeoClusterTests
             numGrains = 600;
             await RunWithTimeout("IndependentCreation", 5000, IndependentCreation);
             await RunWithTimeout("CreationRace", 10000, CreationRace);
-            await RunWithTimeout("ConflictResolution", 20000, ConflictResolution);
+            await RunWithTimeout("ConflictResolution", 40000, ConflictResolution);
         }
 
         /// <summary>
@@ -185,7 +185,7 @@ namespace Tests.GeoClusterTests
             Assert.Equal(requested0, base_requested0);
             Assert.Equal(requested1, base_requested1);
 
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         #endregion
@@ -280,7 +280,7 @@ namespace Tests.GeoClusterTests
 
             ValidateClusterRaceResults(results, grains);
 
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         private volatile int threadsDone;
@@ -354,7 +354,7 @@ namespace Tests.GeoClusterTests
         // so they both activate an instance
         // and one of them deactivated once communication is unblocked
 
-        public async Task ConflictResolution()
+        private async Task ConflictResolution()
         {
             int offset = random.Next();
 

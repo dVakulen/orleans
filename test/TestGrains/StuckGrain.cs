@@ -17,6 +17,7 @@ namespace UnitTests.Grains
         private static Dictionary<Guid, TaskCompletionSource<bool>> tcss = new Dictionary<Guid, TaskCompletionSource<bool>>();
         private static Dictionary<Guid, int> counters = new Dictionary<Guid, int>();
         private static HashSet<Guid> grains = new HashSet<Guid>();
+        private bool isDeactivatingBlocking = false;
 
         public static bool Release(Guid key)
         {
@@ -54,12 +55,19 @@ namespace UnitTests.Grains
         public Task NonBlockingCall()
         {
             counters[this.GetPrimaryKey()] = counters[this.GetPrimaryKey()] + 1;
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task<int> GetNonBlockingCallCounter()
         {
             return Task.FromResult(counters[this.GetPrimaryKey()]);
+        }
+
+        public Task BlockingDeactivation()
+        {
+            isDeactivatingBlocking = true;
+            DeactivateOnIdle();
+            return Task.CompletedTask;
         }
 
         public override Task OnActivateAsync()
@@ -78,6 +86,8 @@ namespace UnitTests.Grains
 
         public override Task OnDeactivateAsync()
         {
+            if (isDeactivatingBlocking) return RunForever();
+
             var key = this.GetPrimaryKey();
             lock (grains)
             {
@@ -97,7 +107,7 @@ namespace UnitTests.Grains
         public Task Release(Guid key)
         {
             StuckGrain.Release(key);
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task<bool> IsActivated(Guid key)

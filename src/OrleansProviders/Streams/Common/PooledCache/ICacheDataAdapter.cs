@@ -46,19 +46,23 @@ namespace Orleans.Providers.Streams.Common
         StreamPosition GetStreamPosition(TQueueMessage queueMessage);
 
         /// <summary>
-        /// Given a purge request, indicates if a cached message should be purged from the cache
+        /// Should be set to OnBlockAllocated method of the cache's EvicationStrategy
         /// </summary>
-        /// <param name="cachedMessage"></param>
-        /// <param name="newestCachedMessage"></param>
-        /// <param name="purgeRequest"></param>
-        /// <param name="nowUtc"></param>
-        /// <returns></returns>
-        bool ShouldPurge(ref TCachedMessage cachedMessage, ref TCachedMessage newestCachedMessage, IDisposable purgeRequest, DateTime nowUtc);
+        Action<FixedSizeBuffer> OnBlockAllocated { set; }
 
         /// <summary>
-        /// Assignable purge action.  This is called when a purge request is triggered.
+        /// Get cached message enqueueTime
         /// </summary>
-        Action<IDisposable> PurgeAction { set; }
+        /// <param name="message"></param>
+        /// <returns>Return message's enqueue time Utc, return null if message didn't keep a enqueue time</returns>
+        DateTime? GetMessageEnqueueTimeUtc(ref TCachedMessage message);
+
+        /// <summary>
+        /// Get cached message dequeue time
+        /// </summary>
+        /// <param name="message"></param>
+        /// <returns>Return message's dequeue time Utc, return null if the message didn't keep a dequeue time</returns>
+        DateTime? GetMessageDequeueTimeUtc(ref TCachedMessage message);
     }
 
     /// <summary>

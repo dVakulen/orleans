@@ -6,6 +6,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Grains;
 using Microsoft.ServiceFabric.Services.Communication.Runtime;
 using Microsoft.ServiceFabric.Services.Runtime;
 using Microsoft.Orleans.ServiceFabric;
@@ -61,18 +62,11 @@ namespace StatelessCalculatorService
         public ClusterConfiguration GetClusterConfiguration()
         {
             var config = new ClusterConfiguration();
-            config.Globals.DeploymentId = Regex.Replace(
-                this.Context.ServiceName.PathAndQuery.Trim('/'),
-                "[^a-zA-Z0-9_]",
-                "_");
             config.Globals.ReminderServiceType = GlobalConfiguration.ReminderServiceProviderType.ReminderTableGrain;
-            config.Globals.LivenessType = GlobalConfiguration.LivenessProviderType.Custom;
-            config.Globals.MembershipTableAssembly = typeof(OrleansServiceFabricExtensions).Assembly.FullName;
             config.Globals.DataConnectionString = "UseDevelopmentStorage=true";
-            config.Defaults.StartupTypeName = typeof(ClusterStartup).AssemblyQualifiedName;
-            //config.Defaults.DefaultTraceLevel = Severity.Verbose;
-            LogManager.LogConsumers.Add(new EventSourceLogger());
             config.Globals.RegisterBootstrapProvider<BootstrapProvider>("booter");
+            config.Defaults.StartupTypeName = typeof(ClusterStartup).AssemblyQualifiedName;
+            LogManager.LogConsumers.Add(new EventSourceLogger());
             return config;
         }
 
@@ -119,6 +113,7 @@ namespace StatelessCalculatorService
         {
             var logger = providerRuntime.GetLogger(nameof(BootstrapProvider));
             this.Name = name;
+            
             var grain = providerRuntime.GrainFactory.GetGrain<ICalculatorGrain>(Guid.Empty);
             Task.Factory.StartNew(
                 async () =>
@@ -127,9 +122,8 @@ namespace StatelessCalculatorService
                     {
                         try
                         {
-                            var oldValue = await grain.Get();
                             var value = await grain.Add(1);
-                            //logger.Info($"{oldValue} + 1 = {value}");
+                            logger.Info($"{value - 1} + 1 = {value}");
                             await Task.Delay(TimeSpan.FromSeconds(4));
                         }
                         catch (Exception exception)

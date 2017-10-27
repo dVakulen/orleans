@@ -22,7 +22,6 @@ namespace Orleans.Providers.Streams.Common
         private int writeIndex;
         private int readIndex;
 
-
         /// <summary>
         /// Linked list node, so this message block can be kept in a linked list
         /// </summary>
@@ -57,6 +56,16 @@ namespace Orleans.Providers.Streams.Common
         /// Newest message in this block
         /// </summary>
         public TCachedMessage NewestMessage => cachedMessages[NewestMessageIndex];
+
+        /// <summary>
+        /// Message count in this block
+        /// </summary>
+        public int ItemCount { get
+            {
+                int count = writeIndex - readIndex;
+                return count >= 0 ? count : 0;
+            }  
+        }
 
         /// <summary>
         /// Block of cached messages
