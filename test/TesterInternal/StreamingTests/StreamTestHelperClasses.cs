@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Orleans;
 using Orleans.Runtime;
 using Orleans.Streams;
@@ -72,7 +74,7 @@ namespace UnitTests.StreamingTests
 
         public Task DeactivateConsumerOnIdle()
         {
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
     }
 
@@ -80,7 +82,6 @@ namespace UnitTests.StreamingTests
     {
         private readonly ProducerObserver producer;
         private readonly IClusterClient client;
-
         private Streaming_ProducerClientObject(Logger logger, IClusterClient client)
         {
             this.client = client;
@@ -97,7 +98,7 @@ namespace UnitTests.StreamingTests
         public Task BecomeProducer(Guid streamId, string providerToUse, string streamNamespace)
         {
             this.producer.BecomeProducer(streamId, this.client.GetStreamProvider(providerToUse), streamNamespace);
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task ProduceSequentialSeries(int count)
@@ -119,7 +120,7 @@ namespace UnitTests.StreamingTests
         {
             return this.producer.ProducePeriodicSeries(timerCallback =>
                     {
-                        return new AsyncTaskSafeTimer(timerCallback, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
+                        return new AsyncTaskSafeTimer(NullLogger.Instance, timerCallback, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
                     }, count);
         }
 
@@ -160,7 +161,7 @@ namespace UnitTests.StreamingTests
 
         public Task DeactivateProducerOnIdle()
         {
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
     }
 

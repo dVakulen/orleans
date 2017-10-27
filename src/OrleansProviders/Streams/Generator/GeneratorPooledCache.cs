@@ -7,6 +7,8 @@ using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streams;
 using static System.String;
+using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace Orleans.Providers.Streams.Generator
 {
@@ -16,18 +18,22 @@ namespace Orleans.Providers.Streams.Generator
     public class GeneratorPooledCache : IQueueCache
     {
         private readonly PooledQueueCache<GeneratedBatchContainer, CachedMessage> cache;
-
+        private GeneratorPooledCacheEvictionStrategy evictionStrategy;
         /// <summary>
         /// Pooled cache for generator stream provider
         /// </summary>
         /// <param name="bufferPool"></param>
         /// <param name="logger"></param>
         /// <param name="serializationManager"></param>
-        public GeneratorPooledCache(IObjectPool<FixedSizeBuffer> bufferPool, Logger logger, SerializationManager serializationManager)
+        /// <param name="cacheMonitor"></param>
+        /// <param name="monitorWriteInterval">monitor write interval.  Only triggered for active caches.</param>
+        public GeneratorPooledCache(IObjectPool<FixedSizeBuffer> bufferPool, ILogger logger, SerializationManager serializationManager, ICacheMonitor cacheMonitor, TimeSpan? monitorWriteInterval)
         {
             var dataAdapter = new CacheDataAdapter(bufferPool, serializationManager);
-            cache = new PooledQueueCache<GeneratedBatchContainer, CachedMessage>(dataAdapter, CacheDataComparer.Instance, logger);
-            dataAdapter.PurgeAction = cache.Purge;
+            cache = new PooledQueueCache<GeneratedBatchContainer, CachedMessage>(dataAdapter, CacheDataComparer.Instance, logger, cacheMonitor, monitorWriteInterval);
+            TimePurgePredicate purgePredicate = new TimePurgePredicate(TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(10));
+            this.evictionStrategy = new GeneratorPooledCacheEvictionStrategy(logger, purgePredicate, cacheMonitor, monitorWriteInterval) {PurgeObservable = cache};
+            EvictionStrategyCommonUtils.WireUpEvictionStrategy(cache, dataAdapter, this.evictionStrategy);
         }
 
         // For fast GC this struct should contain only value types.  I included streamNamespace because I'm lasy and this is test code, but it should not be in here.
@@ -36,6 +42,8 @@ namespace Orleans.Providers.Streams.Generator
             public Guid StreamGuid;
             public string StreamNamespace;
             public long SequenceNumber;
+            public DateTime EnqueueTimeUtc;
+            public DateTime DequeueTimeUtc;
             public ArraySegment<byte> Payload;
         }
 
@@ -58,13 +66,36 @@ namespace Orleans.Providers.Streams.Generator
             }
         }
 
+        private class GeneratorPooledCacheEvictionStrategy : ChronologicalEvictionStrategy<CachedMessage>
+        {
+            public GeneratorPooledCacheEvictionStrategy(ILogger logger, TimePurgePredicate purgePredicate, ICacheMonitor cacheMonitor, TimeSpan? monitorWriteInterval)
+                : base(logger, purgePredicate, cacheMonitor, monitorWriteInterval)
+            {            
+            }
+
+            protected override object GetBlockId(CachedMessage? cachedMessage)
+            {
+                return cachedMessage?.Payload.Array;
+            }
+
+            protected override DateTime GetDequeueTimeUtc(ref CachedMessage cachedMessage)
+            {
+                return cachedMessage.DequeueTimeUtc;
+            }
+
+            protected override DateTime GetEnqueueTimeUtc(ref CachedMessage cachedMessage)
+            {
+                return cachedMessage.EnqueueTimeUtc;
+            }
+        }
+
         private class CacheDataAdapter : ICacheDataAdapter<GeneratedBatchContainer, CachedMessage>
         {
             private readonly IObjectPool<FixedSizeBuffer> bufferPool;
             private readonly SerializationManager serializationManager;
             private FixedSizeBuffer currentBuffer;
 
-            public Action<IDisposable> PurgeAction { private get; set; }
+            public Action<FixedSizeBuffer> OnBlockAllocated { private get; set; }
 
             public CacheDataAdapter(IObjectPool<FixedSizeBuffer> bufferPool, SerializationManager serializationManager)
             {
@@ -76,12 +107,24 @@ namespace Orleans.Providers.Streams.Generator
                 this.serializationManager = serializationManager;
             }
 
+            public DateTime? GetMessageEnqueueTimeUtc(ref CachedMessage message)
+            {
+                return message.EnqueueTimeUtc;
+            }
+
+            public DateTime? GetMessageDequeueTimeUtc(ref CachedMessage message)
+            {
+                return message.DequeueTimeUtc;
+            }
+
             public StreamPosition QueueMessageToCachedMessage(ref CachedMessage cachedMessage, GeneratedBatchContainer queueMessage, DateTime dequeueTimeUtc)
             {
                 StreamPosition setreamPosition = GetStreamPosition(queueMessage);
                 cachedMessage.StreamGuid = setreamPosition.StreamIdentity.Guid;
                 cachedMessage.StreamNamespace = setreamPosition.StreamIdentity.Namespace;
                 cachedMessage.SequenceNumber = queueMessage.RealToken.SequenceNumber;
+                cachedMessage.EnqueueTimeUtc = queueMessage.EnqueueTimeUtc;
+                cachedMessage.DequeueTimeUtc = dequeueTimeUtc;
                 cachedMessage.Payload = SerializeMessageIntoPooledSegment(queueMessage);
                 return setreamPosition;
             }
@@ -99,7 +142,10 @@ namespace Orleans.Providers.Streams.Generator
                 {
                     // no block or block full, get new block and try again
                     currentBuffer = bufferPool.Allocate();
-                    currentBuffer.SetPurgeAction(PurgeAction);
+                    if (this.OnBlockAllocated == null)
+                        throw new OrleansException("Eviction strategy's OnBlockAllocated is not set for current data adapter, this will affect cache purging");
+                    //call EvictionStrategy's OnBlockAllocated method
+                    this.OnBlockAllocated.Invoke(currentBuffer);
                     // if this fails with clean block, then requested size is too big
                     if (!currentBuffer.TryGetSegment(size, out segment))
                     {
@@ -129,17 +175,6 @@ namespace Orleans.Providers.Streams.Generator
             public StreamPosition GetStreamPosition(GeneratedBatchContainer queueMessage)
             {
                 return new StreamPosition(new StreamIdentity(queueMessage.StreamGuid, queueMessage.StreamNamespace), queueMessage.RealToken);
-            }
-
-            public bool ShouldPurge(ref CachedMessage cachedMessage, ref CachedMessage newestCachedMessage, IDisposable purgeRequest, DateTime nowUtc)
-            {
-                var purgedResource = (FixedSizeBuffer) purgeRequest;
-                // if we're purging our current buffer, don't use it any more
-                if (currentBuffer != null && currentBuffer.Id == purgedResource.Id)
-                {
-                    currentBuffer = null;
-                }
-                return cachedMessage.Payload.Array == purgedResource.Id;
             }
         }
 
@@ -197,11 +232,10 @@ namespace Orleans.Providers.Streams.Generator
         /// <param name="messages"></param>
         public void AddToCache(IList<IBatchContainer> messages)
         {
-            DateTime dequeueTimeUtc = DateTime.UtcNow;
-            foreach (IBatchContainer container in messages)
-            {
-                cache.Add(container as GeneratedBatchContainer, dequeueTimeUtc);
-            }
+            List<GeneratedBatchContainer> generatedMessages = messages
+                .Cast<GeneratedBatchContainer>()
+                .ToList();
+            cache.Add(generatedMessages, DateTime.UtcNow);
         }
 
         /// <summary>
@@ -212,6 +246,7 @@ namespace Orleans.Providers.Streams.Generator
         public bool TryPurgeFromCache(out IList<IBatchContainer> purgedItems)
         {
             purgedItems = null;
+            this.evictionStrategy.PerformPurge(DateTime.UtcNow);
             return false;
         }
 

@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading.Tasks;
 using Orleans;
 using Orleans.Concurrency;
 using Orleans.Runtime;
 using UnitTests.GrainInterfaces;
+using Orleans.Runtime.Configuration;
 
 namespace UnitTests.Grains
 {
@@ -23,7 +25,7 @@ namespace UnitTests.Grains
             label = this.GetPrimaryKeyLong().ToString();
             logger.Info("OnActivateAsync");
 
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task<string> GetLabel()
@@ -36,7 +38,7 @@ namespace UnitTests.Grains
             this.label = label;
 
             //logger.Info("SetLabel {0} received", label);
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task<IStressTestGrain> GetGrainReference()
@@ -66,7 +68,8 @@ namespace UnitTests.Grains
                 var reply = new List<Tuple<SiloAddress, ActivationId>>();
                 for (int i = 0; i < 10; i++)
                 {
-                    reply.Add(new Tuple<SiloAddress, ActivationId>(SiloAddress.NewLocalAddress(0), ActivationId.NewId()));
+                    var siloAddress = SiloAddress.New(new IPEndPoint(ClusterConfiguration.GetLocalIPAddress(),0), 0);
+                    reply.Add(new Tuple<SiloAddress, ActivationId>(siloAddress, ActivationId.NewId()));
                 }
                 list.Add(new Tuple<GrainId, int, List<Tuple<SiloAddress, ActivationId>>>(id, 3, reply));
             }
@@ -80,7 +83,7 @@ namespace UnitTests.Grains
 
         public Task Ping(byte[] data)
         {
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public async Task PingWithDelay(byte[] data, TimeSpan delay)
@@ -90,13 +93,13 @@ namespace UnitTests.Grains
 
         public Task Send(byte[] data)
         {
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task DeactivateSelf()
         {
             DeactivateOnIdle();
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
     }
 
@@ -111,7 +114,7 @@ namespace UnitTests.Grains
             label = this.GetPrimaryKeyLong().ToString();
             logger = base.GetLogger("ReentrantStressTestGrain " + base.Data.Address.ToString());
             logger.Info("OnActivateAsync");
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task<string> GetRuntimeInstanceId()
@@ -126,7 +129,7 @@ namespace UnitTests.Grains
 
         public Task Ping(byte[] data)
         {
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public async Task PingWithDelay(byte[] data, TimeSpan delay)
@@ -145,7 +148,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingMutableArray(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task PingImmutableArray(Immutable<byte[]> data, long nextGrain, bool nextGrainIsRemote)
@@ -160,7 +163,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingImmutableArray(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task PingMutableDictionary(Dictionary<int, string> data, long nextGrain, bool nextGrainIsRemote)
@@ -175,7 +178,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingMutableDictionary(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task PingImmutableDictionary(Immutable<Dictionary<int, string>> data, long nextGrain,
@@ -191,7 +194,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingImmutableDictionary(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public async Task InterleavingConsistencyTest(int numItems)
@@ -266,7 +269,7 @@ namespace UnitTests.Grains
             label = this.GetPrimaryKeyLong().ToString();
             logger = base.GetLogger("ReentrantLocalStressTestGrain " + base.Data.Address.ToString());
             logger.Info("OnActivateAsync");
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task<byte[]> Echo(byte[] data)
@@ -281,7 +284,7 @@ namespace UnitTests.Grains
 
         public Task Ping(byte[] data)
         {
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public async Task PingWithDelay(byte[] data, TimeSpan delay)
@@ -300,7 +303,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingMutableArray(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task PingImmutableArray(Immutable<byte[]> data, long nextGrain, bool nextGrainIsRemote)
@@ -315,7 +318,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingImmutableArray(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task PingMutableDictionary(Dictionary<int, string> data, long nextGrain, bool nextGrainIsRemote)
@@ -330,7 +333,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingMutableDictionary(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
 
         public Task PingImmutableDictionary(Immutable<Dictionary<int, string>> data, long nextGrain,
@@ -346,7 +349,7 @@ namespace UnitTests.Grains
                 return GrainFactory.GetGrain<IReentrantLocalStressTestGrain>(nextGrain)
                     .PingImmutableDictionary(data, -1, false);
             }
-            return TaskDone.Done;
+            return Task.CompletedTask;
         }
     }
 }

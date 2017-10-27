@@ -8,7 +8,9 @@ using UnitTests.GrainInterfaces;
 namespace UnitTests.Grains
 {
     [ImplicitStreamSubscription("InterceptedStream")]
+#pragma warning disable 618
     public class StreamInterceptionGrain : Grain, IStreamInterceptionGrain, IGrainInvokeInterceptor
+#pragma warning restore 618
     {
         private int lastStreamValue;
 
@@ -35,7 +37,7 @@ namespace UnitTests.Grains
                 (value, token) =>
                 {
                     this.lastStreamValue = value;
-                    return TaskDone.Done;
+                    return Task.CompletedTask;
                 });
             await base.OnActivateAsync();
         }

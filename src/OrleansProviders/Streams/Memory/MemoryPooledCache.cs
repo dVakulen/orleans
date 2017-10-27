@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Streams;
@@ -16,18 +17,22 @@ namespace Orleans.Providers
         where TSerializer : class, IMemoryMessageBodySerializer
     {
         private readonly PooledQueueCache<MemoryMessageData, MemoryMessageData> cache;
-
+        private MemoryPooledCacheEvictionStrategy evictionStrategy;
         /// <summary>
         /// Pooled cache for memory stream provider
         /// </summary>
         /// <param name="bufferPool"></param>
+        /// <param name="purgePredicate"></param>
         /// <param name="logger"></param>
         /// <param name="serializer"></param>
-        public MemoryPooledCache(IObjectPool<FixedSizeBuffer> bufferPool, Logger logger, TSerializer serializer)
+        /// <param name="cacheMonitor"></param>
+        /// <param name="monitorWriteInterval">monitor write interval.  Only triggered for active caches.</param>
+        public MemoryPooledCache(IObjectPool<FixedSizeBuffer> bufferPool, TimePurgePredicate purgePredicate, ILogger logger, TSerializer serializer, ICacheMonitor cacheMonitor, TimeSpan? monitorWriteInterval)
         {
             var dataAdapter = new CacheDataAdapter(bufferPool, serializer);
-            cache = new PooledQueueCache<MemoryMessageData, MemoryMessageData>(dataAdapter, CacheDataComparer.Instance, logger);
-            dataAdapter.PurgeAction = cache.Purge;
+            cache = new PooledQueueCache<MemoryMessageData, MemoryMessageData>(dataAdapter, CacheDataComparer.Instance, logger, cacheMonitor, monitorWriteInterval);
+            this.evictionStrategy = new MemoryPooledCacheEvictionStrategy(logger, purgePredicate, cacheMonitor, monitorWriteInterval) {PurgeObservable = cache};
+            EvictionStrategyCommonUtils.WireUpEvictionStrategy<MemoryMessageData, MemoryMessageData>(cache, dataAdapter, evictionStrategy);
         }
 
         private class CacheDataComparer : ICacheDataComparer<MemoryMessageData>
@@ -49,13 +54,36 @@ namespace Orleans.Providers
             }
         }
 
+        private class MemoryPooledCacheEvictionStrategy : ChronologicalEvictionStrategy<MemoryMessageData>
+        {
+            public MemoryPooledCacheEvictionStrategy(ILogger logger, TimePurgePredicate purgePredicate, ICacheMonitor cacheMonitor, TimeSpan? monitorWriteInterval)
+                : base(logger, purgePredicate, cacheMonitor, monitorWriteInterval)
+            {
+            }
+
+            protected override object GetBlockId(MemoryMessageData? cachedMessage)
+            {
+                return cachedMessage?.Payload.Array;
+            }
+
+            protected override DateTime GetDequeueTimeUtc(ref MemoryMessageData cachedMessage)
+            {
+                return cachedMessage.DequeueTimeUtc;
+            }
+
+            protected override DateTime GetEnqueueTimeUtc(ref MemoryMessageData cachedMessage)
+            {
+                return cachedMessage.EnqueueTimeUtc;
+            }
+        }
+
         private class CacheDataAdapter : ICacheDataAdapter<MemoryMessageData, MemoryMessageData>
         {
             private readonly IObjectPool<FixedSizeBuffer> bufferPool;
             private readonly TSerializer serializer;
             private FixedSizeBuffer currentBuffer;
 
-            public Action<IDisposable> PurgeAction { private get; set; }
+            public Action<FixedSizeBuffer> OnBlockAllocated { private get; set; }
 
             public CacheDataAdapter(IObjectPool<FixedSizeBuffer> bufferPool, TSerializer serializer)
             {
@@ -66,12 +94,23 @@ namespace Orleans.Providers
                 this.bufferPool = bufferPool;
                 this.serializer = serializer;
             }
-             
+
+            public DateTime? GetMessageEnqueueTimeUtc(ref MemoryMessageData message)
+            {
+                return message.EnqueueTimeUtc;
+            }
+
+            public DateTime? GetMessageDequeueTimeUtc(ref MemoryMessageData message)
+            {
+                return message.DequeueTimeUtc;
+            }
+
             public StreamPosition QueueMessageToCachedMessage(ref MemoryMessageData cachedMessage,
                 MemoryMessageData queueMessage, DateTime dequeueTimeUtc)
             {
                 StreamPosition setreamPosition = GetStreamPosition(queueMessage);
                 cachedMessage = queueMessage;
+                cachedMessage.DequeueTimeUtc = dequeueTimeUtc;
                 cachedMessage.Payload = SerializeMessageIntoPooledSegment(queueMessage);
                 return setreamPosition;
             }
@@ -88,7 +127,10 @@ namespace Orleans.Providers
                 {
                     // no block or block full, get new block and try again
                     currentBuffer = bufferPool.Allocate();
-                    currentBuffer.SetPurgeAction(PurgeAction);
+                    if (this.OnBlockAllocated == null)
+                        throw new OrleansException("Eviction strategy's OnBlockAllocated is not set for current data adapter, this will affect cache purging");
+                    //call EvictionStrategy's OnBlockAllocated method
+                    this.OnBlockAllocated.Invoke(currentBuffer);
                     // if this fails with clean block, then requested size is too big
                     if (!currentBuffer.TryGetSegment(size, out segment))
                     {
@@ -117,17 +159,6 @@ namespace Orleans.Providers
             {
                 return new StreamPosition(new StreamIdentity(queueMessage.StreamGuid, queueMessage.StreamNamespace),
                     new EventSequenceTokenV2(queueMessage.SequenceNumber));
-            }
-
-            public bool ShouldPurge(ref MemoryMessageData cachedMessage, ref MemoryMessageData newestCachedMessage, IDisposable purgeRequest, DateTime nowUtc)
-            {
-                var purgedResource = (FixedSizeBuffer) purgeRequest;
-                // if we're purging our current buffer, don't use it any more
-                if (currentBuffer != null && currentBuffer.Id == purgedResource.Id)
-                {
-                    currentBuffer = null;
-                }
-                return cachedMessage.Payload.Array == purgedResource.Id;
             }
         }
 
@@ -189,12 +220,11 @@ namespace Orleans.Providers
         /// <param name="messages"></param>
         public void AddToCache(IList<IBatchContainer> messages)
         {
-            DateTime dequeueTimeUtc = DateTime.UtcNow;
-            foreach (IBatchContainer container in messages)
-            {
-                MemoryBatchContainer<TSerializer> memoryBatchContainer = (MemoryBatchContainer<TSerializer>) container;
-                cache.Add(memoryBatchContainer.MessageData, dequeueTimeUtc);
-            }
+            List<MemoryMessageData> memoryMessages = messages
+                .Cast<MemoryBatchContainer<TSerializer>>()
+                .Select(container => container.MessageData)
+                .ToList();
+            cache.Add(memoryMessages, DateTime.UtcNow);
         }
 
         /// <summary>
@@ -205,6 +235,7 @@ namespace Orleans.Providers
         public bool TryPurgeFromCache(out IList<IBatchContainer> purgedItems)
         {
             purgedItems = null;
+            this.evictionStrategy.PerformPurge(DateTime.UtcNow);
             return false;
         }
 

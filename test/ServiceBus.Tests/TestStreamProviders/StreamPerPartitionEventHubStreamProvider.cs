@@ -1,14 +1,7 @@
 ﻿using System;
 using System.Text;
-
-#if NETSTANDARD
 using Microsoft.Azure.EventHubs;
-#else
-
-using Microsoft.ServiceBus.Messaging;
-
-#endif
-
+using Microsoft.Extensions.Logging;
 using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Serialization;
@@ -35,11 +28,13 @@ namespace ServiceBus.Tests.TestStreamProviders.EventHub
                 timePurgePredicate = new TimePurgePredicate(adapterSettings.DataMinTimeInCache, adapterSettings.DataMaxAgeInCache);
             }
 
-            public IEventHubQueueCache CreateCache(string partition, IStreamQueueCheckpointer<string> checkpointer, Logger cacheLogger)
+            public IEventHubQueueCache CreateCache(string partition, IStreamQueueCheckpointer<string> checkpointer, ILoggerFactory loggerFactory, ITelemetryProducer telemetryProducer)
             {
-                var bufferPool = new FixedSizeObjectPool<FixedSizeBuffer>(adapterSettings.CacheSizeMb, () => new FixedSizeBuffer(1 << 20));
-                var dataAdapter = new CachedDataAdapter(partition, bufferPool, timePurgePredicate, this.serializationManager);
-                return new EventHubQueueCache(checkpointer, dataAdapter, EventHubDataComparer.Instance, cacheLogger);
+                var bufferPool = new ObjectPool<FixedSizeBuffer>(() => new FixedSizeBuffer(1 << 20), null, null);
+                var dataAdapter = new CachedDataAdapter(partition, bufferPool, this.serializationManager);
+                var cacheLogger = loggerFactory.CreateLogger($"{typeof(EventHubQueueCache).FullName}.{this.adapterSettings.StreamProviderName}.{partition}");
+                return new EventHubQueueCache(checkpointer, dataAdapter, EventHubDataComparer.Instance, cacheLogger,
+                    new EventHubCacheEvictionStrategy(cacheLogger, this.timePurgePredicate, null, null), null, null);
             }
         }
 
@@ -55,8 +50,8 @@ namespace ServiceBus.Tests.TestStreamProviders.EventHub
         {
             private readonly Guid partitionStreamGuid;
 
-            public CachedDataAdapter(string partitionKey, IObjectPool<FixedSizeBuffer> bufferPool, TimePurgePredicate timePurge, SerializationManager serializationManager)
-                : base(serializationManager, bufferPool, timePurge)
+            public CachedDataAdapter(string partitionKey, IObjectPool<FixedSizeBuffer> bufferPool, SerializationManager serializationManager)
+                : base(serializationManager, bufferPool)
             {
                 partitionStreamGuid = GetPartitionGuid(partitionKey);
             }
@@ -65,11 +60,8 @@ namespace ServiceBus.Tests.TestStreamProviders.EventHub
             {
                 IStreamIdentity stremIdentity = new StreamIdentity(partitionStreamGuid, null);
                 StreamSequenceToken token =
-#if NETSTANDARD
                 new EventHubSequenceTokenV2(queueMessage.SystemProperties.Offset, queueMessage.SystemProperties.SequenceNumber, 0);
-#else
-                new EventHubSequenceTokenV2(queueMessage.Offset, queueMessage.SequenceNumber, 0);
-#endif
+
                 return new StreamPosition(stremIdentity, token);
             }
         }
