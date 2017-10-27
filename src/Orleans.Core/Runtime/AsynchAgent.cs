@@ -1,11 +1,34 @@
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Orleans.Runtime
 {
+    class WorkDispatcher // rename. 
+    {
+        class StagesExecutionPlan // mapping? 
+        {
+            
+        }
+
+        private StagesExecutionPlan ExecutionPlan;
+
+        public void ScheduleStageRun(string stage, Task work) // returns stageExecutionHandle
+        {
+            // this.currentExecutorService.submit
+            
+        }
+        // current impl: per stage worker pool with optional blocking queue
+    }
+
+     // there should be ability to partially switch stages implementations
+     // in order to enable coarce - grained configuration based optimizations
+
+    // AsynchAgent -  long running work. queue agents - many short-running workloads //FaultBehavior
+
     // move  threading related thing out of AsynchAgent
-    // AsynchAgent - becomes more of a trait?, 
+    // AsynchAgent - becomes more of a trait?, and its content moves into poolThread./ start stop able.
     // take work dispatcher as dependency
     // dispatcher accepts work items + stage definition
     // dispatcher has internal stages to executors mappings (plan)
@@ -135,29 +158,6 @@ namespace Orleans.Runtime
                 Log.Verbose("Ignoring error during Stop: {0}", exc);
             }
             Log.Verbose("Stopped agent");
-        }
-
-        public void Abort(object stateInfo)
-        {
-            if(t!=null)
-                t.Abort(stateInfo);
-        }
-
-        public void Join(TimeSpan timeout)
-        {
-            try
-            {
-                var agentThread = t;
-                if (agentThread != null)
-                {
-                    bool joined = agentThread.Join((int)timeout.TotalMilliseconds);
-                    Log.Verbose("{0} the agent thread {1} after {2} time.", joined ? "Joined" : "Did not join", Name, timeout);
-                }
-            }catch(Exception exc)
-            {
-                // ignore. Just make sure Join does not throw.
-                Log.Verbose("Ignoring error during Join: {0}", exc);
-            }
         }
 
         protected abstract void Run();

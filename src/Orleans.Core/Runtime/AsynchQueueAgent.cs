@@ -6,6 +6,9 @@ using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime
 {
+    // queue services? where to move the BlockingCollection ?
+    // instead of accumulating work items to do in local collections - lambdas with it
+    // will be storred in execution service, thus only 1 mention of BC should remain
     internal abstract class AsynchQueueAgent<T> : AsynchAgent, IDisposable where T : IOutgoingMessage
     {
         private BlockingCollection<T> requestQueue;
