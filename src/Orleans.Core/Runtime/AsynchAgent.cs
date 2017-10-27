@@ -4,6 +4,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Orleans.Runtime
 {
+    // move  threading related thing out of AsynchAgent
+    // AsynchAgent - becomes more of a trait?, 
+    // take work dispatcher as dependency
+    // dispatcher accepts work items + stage definition
+    // dispatcher has internal stages to executors mappings (plan)
+    // current impl will be mapped to pools of adjusted workerPoolThreads
     internal abstract class AsynchAgent : IDisposable
     {
         public enum FaultBehavior
