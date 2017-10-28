@@ -82,7 +82,7 @@ namespace Orleans.Runtime
         private ProviderManagerSystemTarget providerManagerSystemTarget;
         private readonly IMembershipOracle membershipOracle;
         private readonly IMultiClusterOracle multiClusterOracle;
-
+        private readonly ExecutorService executorService;
         private Watchdog platformWatchdog;
         private readonly TimeSpan initTimeout;
         private readonly TimeSpan stopTimeout = TimeSpan.FromMinutes(1);
@@ -229,7 +229,7 @@ namespace Orleans.Runtime
                 logger.Error(ErrorCode.SiloStartError, "Exception during Silo.Start, GrainFactory was not registered in Dependency Injection container", exc);
                 throw;
             }
-
+            
             grainTypeManager = Services.GetRequiredService<GrainTypeManager>();
 
             // Performance metrics
@@ -266,12 +266,13 @@ namespace Orleans.Runtime
             siloStatistics.MetricsTable.ActivationDirectory = activationDirectory;
             siloStatistics.MetricsTable.ActivationCollector = catalog.ActivationCollector;
             siloStatistics.MetricsTable.MessageCenter = messageCenter;
-
+            
+            executorService = Services.GetRequiredService<ExecutorService>();
             // Now the incoming message agents
             var messageFactory = this.Services.GetRequiredService<MessageFactory>();
-            incomingSystemAgent = new IncomingMessageAgent(Message.Categories.System, messageCenter, activationDirectory, scheduler, catalog.Dispatcher, messageFactory, this.loggerFactory);
-            incomingPingAgent = new IncomingMessageAgent(Message.Categories.Ping, messageCenter, activationDirectory, scheduler, catalog.Dispatcher, messageFactory, this.loggerFactory);
-            incomingAgent = new IncomingMessageAgent(Message.Categories.Application, messageCenter, activationDirectory, scheduler, catalog.Dispatcher, messageFactory, this.loggerFactory);
+            incomingSystemAgent = new IncomingMessageAgent(Message.Categories.System, messageCenter, activationDirectory, scheduler, catalog.Dispatcher, messageFactory, executorService, this.loggerFactory);
+            incomingPingAgent = new IncomingMessageAgent(Message.Categories.Ping, messageCenter, activationDirectory, scheduler, catalog.Dispatcher, messageFactory, executorService, this.loggerFactory);
+            incomingAgent = new IncomingMessageAgent(Message.Categories.Application, messageCenter, activationDirectory, scheduler, catalog.Dispatcher, messageFactory, executorService, this.loggerFactory);
 
             membershipOracle = Services.GetRequiredService<IMembershipOracle>();
 
@@ -530,7 +531,7 @@ namespace Orleans.Runtime
                 if (this.logger.IsVerbose) { this.logger.Verbose("Silo deployment load publisher started successfully."); }
 
                 // Start background timer tick to watch for platform execution stalls, such as when GC kicks in
-                this.platformWatchdog = new Watchdog(this.LocalConfig.StatisticsLogWriteInterval, this.healthCheckParticipants, this.loggerFactory);
+                this.platformWatchdog = new Watchdog(this.LocalConfig.StatisticsLogWriteInterval, this.healthCheckParticipants, this.executorService, this.loggerFactory);
                 this.platformWatchdog.Start();
                 if (this.logger.IsVerbose) { this.logger.Verbose("Silo platform watchdog started successfully."); }
 

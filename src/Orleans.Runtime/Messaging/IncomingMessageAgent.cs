@@ -14,12 +14,13 @@ namespace Orleans.Runtime.Messaging
         private readonly MessageFactory messageFactory;
         private readonly Message.Categories category;
 
-        internal IncomingMessageAgent(Message.Categories cat, IMessageCenter mc, ActivationDirectory ad, OrleansTaskScheduler sched, Dispatcher dispatcher, MessageFactory messageFactory, ILoggerFactory loggerFactory) :
-            base(cat.ToString(), loggerFactory)
+        internal IncomingMessageAgent(Message.Categories cat, IMessageCenter mc, ActivationDirectory ad, OrleansTaskScheduler sched, Dispatcher dispatcher, MessageFactory messageFactory, ExecutorService executorService, ILoggerFactory loggerFactory) :
+            base(executorService, cat.ToString(), loggerFactory)
         {
             category = cat;
             messageCenter = mc;
             directory = ad;
+            // topo: remove need in scheduler
             scheduler = sched;
             this.dispatcher = dispatcher;
             this.messageFactory = messageFactory;

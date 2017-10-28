@@ -1,27 +1,71 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Orleans.Runtime
 {
-    class WorkDispatcher // rename. 
+    // pr notes: -work is two fold: 1 step - extract threading logic and make it injectable dependency
+    // 2 step - ??
+    interface IWorkDescriptor // for ExecutorService
+    {
+
+    }
+    interface IStage : IWorkDescriptor
+    {
+        
+    }
+    // due to number of entities to take new dependency for reducing churn
+    // it's order in parameters list will be in case of presense of log factory  - right before it, 
+    // not accounting it's importance to class functioning (for churn reducing)
+
+    //  class StageExecutionHandle
+    abstract class ExecutorService  // not needed?  .. stage info requirement is leaking from below .. 
+    {
+        // returns stageExecutionHandle // agent.stop  used only for cts, handle not needed? 
+        // or should the ExecutorService just provide means for job restarting?
+       // public abstract void Submit<T>(Action work) where T : IStage;
+    }
+
+    class StagedExecutorService : ExecutorService // rename.?
     {
         class StagesExecutionPlan // mapping? 
         {
-            
+            public Dictionary<Type, StagedExecutor> currentMapping = new Dictionary<Type, StagedExecutor>();
         }
 
-        private StagesExecutionPlan ExecutionPlan;
+        private StagesExecutionPlan currentExecutionPlan = new StagesExecutionPlan();
 
-        public void ScheduleStageRun(string stage, Task work) // returns stageExecutionHandle
+        class StagedExecutor
         {
+            public void Execute()
+            {
+                
+            }
+        }
+
+        public  void Submit<T>(Action work) where T : IStage
+        {
+            currentExecutionPlan.currentMapping[typeof(T)].Execute();
+            throw new NotImplementedException();
+        }
+
+        // overload with func returning promise isn't needed? 
+
+        public void ScheduleStageRun<T>(T stage, Action work) where T : IStage// returns stageExecutionHandle
+        {
+          //  ThreadPool.QueueUserWorkItem()
             // this.currentExecutorService.submit
             
         }
+
         // current impl: per stage worker pool with optional blocking queue
+        
     }
 
+    //  "Enable execution engine config\switch"
      // there should be ability to partially switch stages implementations
      // in order to enable coarce - grained configuration based optimizations
 
@@ -33,6 +77,8 @@ namespace Orleans.Runtime
     // dispatcher accepts work items + stage definition
     // dispatcher has internal stages to executors mappings (plan)
     // current impl will be mapped to pools of adjusted workerPoolThreads
+
+    // 1 step - ensure ExecuterService resolving in all target places ( AsynchAgent, workerpoolThread) 
     internal abstract class AsynchAgent : IDisposable
     {
         public enum FaultBehavior
@@ -41,6 +87,8 @@ namespace Orleans.Runtime
             RestartOnFault, // Restart the agent if it faults
             IgnoreFault     // Allow the agent to stop if it faults, but take no other action (other than logging)
         }
+
+        protected readonly ExecutorService executorService;
 
         private Thread t;
         protected CancellationTokenSource Cts;
@@ -55,10 +103,14 @@ namespace Orleans.Runtime
 
         public ThreadState State { get; private set; }
         internal string Name { get; private set; }
-        internal int ManagedThreadId { get { return t==null ? -1 : t.ManagedThreadId;  } } 
+        internal int ManagedThreadId { get { return t==null ? -1 : t.ManagedThreadId;  } }
 
-        protected AsynchAgent(string nameSuffix, ILoggerFactory loggerFactory)
+        //   private Catalog Catalog => this.catalog ?? (this.catalog = this.ServiceProvider.GetRequiredService<Catalog>());
+        // nameSuffix - maybe at some point should be removed.
+        protected AsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory)
         {
+            this.executorService = executorService;
+
             Cts = new CancellationTokenSource();
             var thisType = GetType();
             
@@ -89,11 +141,12 @@ namespace Orleans.Runtime
                 threadTracking = new ThreadTrackingStatistic(Name);
             }
 #endif
+            //      ExecutorService.submit(AgentThreadProc)
             t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
         }
 
-        protected AsynchAgent(ILoggerFactory loggerFactory)
-            : this(null, loggerFactory)
+        protected AsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory)
+            : this(executorService, null, loggerFactory)
         {
         }
 

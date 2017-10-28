@@ -17,8 +17,8 @@ namespace Orleans.Messaging
         private readonly IncomingMessageBuffer buffer;
         private Socket socket;
 
-        internal GatewayClientReceiver(GatewayConnection gateway, SerializationManager serializationManager, ILoggerFactory loggerFactory)
-            : base(gateway.Address.ToString(), loggerFactory)
+        internal GatewayClientReceiver(GatewayConnection gateway, ExecutorService executorService, SerializationManager serializationManager, ILoggerFactory loggerFactory)
+            : base(executorService, gateway.Address.ToString(), loggerFactory)
         {
             gatewayConnection = gateway;
             OnFault = FaultBehavior.RestartOnFault;
