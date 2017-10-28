@@ -4,70 +4,301 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime
 {
     // pr notes: -work is two fold: 1 step - extract threading logic and make it injectable dependency
-    // 2 step - ??
-    interface IWorkDescriptor // for ExecutorService
-    {
+    // 2 step - implement stage ( workers pool + queue)
+    // exctracted frokm asynch agent logic could be consolidated with WorkerPoolTHread one, 
+    // but for simplicity of this PR  it remained untouched
 
-    }
-    interface IStage : IWorkDescriptor
+    // . 
+    // concepts introduced:  ..
+    // responsibilites moved : ..
+    interface IActionDescriptor
     {
-        
     }
+
+    // threadpool - ThreadPoolType.Fixed, sclaing, is ThreadpooBuilder needed?
+    // convinient way to ensure compile time invariants, 
+    interface IActionAttribute
+    {
+    }
+
+    // approach - copy existing, get tests green, delete old.
+
+    interface OrleansContextRequired : IActionAttribute { }
+    static class ActionFaultBehavior
+    {
+        public interface CrashOnFault : IActionAttribute // Crash the process if the agent faults
+        {
+        }
+
+        public interface RestartOnFault : IActionAttribute // Restart the agent if it faults
+        {
+        }
+
+        public interface IgnoreFault : IActionAttribute // Allow the agent to stop if it faults, but take no other action (other than logging)
+        {
+        }
+    }
+
+
+    interface IStageDefinition
+    {
+    }
+
+    // stage - actions : 1 to many
     // due to number of entities to take new dependency for reducing churn
     // it's order in parameters list will be in case of presense of log factory  - right before it, 
     // not accounting it's importance to class functioning (for churn reducing)
 
     //  class StageExecutionHandle
-    abstract class ExecutorService  // not needed?  .. stage info requirement is leaking from below .. 
+    abstract class ExecutorService // not needed?  .. stage info requirement is leaking from below .. 
     {
         // returns stageExecutionHandle // agent.stop  used only for cts, handle not needed? 
         // or should the ExecutorService just provide means for job restarting?
-       // public abstract void Submit<T>(Action work) where T : IStage;
+
+        // passing stage and action info as generic parameters in comparison with passing 
+        // as argument:as at each call point 
+        // the values are static(does not change during execution), more clearly states this info immutability,
+        // also helps to show class contract in class definition ( <IConcreteActionDescriptor> - ) 
+        // todo: overload without TIActionDescriptor withc will use default
+        // + overload  with argument as param? could be added later
+        // predefined executors? 
+        public abstract void Submit<TStage, T>(Action work)
+            where TStage : IStageDefinition
+            where T : IActionDescriptor;
     }
 
-    class StagedExecutorService : ExecutorService // rename.?
+    abstract class StagesExecutionPlan
     {
-        class StagesExecutionPlan // mapping? 
+        // could be changeable at runtime (adopting to load, etc)
+        private Dictionary<Type, IStageExecutor> mapping { get; } 
+
+        protected HashSet<Type> KnownStages { get; }
+
+        public StagesExecutionPlan()
         {
-            public Dictionary<Type, StagedExecutor> currentMapping = new Dictionary<Type, StagedExecutor>();
+            mapping = new Dictionary<Type, IStageExecutor>();
+            KnownStages = GetKnownStages();
         }
 
-        private StagesExecutionPlan currentExecutionPlan = new StagesExecutionPlan();
-
-        class StagedExecutor
+        private HashSet<Type> GetKnownStages()
         {
-            public void Execute()
+            return new HashSet<Type>
             {
-                
+                typeof(ConcreteStageDefinition)
+            };
+        }
+
+        // + list of known stages
+        protected void Register<T>(IStageExecutor executor) where T : IStageDefinition
+        {
+            mapping.Add(typeof(T), executor);
+        }
+
+        public void Dispatch<TStage, T>(Action workItem)
+            where TStage : IStageDefinition
+            where T : IActionDescriptor
+        {
+            if (mapping.TryGetValue(typeof(TStage), out var correspondingExecutor))
+            {
+                correspondingExecutor.Execute<T>(workItem);
+            }
+            else
+            {
+                throw new Exception();
             }
         }
+    }
 
-        public  void Submit<T>(Action work) where T : IStage
+    class ThreadPoolPerStageExecutionPlan : StagesExecutionPlan
+    {
+        // public Dictionary<Type, IStageExecutor> currentMapping = new Dictionary<Type, IStageExecutor>();
+
+        public ThreadPoolPerStageExecutionPlan()
         {
-            currentExecutionPlan.currentMapping[typeof(T)].Execute();
-            throw new NotImplementedException();
+            Register<ConcreteStageDefinition>(new ConcreteStageExecutor());
         }
+
+        //  private readonly 
+        //  protected override Dictionary<Type, IStageExecutor> currentMapping { get; }
+    }
+
+    interface IStageExecutor
+    {
+        void Execute<T>(Action workItem) where T : IActionDescriptor; // provide default handling? 
+    }
+
+
+    class ConcreteStageDefinition : IStageDefinition
+    {
+    }
+
+    class ConcreteActionDescription : IActionDescriptor, ActionFaultBehavior.CrashOnFault
+    {
+    }
+
+    class StagedExecutorService : ExecutorService // rename.? most likely only ExecutorService is to remain
+    {
+        public StagedExecutorService(NodeConfiguration config)
+        {
+        }
+
+        public StagedExecutorService(ClientConfiguration config)
+        {
+        }
+
+        // could be swappable at runtime
+        private StagesExecutionPlan currentExecutionPlan = new ThreadPoolPerStageExecutionPlan();
+
+
+//         class ConcreteStageExecutor : StageExecutor<ConcreteStageDescription>
+//        {
+//        }
 
         // overload with func returning promise isn't needed? 
 
-        public void ScheduleStageRun<T>(T stage, Action work) where T : IStage// returns stageExecutionHandle
+        // returns stageExecutionHandle ? ensure number of concurrent runs constrain. 
+        public override void Submit<TStage, T>(Action work)
         {
-          //  ThreadPool.QueueUserWorkItem()
-            // this.currentExecutorService.submit
-            
+            currentExecutionPlan.Dispatch<TStage, T>(work);
+            throw new NotImplementedException();
         }
 
+        //  ThreadPool.QueueUserWorkItem()
+        // this.currentExecutorService.submit
         // current impl: per stage worker pool with optional blocking queue
-        
+    }
+
+    class ConcreteStageExecutor : IStageExecutor// - will be abstract
+    {
+        private Dictionary<Type, LinkedList<IActionWrapper>> workItemWrappers = null;
+        // interceptors? currenlty there's no need in multiple wrappers per action  Action[] - will be stack\ likedlist be more descriptive? 
+        public ConcreteStageExecutor()
+        {
+            // precalculate workItem wrapper lambdas?
+
+        }
+
+        public void Execute<T>(Action workItem) where T : IActionDescriptor
+        {
+           
+            if (!workItemWrappers.TryGetValue(typeof(T), out var actionWrappers))
+            {
+                workItemWrappers[typeof(T)] = actionWrappers = GetActionWrappers<T>();
+            }
+            //            var qw  = new LinkedList<string>();
+            if (actionWrappers.Any())
+            {
+                var qwe = actionWrappers.First;
+                ExecuteActionV2(qwe, workItem);
+            }
+            else
+            {
+                workItem();
+            }
+            throw new NotImplementedException();
+        }
+       protected interface IActionWrapper
+        {
+            Type HandlingAttributeType { get; }
+            void ExecuteAction(Action action);
+
+        }
+        abstract class ActionBehaviorMixin<TActionAttribute> : IActionWrapper where TActionAttribute : IActionAttribute
+        {
+            public Type HandlingAttributeType { get; } = typeof(TActionAttribute);
+            public abstract void ExecuteAction(Action action);
+        }
+
+        void ExecuteActionV2(LinkedListNode<IActionWrapper> actionNode, Action action)
+        {
+            if (actionNode == null)
+            {
+                action();
+                //  workAction();
+            }
+            else
+            {
+                ExecuteActionV2(actionNode.Next, action);
+            }
+        }
+
+        //        ThreadPool.QueueUserWorkItem(state => // ashould be another action wrapper, iotsideschedulerrunnable  behavior
+        //                        {
+        //                            if (RuntimeContext.Current == null)
+        //                            {
+        //                                RuntimeContext.Current = new RuntimeContext
+        //                                {
+        //                                    Scheduler = TaskScheduler.Current
+        //    };
+        //}
+        //agent.Run();
+        //                        });
+
+        // todo: describe reasons fornaming
+        class OrleansContextRequiredMixin : ActionBehaviorMixin<OrleansContextRequired> // for .net threadpool based executor ( not only? )  // rename
+        {
+            private TaskScheduler taskScheduler;
+            public OrleansContextRequiredMixin(TaskScheduler scheduler)
+            {
+                taskScheduler = scheduler;
+            }
+
+            public override void ExecuteAction(Action action)
+            {
+                RuntimeContext.InitializeThread(taskScheduler);
+                try
+                {
+                    action();
+                }
+                finally
+                {
+                    // deinitialize will be needed for .net threadpool
+                }
+            }
+        }
+
+        class ActionCrashOnFaultBehavior : ActionBehaviorMixin<ActionFaultBehavior.CrashOnFault>
+        {
+            public override void ExecuteAction(Action action)
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    var todo = ex;
+                }
+            }
+        }
+        // each stageexecutor - should be able to add its own?
+        protected virtual LinkedList<IActionWrapper> GetActionWrappers<T>() where T : IActionDescriptor
+        {
+            var actionWrappers = new LinkedList<IActionWrapper>();
+            var existingWrappersList = new List<IActionWrapper>
+            {
+                new ActionCrashOnFaultBehavior()
+            };
+
+            var tType = typeof(T);
+            return existingWrappersList
+                .Where(v => v.HandlingAttributeType.IsAssignableFrom(tType))
+                .Aggregate(actionWrappers, (list, wrapper) =>
+                {
+                    list.AddLast(wrapper);
+                    return list;
+                });
+        }
     }
 
     //  "Enable execution engine config\switch"
-     // there should be ability to partially switch stages implementations
-     // in order to enable coarce - grained configuration based optimizations
+    // there should be ability to partially switch stages implementations
+    // in order to enable coarce - grained configuration based optimizations
 
     // AsynchAgent -  long running work. queue agents - many short-running workloads //FaultBehavior
 
@@ -79,32 +310,20 @@ namespace Orleans.Runtime
     // current impl will be mapped to pools of adjusted workerPoolThreads
 
     // 1 step - ensure ExecuterService resolving in all target places ( AsynchAgent, workerpoolThread) 
-    internal abstract class AsynchAgent : IDisposable
-    {
-        public enum FaultBehavior
-        {
-            CrashOnFault,   // Crash the process if the agent faults
-            RestartOnFault, // Restart the agent if it faults
-            IgnoreFault     // Allow the agent to stop if it faults, but take no other action (other than logging)
-        }
+    internal abstract class AsynchAgent : IDisposable // on fault should be passed alongside concrete action 
+    {  // asyncg agent- stage reference. 
 
         protected readonly ExecutorService executorService;
-
-        private Thread t;
         protected CancellationTokenSource Cts;
         protected object Lockable;
         protected Logger Log;
         private readonly string type;
-        protected FaultBehavior OnFault;
 
 #if TRACK_DETAILED_STATS
         internal protected ThreadTrackingStatistic threadTracking;
 #endif
 
-        public ThreadState State { get; private set; }
         internal string Name { get; private set; }
-        internal int ManagedThreadId { get { return t==null ? -1 : t.ManagedThreadId;  } }
-
         //   private Catalog Catalog => this.catalog ?? (this.catalog = this.ServiceProvider.GetRequiredService<Catalog>());
         // nameSuffix - maybe at some point should be removed.
         protected AsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory)
@@ -129,20 +348,13 @@ namespace Orleans.Runtime
             }
 
             Lockable = new object();
-            State = ThreadState.Unstarted;
-            OnFault = FaultBehavior.IgnoreFault;
             Log = new LoggerWrapper(Name, loggerFactory);
-
-            AppDomain.CurrentDomain.DomainUnload += CurrentDomain_DomainUnload;
-
 #if TRACK_DETAILED_STATS
             if (StatisticsCollector.CollectThreadTimeTrackingStats)
             {
                 threadTracking = new ThreadTrackingStatistic(Name);
             }
 #endif
-            //      ExecutorService.submit(AgentThreadProc)
-            t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
         }
 
         protected AsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory)
@@ -150,133 +362,53 @@ namespace Orleans.Runtime
         {
         }
 
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
-        private void CurrentDomain_DomainUnload(object sender, EventArgs e)
-        {
-            try
-            {
-                if (State != ThreadState.Stopped)
-                {
-                    Stop();
-                }
-            }
-            catch (Exception exc)
-            {
-                // ignore. Just make sure DomainUnload handler does not throw.
-                Log.Verbose("Ignoring error during Stop: {0}", exc);
-            }
-        }
-
         public virtual void Start()
         {
-            lock (Lockable)
-            {
-                if (State == ThreadState.Running)
-                {
-                    return;
-                }
-
-                if (State == ThreadState.Stopped)
-                {
-                    Cts = new CancellationTokenSource();
-                    t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
-                }
-
-                t.Start(this);
-                State = ThreadState.Running;
-            }
-            if(Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
+           //  executorService.Submit<>( AgentThreadProc);
+            // todo: executor service should ensure concurrent run number guarantees
+            //                if (State == ThreadState.Stopped)
+            //                {
+            //                    Cts = new CancellationTokenSource();
+            //                    t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
+            //                }
+            // if(Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         public virtual void Stop()
         {
-            try
-            {
-                lock (Lockable)
-                {
-                    if (State == ThreadState.Running)
-                    {
-                        State = ThreadState.StopRequested;
-                        Cts.Cancel();
-                        State = ThreadState.Stopped;
-                    }
-                }
+            // todo: StopRequested verify that it is not needed
 
-                AppDomain.CurrentDomain.DomainUnload -= CurrentDomain_DomainUnload;
-            }
-            catch (Exception exc)
-            {
-                // ignore. Just make sure stop does not throw.
-                Log.Verbose("Ignoring error during Stop: {0}", exc);
-            }
+            Cts.Cancel();
             Log.Verbose("Stopped agent");
         }
 
         protected abstract void Run();
-
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
-        private static void AgentThreadProc(Object obj)
-        {
-            var agent = obj as AsynchAgent;
-            if (agent == null)
-            {
-                throw new InvalidOperationException("Agent thread started with incorrect parameter type");
-            }
-
-            try
-            {
-                LogStatus(agent.Log, "Starting AsyncAgent {0} on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
-                CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
-                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
-                CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
-                agent.Run();
-            }
-            catch (Exception exc)
-            {
-                if (agent.State == ThreadState.Running) // If we're stopping, ignore exceptions
-                {
-                    var log = agent.Log;
-                    switch (agent.OnFault)
-                    {
-                        case FaultBehavior.CrashOnFault:
-                            Console.WriteLine(
-                                "The {0} agent has thrown an unhandled exception, {1}. The process will be terminated.",
-                                agent.Name, exc);
-                            log.Error(ErrorCode.Runtime_Error_100023,
-                                "AsynchAgent Run method has thrown an unhandled exception. The process will be terminated.",
-                                exc);
-                            log.Fail(ErrorCode.Runtime_Error_100024, "Terminating process because of an unhandled exception caught in AsynchAgent.Run.");
-                            break;
-                        case FaultBehavior.IgnoreFault:
-                            log.Error(ErrorCode.Runtime_Error_100025, "AsynchAgent Run method has thrown an unhandled exception. The agent will exit.",
-                                exc);
-                            agent.State = ThreadState.Stopped;
-                            break;
-                        case FaultBehavior.RestartOnFault:
-                            log.Error(ErrorCode.Runtime_Error_100026,
-                                "AsynchAgent Run method has thrown an unhandled exception. The agent will be restarted.",
-                                exc);
-                            agent.State = ThreadState.Stopped;
-                            try
-                            {
-                                agent.Start();
-                            }
-                            catch (Exception ex)
-                            {
-                                log.Error(ErrorCode.Runtime_Error_100027, "Unable to restart AsynchAgent", ex);
-                                agent.State = ThreadState.Stopped;
-                            }
-                            break;
-                    }
-                }
-            }
-            finally
-            {
-                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).DecrementBy(1);
-                agent.Log.Info(ErrorCode.Runtime_Error_100328, "Stopping AsyncAgent {0} that runs on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
-            }
-        }
+//
+//        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+//        private static void AgentThreadProc(Object obj)// not neeeded
+//        {
+//            var agent = obj as AsynchAgent;
+//            if (agent == null)
+//            {
+//                throw new InvalidOperationException("Agent thread started with incorrect parameter type");
+//    }
+//
+//            try
+//            {
+//                LogStatus(agent.Log, "Starting AsyncAgent {0} on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+//    CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
+//                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
+//    CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
+//
+//    agent.Run();
+//            }
+//            finally
+//            {
+//                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).DecrementBy(1);
+//agent.Log.Info(ErrorCode.Runtime_Error_100328, "Stopping AsyncAgent {0} that runs on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+//            }
+//        }
 
 #region IDisposable Members
 
@@ -302,22 +434,6 @@ namespace Orleans.Runtime
         public override string ToString()
         {
             return Name;
-        }
-
-        internal static bool IsStarting { get; set; }
-
-        private static void LogStatus(Logger log, string msg, params object[] args)
-        {
-            if (IsStarting)
-            {
-                // Reduce log noise during silo startup
-                if (log.IsVerbose) log.Verbose(msg, args);
-            }
-            else
-            {
-                // Changes in agent threads during all operations aside for initial creation are usually important diag events.
-                log.Info(msg, args);
-            }
         }
     }
 }

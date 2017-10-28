@@ -68,7 +68,6 @@ namespace Orleans.Hosting
             services.TryAddSingleton<TelemetryManager>();
             services.TryAddFromExisting<ITelemetryProducer, TelemetryManager>();
 
-            services.TryAddSingleton<ExecutorService>(_ => new StagedExecutorService());
 
             // queue balancer contructing related
             services.TryAddTransient<StaticClusterConfigDeploymentBalancer>();
@@ -110,6 +109,7 @@ namespace Orleans.Hosting
             services.TryAddSingleton<IGrainRuntime, GrainRuntime>();
             services.TryAddSingleton<IGrainCancellationTokenRuntime, GrainCancellationTokenRuntime>();
             services.TryAddSingleton<OrleansTaskScheduler>();
+            services.TryAddSingleton<ExecutorService, StagedExecutorService>(); // (will be taking dependency on OrleansTaskScheduler)
             services.TryAddSingleton<GrainFactory>(sp => sp.GetService<InsideRuntimeClient>().ConcreteGrainFactory);
             services.TryAddFromExisting<IGrainFactory, GrainFactory>();
             services.TryAddFromExisting<IInternalGrainFactory, GrainFactory>();
