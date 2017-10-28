@@ -16,7 +16,8 @@ namespace UnitTests.MessageCenterTests
             private readonly ITestOutputHelper output;
 
             public TestAgent(ITestOutputHelper output)
-                :base(NullLoggerFactory.Instance)
+                // todo: pass default instance? + rewrite
+                :base(null, NullLoggerFactory.Instance)
             {
                 this.output = output;
             }

@@ -4,70 +4,184 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime
 {
     // pr notes: -work is two fold: 1 step - extract threading logic and make it injectable dependency
-    // 2 step - ??
-    interface IWorkDescriptor // for ExecutorService
+    // 2 step - implement stage ( workers pool + queue)
+    // . 
+    // concepts introduced:  ..
+    // responsibilites moved : ..
+    interface IActionDescriptor
     {
+    }
 
-    }
-    interface IStage : IWorkDescriptor
+    // convinient way to ensure compile time invariants, 
+    interface IActionAttribute
     {
-        
     }
+
+    static class ActionFaultBehavior
+    {
+        public interface CrashOnFault : IActionAttribute // Crash the process if the agent faults
+        {
+        }
+
+        public interface RestartOnFault : IActionAttribute // Restart the agent if it faults
+        {
+        }
+
+        public interface
+            IgnoreFault : IActionAttribute // Allow the agent to stop if it faults, but take no other action (other than logging)
+        {
+        }
+    }
+
+    interface IStage
+    {
+    }
+
+    // stage - actions : 1 to many
     // due to number of entities to take new dependency for reducing churn
     // it's order in parameters list will be in case of presense of log factory  - right before it, 
     // not accounting it's importance to class functioning (for churn reducing)
 
     //  class StageExecutionHandle
-    abstract class ExecutorService  // not needed?  .. stage info requirement is leaking from below .. 
+    abstract class ExecutorService // not needed?  .. stage info requirement is leaking from below .. 
     {
         // returns stageExecutionHandle // agent.stop  used only for cts, handle not needed? 
         // or should the ExecutorService just provide means for job restarting?
-       // public abstract void Submit<T>(Action work) where T : IStage;
+
+        // passing stage and action info as generic parameters in comparison with passing 
+        // as argument:as at each call point 
+        // the values are static(does not change during execution), more clearly states this info immutability
+        // todo: overload without TIActionDescriptor withc will use default
+        public abstract void Submit<TStage, T>(Action work)
+            where TStage : IStage
+            where T : IActionDescriptor;
+    }
+
+    abstract class StagesExecutionPlan
+    {
+        private Dictionary<Type, IStageExecutor> mapping { get; } 
+
+        protected HashSet<Type> KnownStages { get; }
+
+        public StagesExecutionPlan()
+        {
+            mapping = new Dictionary<Type, IStageExecutor>();
+            KnownStages = GetKnownStages();
+        }
+
+        private HashSet<Type> GetKnownStages()
+        {
+            return new HashSet<Type>
+            {
+                typeof(ConcreteStage)
+            };
+        }
+
+        // + list of known stages
+        protected void Register<T>(IStageExecutor executor) where T : IStage
+        {
+            mapping.Add(typeof(T), executor);
+        }
+
+        public void Dispatch<TStage, T>(Action workItem)
+            where TStage : IStage
+            where T : IActionDescriptor
+        {
+            if (mapping.TryGetValue(typeof(TStage), out var correspondingExecutor))
+            {
+                correspondingExecutor.Execute<T>(workItem);
+            }
+            else
+            {
+                throw new Exception();
+            }
+        }
+    }
+
+    class ThreadPoolPerStageExecutionPlan : StagesExecutionPlan
+    {
+        // public Dictionary<Type, IStageExecutor> currentMapping = new Dictionary<Type, IStageExecutor>();
+
+        public ThreadPoolPerStageExecutionPlan()
+        {
+            Register<ConcreteStage>(new ConcreteStageExecutor());
+        }
+
+        //  private readonly 
+        //  protected override Dictionary<Type, IStageExecutor> currentMapping { get; }
+    }
+
+    interface IStageExecutor
+    {
+        void Execute<T>(Action workItem) where T : IActionDescriptor; // provide default handling? 
+    }
+
+    class ConcreteStageExecutor : IStageExecutor // should be on method
+    {
+        public ConcreteStageExecutor()
+        {
+            // precalculate workItem wrapper lambdas?
+
+            //                if (typeof(ActionFaultBehavior.CrashOnFault).IsAssignableFrom(typeof(T)))// ?? precalculate at stage creation.
+            //                {
+            //                    // ...
+            //                }
+        }
+
+        public void Execute<T>(Action workItem) where T : IActionDescriptor
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    class ConcreteStage : IStage
+    {
+    }
+
+    class ConcreteActionDescription : IActionDescriptor, ActionFaultBehavior.CrashOnFault
+    {
     }
 
     class StagedExecutorService : ExecutorService // rename.?
     {
-        class StagesExecutionPlan // mapping? 
+        public StagedExecutorService(NodeConfiguration config)
         {
-            public Dictionary<Type, StagedExecutor> currentMapping = new Dictionary<Type, StagedExecutor>();
         }
 
-        private StagesExecutionPlan currentExecutionPlan = new StagesExecutionPlan();
-
-        class StagedExecutor
+        public StagedExecutorService(ClientConfiguration config)
         {
-            public void Execute()
-            {
-                
-            }
         }
 
-        public  void Submit<T>(Action work) where T : IStage
-        {
-            currentExecutionPlan.currentMapping[typeof(T)].Execute();
-            throw new NotImplementedException();
-        }
+
+        private StagesExecutionPlan currentExecutionPlan = new ThreadPoolPerStageExecutionPlan();
+
+
+//         class ConcreteStageExecutor : StageExecutor<ConcreteStageDescription>
+//        {
+//        }
 
         // overload with func returning promise isn't needed? 
 
-        public void ScheduleStageRun<T>(T stage, Action work) where T : IStage// returns stageExecutionHandle
+        // returns stageExecutionHandle ? ensure number of concurrent runs constrain. 
+        public override void Submit<TStage, T>(Action work)
         {
-          //  ThreadPool.QueueUserWorkItem()
-            // this.currentExecutorService.submit
-            
+            currentExecutionPlan.Dispatch<TStage, T>(work);
+            throw new NotImplementedException();
         }
 
+        //  ThreadPool.QueueUserWorkItem()
+        // this.currentExecutorService.submit
         // current impl: per stage worker pool with optional blocking queue
-        
     }
 
     //  "Enable execution engine config\switch"
-     // there should be ability to partially switch stages implementations
-     // in order to enable coarce - grained configuration based optimizations
+    // there should be ability to partially switch stages implementations
+    // in order to enable coarce - grained configuration based optimizations
 
     // AsynchAgent -  long running work. queue agents - many short-running workloads //FaultBehavior
 

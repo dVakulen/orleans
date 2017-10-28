@@ -88,7 +88,7 @@ namespace Orleans
             services.TryAddSingleton<TelemetryManager>();
             services.TryAddFromExisting<ITelemetryProducer, TelemetryManager>();
             services.AddLogging();
-            services.TryAddSingleton<ExecutorService>(_ => new StagedExecutorService());
+            services.TryAddSingleton<ExecutorService, StagedExecutorService>();
 
             //temporary change until runtime moved away from Logger
             services.TryAddSingleton(typeof(LoggerWrapper<>));
