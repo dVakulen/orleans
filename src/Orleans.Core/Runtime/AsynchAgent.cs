@@ -355,8 +355,14 @@ namespace Orleans.Runtime
 //            // consider submit typeof(this) as stage
 //            executorService.SubmitqQ(this,   null);
             // 'type inference 
-            executorService.SubmitW(this, GetAction<T>());
+            executorService.SubmitW(this, GetAction());
         }
+        // this is agent business logic
+        // run - also action , so will have action descriptor
+        //   / protected abstract void Run<T>() where T: IActionDescriptor;
+        // todo: verify fit in inheritors
+        // being called at stage start
+        public abstract T GetAction() ;  // { get; } //where T : 
         public static Func<TResult> ApplyPartial<T1, TResult>
             (Func<T1, TResult> function, T1 arg1)
         {
@@ -479,16 +485,9 @@ namespace Orleans.Runtime
 
             Cts.Cancel();
             Log.Verbose("Stopped agent");
-
-            executorService.Submit(this, GetAction());
+            
         }
 
-        // this is agent business logic
-        // run - also action , so will have action descriptor
-   //   / protected abstract void Run<T>() where T: IActionDescriptor;
-   // todo: verify fit in inheritors
-        public abstract T GetAction<T>() where  T: IActionDescriptor;  // { get; } //where T : 
-       // void Q<T>()
 //
 //        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
 //        private static void AgentThreadProc(Object obj)// not neeeded
