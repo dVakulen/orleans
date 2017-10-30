@@ -77,6 +77,7 @@ namespace Orleans.Runtime
         // + overload  with argument as param? could be added later
         // predefined executors? 
         // should accept actionDescriptor instead of Action.
+        // generics - enforcing contracts
         public abstract void Submit<TStage, T>(TStage stage, Action work) // TStage,typ
             where TStage : IStageDefinition
             where T : IActionDescriptor;
@@ -325,8 +326,7 @@ namespace Orleans.Runtime
     // current impl will be mapped to pools of adjusted workerPoolThreads
 
     // 1 step - ensure ExecuterService resolving in all target places ( AsynchAgent, workerpoolThread) 
-    internal abstract class SingleActionAsynchAgent< T> : AsynchAgent
-        where T : IActionDescriptor
+    internal abstract class SingleActionAsynchAgent: AsynchAgent
     {
         // need in empty ctors should be removed in following c# versions https://github.com/dotnet/csharplang/issues/806
         protected SingleActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
@@ -362,7 +362,7 @@ namespace Orleans.Runtime
         //   / protected abstract void Run<T>() where T: IActionDescriptor;
         // todo: verify fit in inheritors
         // being called at stage start
-        public abstract T GetAction() ;  // { get; } //where T : 
+        public abstract IActionDescriptor GetAction() ;  // { get; } //where T : 
         public static Func<TResult> ApplyPartial<T1, TResult>
             (Func<T1, TResult> function, T1 arg1)
         {
