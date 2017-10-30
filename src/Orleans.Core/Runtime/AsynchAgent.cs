@@ -457,6 +457,7 @@ namespace Orleans.Runtime
         }
 
         // there action must be submitted to executor service
+        // start of the stage execution.
         public abstract void Start();
         //{
         //    executorService.Submit<>( Run);
@@ -485,6 +486,7 @@ namespace Orleans.Runtime
         // this is agent business logic
         // run - also action , so will have action descriptor
    //   / protected abstract void Run<T>() where T: IActionDescriptor;
+   // todo: verify fit in inheritors
         public abstract T GetAction<T>() where  T: IActionDescriptor;  // { get; } //where T : 
        // void Q<T>()
 //
