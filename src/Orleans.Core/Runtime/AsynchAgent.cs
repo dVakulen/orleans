@@ -80,7 +80,9 @@ namespace Orleans.Runtime
         public abstract void Submit<TStage, T>(TStage stage, Action work) // TStage,typ
             where TStage : IStageDefinition
             where T : IActionDescriptor;
-
+        public abstract void SubmitW<TStage, T>(TStage stage, T work) // TStage,typ
+            where TStage : IStageDefinition
+            where T : IActionDescriptor;
         public abstract void SubmitqQ<TStage>(TStage stage, Action work) // TStage,typ
             where TStage : IStageDefinition;
     }
@@ -335,11 +337,15 @@ namespace Orleans.Runtime
         {
         }
 
-//        protected override void Run<Q>()
-//            where  Q : IActionDescriptor
-//        {
-//            
-//        }
+        //        protected override void Run<Q>()
+        //            where  Q : IActionDescriptor
+        //        {
+        //            
+        //        }
+
+        // what does start means? - Stage start 
+
+        // for SingleActionAsynchAgent - does it means it should single action? (looks like yes) 
         public override void Start()
         {
 //            ApplyPartial((this, "") =>
@@ -349,8 +355,7 @@ namespace Orleans.Runtime
 //            // consider submit typeof(this) as stage
 //            executorService.SubmitqQ(this,   null);
             // 'type inference 
-            //https://github.com/Microsoft/TypeScript/issues/10571 do waht
-            executorService.Submit(this, GetAction<T>());
+            executorService.SubmitW(this, GetAction<T>());
         }
         public static Func<TResult> ApplyPartial<T1, TResult>
             (Func<T1, TResult> function, T1 arg1)
@@ -479,7 +484,7 @@ namespace Orleans.Runtime
 
         // this is agent business logic
         // run - also action , so will have action descriptor
-       / protected abstract void Run<T>() where T: IActionDescriptor;
+   //   / protected abstract void Run<T>() where T: IActionDescriptor;
         public abstract T GetAction<T>() where  T: IActionDescriptor;  // { get; } //where T : 
        // void Q<T>()
 //
