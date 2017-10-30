@@ -11,8 +11,10 @@ namespace Orleans.Messaging
     /// <summary>
     /// The Receiver class is used by the GatewayConnection to receive messages. It runs its own thread, but it performs all i/o operations synchronously.
     /// </summary>
-    internal class GatewayClientReceiver : AsynchAgent
+    internal class GatewayClientReceiver : SingleActionAsynchAgent<GatewayClientReceiver, GatewayClientReceiver.GatewayClientReceiveActionDescriptor>
     {
+        public class GatewayClientReceiveActionDescriptor : IActionDescriptor, ActionFaultBehavior.RestartOnFault { } // todo: move to bottom?
+
         private readonly GatewayConnection gatewayConnection;
         private readonly IncomingMessageBuffer buffer;
         private Socket socket;
@@ -21,7 +23,6 @@ namespace Orleans.Messaging
             : base(executorService, gateway.Address.ToString(), loggerFactory)
         {
             gatewayConnection = gateway;
-            OnFault = FaultBehavior.RestartOnFault;
             buffer = new IncomingMessageBuffer(loggerFactory, serializationManager, true); 
         }
 

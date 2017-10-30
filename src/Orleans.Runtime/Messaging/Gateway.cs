@@ -286,7 +286,7 @@ namespace Orleans.Runtime.Messaging
         }
 
 
-        private class GatewayClientCleanupAgent : AsynchAgent
+        private class GatewayClientCleanupAgent : DefaultActionAsynchAgent<GatewayClientCleanupAgent>
         {
             private readonly Gateway gateway;
             private readonly TimeSpan clientDropTimeout;
@@ -361,8 +361,11 @@ namespace Orleans.Runtime.Messaging
                 return DateTime.UtcNow.Subtract(lastUsed) >= TIME_BEFORE_ROUTE_CACHED_ENTRY_EXPIRES;
             }
         }
-        
-        
+
+        class GatewaySenderActionDescriptor: IActionDescriptor, ActionFaultBehavior.RestartOnFault // todo: to be used;)
+        {
+            
+        }
         private class GatewaySender : AsynchQueueAgent<OutgoingClientMessage>
         {
             private readonly Gateway gateway;
@@ -376,7 +379,6 @@ namespace Orleans.Runtime.Messaging
                 this.messageFactory = messageFactory;
                 this.serializationManager = serializationManager;
                 gatewaySends = CounterStatistic.FindOrCreate(StatisticNames.GATEWAY_SENT);
-                OnFault = FaultBehavior.RestartOnFault;
             }
 
             protected override void Process(OutgoingClientMessage request)

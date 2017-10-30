@@ -16,8 +16,10 @@ namespace Orleans.Runtime
     // . 
     // concepts introduced:  ..
     // responsibilites moved : ..
+    // in order to reduce cognitive load: pending renames for another PR: AsynchAgent -> stage definition
     interface IActionDescriptor
     {
+        void Run();
     }
 
     // threadpool - ThreadPoolType.Fixed, sclaing, is ThreadpooBuilder needed?
@@ -44,6 +46,13 @@ namespace Orleans.Runtime
         }
     }
 
+    static class StandartActionDescriptors
+    {
+       public class CrashOnFaultActionDescriptor : IActionDescriptor, ActionFaultBehavior.CrashOnFault
+        {
+            
+        }
+    }
 
     interface IStageDefinition
     {
@@ -67,9 +76,13 @@ namespace Orleans.Runtime
         // todo: overload without TIActionDescriptor withc will use default
         // + overload  with argument as param? could be added later
         // predefined executors? 
-        public abstract void Submit<TStage, T>(Action work)
+        // should accept actionDescriptor instead of Action.
+        public abstract void Submit<TStage, T>(TStage stage, Action work) // TStage,typ
             where TStage : IStageDefinition
             where T : IActionDescriptor;
+
+        public abstract void SubmitqQ<TStage>(TStage stage, Action work) // TStage,typ
+            where TStage : IStageDefinition;
     }
 
     abstract class StagesExecutionPlan
@@ -310,9 +323,85 @@ namespace Orleans.Runtime
     // current impl will be mapped to pools of adjusted workerPoolThreads
 
     // 1 step - ensure ExecuterService resolving in all target places ( AsynchAgent, workerpoolThread) 
-    internal abstract class AsynchAgent : IDisposable // on fault should be passed alongside concrete action 
-    {  // asyncg agent- stage reference. 
+    internal abstract class SingleActionAsynchAgent< T> : AsynchAgent
+        where T : IActionDescriptor
+    {
+        // need in empty ctors should be removed in following c# versions https://github.com/dotnet/csharplang/issues/806
+        protected SingleActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
+        {
+        }
 
+        protected SingleActionAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
+        {
+        }
+
+//        protected override void Run<Q>()
+//            where  Q : IActionDescriptor
+//        {
+//            
+//        }
+        public override void Start()
+        {
+//            ApplyPartial((this, "") =>
+//            {
+//                executorService.SubmitqQ(this, null);
+//            })
+//            // consider submit typeof(this) as stage
+//            executorService.SubmitqQ(this,   null);
+            // 'type inference 
+            //https://github.com/Microsoft/TypeScript/issues/10571 do waht
+            executorService.Submit(this, GetAction<T>());
+        }
+        public static Func<TResult> ApplyPartial<T1, TResult>
+            (Func<T1, TResult> function, T1 arg1)
+        {
+            return () => function(arg1);
+        }
+    }
+
+    internal abstract class DefaultActionAsynchAgent<TStage> : SingleActionAsynchAgent<TStage, DefaultActionDescriptor>
+        where TStage : IStageDefinition
+    {
+        protected DefaultActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
+        {
+        }
+
+        protected DefaultActionAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
+        {
+        }
+    }
+
+//
+//    internal abstract class DefaultAsynchAgent: DefaultActionAsynchAgent<DefaultAsynchAgent>
+//    {
+//        protected DefaultAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
+//        {
+//        }
+//
+//        protected DefaultAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
+//        {
+//        }
+//    }
+
+    abstract class DefaultActionDescriptor : IActionDescriptor
+    {
+        private DefaultActionDescriptor()
+        {
+            
+        }
+
+        public void Run()
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    internal abstract class AsynchAgent : IStageDefinition, IDisposable
+        //<TStage> :   where TStage : IStageDefinition// , for simplicity for now its not
+        // it is actually single stage.. .
+        //. Requires implementer to explicitly pass themselves so submit
+                                                     // on fault should be passed alongside concrete action 
+    {  // asyncg agent- stage reference. 
         protected readonly ExecutorService executorService;
         protected CancellationTokenSource Cts;
         protected object Lockable;
@@ -362,9 +451,12 @@ namespace Orleans.Runtime
         {
         }
 
-        public virtual void Start()
-        {
-           //  executorService.Submit<>( AgentThreadProc);
+        // there action must be submitted to executor service
+        public abstract void Start();
+        //{
+        //    executorService.Submit<>( Run);
+
+
             // todo: executor service should ensure concurrent run number guarantees
             //                if (State == ThreadState.Stopped)
             //                {
@@ -372,7 +464,7 @@ namespace Orleans.Runtime
             //                    t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
             //                }
             // if(Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
-        }
+       // }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         public virtual void Stop()
@@ -381,9 +473,15 @@ namespace Orleans.Runtime
 
             Cts.Cancel();
             Log.Verbose("Stopped agent");
+
+            executorService.Submit(this, GetAction());
         }
 
-        protected abstract void Run();
+        // this is agent business logic
+        // run - also action , so will have action descriptor
+       / protected abstract void Run<T>() where T: IActionDescriptor;
+        public abstract T GetAction<T>() where  T: IActionDescriptor;  // { get; } //where T : 
+       // void Q<T>()
 //
 //        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
 //        private static void AgentThreadProc(Object obj)// not neeeded
