@@ -7,7 +7,7 @@ namespace Orleans.Runtime.Messaging
 {
   
 
-    internal class IncomingMessageAgent : SingleActionAsynchAgent, IStageDefinition
+    internal class IncomingMessageAgent : AsynchAgent, ActionFaultBehavior.RestartOnFault
     {
         private readonly IMessageCenter messageCenter;
         private readonly ActivationDirectory directory;
@@ -22,7 +22,6 @@ namespace Orleans.Runtime.Messaging
             category = cat;
             messageCenter = mc;
             directory = ad;
-            // topo: remove need in scheduler
             scheduler = sched;
             this.dispatcher = dispatcher;
             this.messageFactory = messageFactory;
@@ -34,11 +33,6 @@ namespace Orleans.Runtime.Messaging
             if (Log.IsVerbose3) Log.Verbose3("Started incoming message agent for silo at {0} for {1} messages", messageCenter.MyAddress, category);
         }
 
-        public override IActionDescriptor GetAction()
-        {
-            throw new NotImplementedException();
-        }
-
         public class IncomingMessageAgentStageActionDescriptor : IActionDescriptor, ActionFaultBehavior.RestartOnFault
         {
             // accept IncomingMessageAgent and run? 
@@ -48,7 +42,7 @@ namespace Orleans.Runtime.Messaging
             }
         }
 
-        protected void Run() // should be part of action descriptor, right?
+        protected override void Run() // should be part of action descriptor, right?
         {
             try
             {

@@ -12,7 +12,7 @@ namespace Orleans.Messaging
     /// 
     /// Note that both sends and receives are synchronous.
     /// </summary>
-    internal class GatewayConnection : OutgoingMessageSender, IStageDefinition
+    internal class GatewayConnection : OutgoingMessageSender
     {
         private readonly MessageFactory messageFactory;
         internal bool IsLive { get; private set; }

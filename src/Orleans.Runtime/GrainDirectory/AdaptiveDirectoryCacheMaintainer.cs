@@ -8,7 +8,7 @@ using Orleans.Runtime.Scheduler;
 
 namespace Orleans.Runtime.GrainDirectory
 {
-    internal class AdaptiveDirectoryCacheMaintainer<TValue> : AsynchAgent
+    internal class AdaptiveDirectoryCacheMaintainer<TValue> : AsynchAgent, ActionFaultBehavior.RestartOnFault
     {
         private static readonly TimeSpan SLEEP_TIME_BETWEEN_REFRESHES = Debugger.IsAttached ? TimeSpan.FromMinutes(5) : TimeSpan.FromMinutes(1); // this should be something like minTTL/4
 
@@ -36,7 +36,6 @@ namespace Orleans.Runtime.GrainDirectory
             
             lastNumAccesses = 0;
             lastNumHits = 0;
-            OnFault = FaultBehavior.RestartOnFault;
         }
 
         protected override void Run()

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Orleans.Runtime
 {
 
-    internal class Watchdog : DefaultActionAsynchAgent<Watchdog>, IStageDefinition
+    internal class Watchdog : AsynchAgent
     {
         private static readonly TimeSpan heartbeatPeriod = TimeSpan.FromMilliseconds(1000);
         private readonly TimeSpan healthCheckPeriod;

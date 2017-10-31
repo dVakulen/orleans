@@ -24,35 +24,32 @@ namespace Orleans.Runtime
 
     // threadpool - ThreadPoolType.Fixed, sclaing, is ThreadpooBuilder needed?
     // convinient way to ensure compile time invariants, 
-    interface IActionAttribute
+    interface IStageAttribute
     {
     }
 
     // approach - copy existing, get tests green, delete old.
 
-    interface OrleansContextRequired : IActionAttribute { }
+    interface OrleansContextRequired : IStageAttribute { }
     static class ActionFaultBehavior
     {
-        public interface CrashOnFault : IActionAttribute // Crash the process if the agent faults
+        public interface IStageFaultBehavior : IStageAttribute // Crash the process if the agent faults
         {
         }
 
-        public interface RestartOnFault : IActionAttribute // Restart the agent if it faults
+        public interface CrashOnFault : IStageFaultBehavior // Crash the process if the agent faults
         {
         }
 
-        public interface IgnoreFault : IActionAttribute // Allow the agent to stop if it faults, but take no other action (other than logging)
+        public interface RestartOnFault : IStageFaultBehavior // Restart the agent if it faults
+        {
+        }
+
+        public interface IgnoreFault : IStageFaultBehavior // Allow the agent to stop if it faults, but take no other action (other than logging)
         {
         }
     }
 
-    static class StandartActionDescriptors
-    {
-       public class CrashOnFaultActionDescriptor : IActionDescriptor, ActionFaultBehavior.CrashOnFault
-        {
-            
-        }
-    }
 
     interface IStageDefinition
     {
@@ -78,13 +75,8 @@ namespace Orleans.Runtime
         // predefined executors? 
         // should accept actionDescriptor instead of Action.
         // generics - enforcing contracts
-        public abstract void Submit<TStage, T>(TStage stage, Action work) // TStage,typ
-            where TStage : IStageDefinition
-            where T : IActionDescriptor;
-        public abstract void SubmitW<TStage, T>(TStage stage, T work) // TStage,typ
-            where TStage : IStageDefinition
-            where T : IActionDescriptor;
-        public abstract void SubmitqQ<TStage>(TStage stage, Action work) // TStage,typ
+      
+        public abstract void Submit<TStage>(TStage stage, Action work) // TStage,typ
             where TStage : IStageDefinition;
     }
 
@@ -115,13 +107,12 @@ namespace Orleans.Runtime
             mapping.Add(typeof(T), executor);
         }
 
-        public void Dispatch<TStage, T>(Action workItem)
+        public void Dispatch<TStage>(Action workItem)
             where TStage : IStageDefinition
-            where T : IActionDescriptor
         {
             if (mapping.TryGetValue(typeof(TStage), out var correspondingExecutor))
             {
-                correspondingExecutor.Execute<T>(workItem);
+                correspondingExecutor.Execute<TStage>(workItem);
             }
             else
             {
@@ -145,18 +136,14 @@ namespace Orleans.Runtime
 
     interface IStageExecutor
     {
-        void Execute<T>(Action workItem) where T : IActionDescriptor; // provide default handling? 
+        void Execute<T>(Action workItem) where T : IStageDefinition; // provide default handling? 
     }
 
 
     class ConcreteStageDefinition : IStageDefinition
     {
     }
-
-    class ConcreteActionDescription : IActionDescriptor, ActionFaultBehavior.CrashOnFault
-    {
-    }
-
+    
     class StagedExecutorService : ExecutorService // rename.? most likely only ExecutorService is to remain
     {
         public StagedExecutorService(NodeConfiguration config)
@@ -178,15 +165,20 @@ namespace Orleans.Runtime
         // overload with func returning promise isn't needed? 
 
         // returns stageExecutionHandle ? ensure number of concurrent runs constrain. 
-        public override void Submit<TStage, T>(Action work)
-        {
-            currentExecutionPlan.Dispatch<TStage, T>(work);
-            throw new NotImplementedException();
-        }
+        //public override void Submit<TStage, T>(Action work) // swap submit - dispatch 
+        //{
+        //    currentExecutionPlan.Dispatch<TStage, T>(work);
+        //    throw new NotImplementedException();
+        //}
 
         //  ThreadPool.QueueUserWorkItem()
         // this.currentExecutorService.submit
         // current impl: per stage worker pool with optional blocking queue
+       
+        public override void Submit<TStage>(TStage stage, Action work)
+        {
+            currentExecutionPlan.Dispatch<TStage>(work);
+        }
     }
 
     class ConcreteStageExecutor : IStageExecutor// - will be abstract
@@ -199,7 +191,7 @@ namespace Orleans.Runtime
 
         }
 
-        public void Execute<T>(Action workItem) where T : IActionDescriptor
+        public void Execute<T>(Action workItem) where T : IStageDefinition
         {
            
             if (!workItemWrappers.TryGetValue(typeof(T), out var actionWrappers))
@@ -224,7 +216,7 @@ namespace Orleans.Runtime
             void ExecuteAction(Action action);
 
         }
-        abstract class ActionBehaviorMixin<TActionAttribute> : IActionWrapper where TActionAttribute : IActionAttribute
+        abstract class ActionBehaviorMixin<TActionAttribute> : IActionWrapper where TActionAttribute : IStageAttribute
         {
             public Type HandlingAttributeType { get; } = typeof(TActionAttribute);
             public abstract void ExecuteAction(Action action);
@@ -293,7 +285,7 @@ namespace Orleans.Runtime
             }
         }
         // each stageexecutor - should be able to add its own?
-        protected virtual LinkedList<IActionWrapper> GetActionWrappers<T>() where T : IActionDescriptor
+        protected virtual LinkedList<IActionWrapper> GetActionWrappers<T>() where T : IStageDefinition
         {
             var actionWrappers = new LinkedList<IActionWrapper>();
             var existingWrappersList = new List<IActionWrapper>
@@ -319,68 +311,55 @@ namespace Orleans.Runtime
     // AsynchAgent -  long running work. queue agents - many short-running workloads //FaultBehavior
 
     // move  threading related thing out of AsynchAgent
-    // AsynchAgent - becomes more of a trait?, and its content moves into poolThread./ start stop able.
+    // AsynchAgent - becomes more of a trait (StageDefinition)?, and its content moves into poolThread./ start stop able.
     // take work dispatcher as dependency
     // dispatcher accepts work items + stage definition
     // dispatcher has internal stages to executors mappings (plan)
     // current impl will be mapped to pools of adjusted workerPoolThreads
+//    internal abstract class SingleActionAsynchAgent: AsynchAgent
+//    {
+//        // need in empty ctors should be removed in following c# versions https://github.com/dotnet/csharplang/issues/806
+//        protected SingleActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
+//        {
+//        }
+//
+//        protected SingleActionAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
+//        {
+//        }
+//
+//        //        protected override void Run<Q>()
+//        //            where  Q : IActionDescriptor
+//        //        {
+//        //            
+//        //        }
+//
+//        // what does start means? - Stage start 
+//
+//        // for SingleActionAsynchAgent - does it means it should single action? (looks like yes) 
+//        public override void Start()
+//        {
+////            ApplyPartial((this, "") =>
+////            {
+////                executorService.SubmitqQ(this, null);
+////            })
+////            // consider submit typeof(this) as stage
+////            executorService.SubmitqQ(this,   null);
+//            // 'type inference 
+//            executorService.SubmitW(this, GetAction());
+//        }
+//        // this is agent business logic
+//        // run - also action , so will have action descriptor
+//        //   / protected abstract void Run<T>() where T: IActionDescriptor;
+//        // todo: verify fit in inheritors
+//        // being called at stage start
+//        public abstract IActionDescriptor GetAction() ;  // { get; } //where T : 
+//        public static Func<TResult> ApplyPartial<T1, TResult>
+//            (Func<T1, TResult> function, T1 arg1)
+//        {
+//            return () => function(arg1);
+//        }
+//    }
 
-    // 1 step - ensure ExecuterService resolving in all target places ( AsynchAgent, workerpoolThread) 
-    internal abstract class SingleActionAsynchAgent: AsynchAgent
-    {
-        // need in empty ctors should be removed in following c# versions https://github.com/dotnet/csharplang/issues/806
-        protected SingleActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
-        {
-        }
-
-        protected SingleActionAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
-        {
-        }
-
-        //        protected override void Run<Q>()
-        //            where  Q : IActionDescriptor
-        //        {
-        //            
-        //        }
-
-        // what does start means? - Stage start 
-
-        // for SingleActionAsynchAgent - does it means it should single action? (looks like yes) 
-        public override void Start()
-        {
-//            ApplyPartial((this, "") =>
-//            {
-//                executorService.SubmitqQ(this, null);
-//            })
-//            // consider submit typeof(this) as stage
-//            executorService.SubmitqQ(this,   null);
-            // 'type inference 
-            executorService.SubmitW(this, GetAction());
-        }
-        // this is agent business logic
-        // run - also action , so will have action descriptor
-        //   / protected abstract void Run<T>() where T: IActionDescriptor;
-        // todo: verify fit in inheritors
-        // being called at stage start
-        public abstract IActionDescriptor GetAction() ;  // { get; } //where T : 
-        public static Func<TResult> ApplyPartial<T1, TResult>
-            (Func<T1, TResult> function, T1 arg1)
-        {
-            return () => function(arg1);
-        }
-    }
-
-    internal abstract class DefaultActionAsynchAgent<TStage> : SingleActionAsynchAgent<TStage, DefaultActionDescriptor>
-        where TStage : IStageDefinition
-    {
-        protected DefaultActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
-        {
-        }
-
-        protected DefaultActionAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
-        {
-        }
-    }
 
 //
 //    internal abstract class DefaultAsynchAgent: DefaultActionAsynchAgent<DefaultAsynchAgent>
@@ -393,19 +372,6 @@ namespace Orleans.Runtime
 //        {
 //        }
 //    }
-
-    abstract class DefaultActionDescriptor : IActionDescriptor
-    {
-        private DefaultActionDescriptor()
-        {
-            
-        }
-
-        public void Run()
-        {
-            throw new NotImplementedException();
-        }
-    }
 
     internal abstract class AsynchAgent : IStageDefinition, IDisposable
         //<TStage> :   where TStage : IStageDefinition// , for simplicity for now its not
@@ -464,19 +430,21 @@ namespace Orleans.Runtime
 
         // there action must be submitted to executor service
         // start of the stage execution.
-        public abstract void Start();
-        //{
-        //    executorService.Submit<>( Run);
+        public virtual void Start()
+        {
+            executorService.Submit(this, Run);
+        }
+        protected abstract void Run();
 
 
-            // todo: executor service should ensure concurrent run number guarantees
-            //                if (State == ThreadState.Stopped)
-            //                {
-            //                    Cts = new CancellationTokenSource();
-            //                    t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
-            //                }
-            // if(Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
-       // }
+        // todo: executor service should ensure concurrent run number guarantees
+        //                if (State == ThreadState.Stopped)
+        //                {
+        //                    Cts = new CancellationTokenSource();
+        //                    t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
+        //                }
+        // if(Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
+        // }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         public virtual void Stop()

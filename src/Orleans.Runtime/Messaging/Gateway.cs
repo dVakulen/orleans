@@ -286,7 +286,7 @@ namespace Orleans.Runtime.Messaging
         }
 
 
-        private class GatewayClientCleanupAgent : DefaultActionAsynchAgent<GatewayClientCleanupAgent>
+        private class GatewayClientCleanupAgent : AsynchAgent
         {
             private readonly Gateway gateway;
             private readonly TimeSpan clientDropTimeout;
@@ -362,11 +362,7 @@ namespace Orleans.Runtime.Messaging
             }
         }
 
-        class GatewaySenderActionDescriptor: IActionDescriptor, ActionFaultBehavior.RestartOnFault // todo: to be used;)
-        {
-            
-        }
-        private class GatewaySender : AsynchQueueAgent<OutgoingClientMessage>
+        private class GatewaySender : AsynchQueueAgent<OutgoingClientMessage>, ActionFaultBehavior.RestartOnFault
         {
             private readonly Gateway gateway;
             private readonly MessageFactory messageFactory;
