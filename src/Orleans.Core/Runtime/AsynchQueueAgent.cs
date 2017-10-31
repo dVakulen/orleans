@@ -24,6 +24,11 @@ namespace Orleans.Runtime
             }
         }
 
+        public override void Start()
+        {
+            // todo: submit to executor service? 
+        }
+
         public void QueueRequest(T request)
         {
             if (requestQueue==null)

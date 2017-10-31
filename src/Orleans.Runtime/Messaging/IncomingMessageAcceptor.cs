@@ -8,7 +8,7 @@ using Orleans.Serialization;
 
 namespace Orleans.Runtime.Messaging
 {
-    internal class IncomingMessageAcceptor : AsynchAgent
+    internal class IncomingMessageAcceptor : AsynchAgent, ActionFaultBehavior.CrashOnFault
     {
         private readonly ConcurrentObjectPool<SaeaPoolWrapper> receiveEventArgsPool;
         private const int SocketBufferSize = 1024 * 128; // 128 kb
@@ -59,7 +59,6 @@ namespace Orleans.Runtime.Messaging
             AcceptingSocket = SocketManager.GetAcceptingSocketForEndpoint(listenAddress);
             Log.Info(ErrorCode.Messaging_IMA_OpenedListeningSocket, "Opened a listening socket at address " + AcceptingSocket.LocalEndPoint);
             OpenReceiveSockets = new HashSet<Socket>();
-            OnFault = FaultBehavior.CrashOnFault;
             SocketDirection = socketDirection;
 
             checkedOutSocketEventArgsCounter = CounterStatistic.FindOrCreate(StatisticNames.MESSAGE_ACCEPTOR_CHECKED_OUT_SOCKET_EVENT_ARGS, false);
