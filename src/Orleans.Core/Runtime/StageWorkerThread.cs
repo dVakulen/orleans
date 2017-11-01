@@ -16,9 +16,7 @@ namespace Orleans.Runtime
             RestartOnFault, // Restart the agent if it faults
             IgnoreFault     // Allow the agent to stop if it faults, but take no other action (other than logging)
         }
-
-        protected readonly ExecutorService executorService;
-
+        
         private Thread t;
         protected CancellationTokenSource Cts;
         protected object Lockable;
@@ -33,13 +31,10 @@ namespace Orleans.Runtime
         public ThreadState State { get; private set; }
         internal string Name { get; private set; }
         internal int ManagedThreadId { get { return t==null ? -1 : t.ManagedThreadId;  } }
-
-        //   private Catalog Catalog => this.catalog ?? (this.catalog = this.ServiceProvider.GetRequiredService<Catalog>());
+        
         // nameSuffix - maybe at some point should be removed.
-        protected StageWorkerThread(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory)
+        protected StageWorkerThread(string nameSuffix, ILoggerFactory loggerFactory)
         {
-            this.executorService = executorService;
-
             Cts = new CancellationTokenSource();
             var thisType = GetType();
             
@@ -70,12 +65,11 @@ namespace Orleans.Runtime
                 threadTracking = new ThreadTrackingStatistic(Name);
             }
 #endif
-            //      ExecutorService.submit(AgentThreadProc)
             t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
         }
 
-        protected StageWorkerThread(ExecutorService executorService, ILoggerFactory loggerFactory)
-            : this(executorService, null, loggerFactory)
+        protected StageWorkerThread(ILoggerFactory loggerFactory)
+            : this(null, loggerFactory)
         {
         }
 

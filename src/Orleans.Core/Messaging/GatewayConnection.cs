@@ -54,18 +54,18 @@ namespace Orleans.Messaging
             if (Log.IsVerbose) Log.Verbose(ErrorCode.ProxyClient_GatewayConnStarted, "Starting gateway connection for gateway {0}", Address);
             lock (Lockable)
             {
-//                if (State == ThreadState.Running)
-//                {
-//                    return;
-//                } // todo: should be ensured by executor service
+              //  if (State == ThreadState.Running)
+                {
+                 //   return;
+                } // todo: should be ensured by executor service
                 Connect();
                 if (!IsLive) return;
 
                 // If the Connect succeeded
                 receiver.Start();
                 //todo. (this is asynch queue agent. )
-                //base.Start
-              //  executorService.Submit<GatewayConnection, GatewayConnectionStageActionDescriptor>(null);
+                base.Start();
+                //  executorService.Submit<GatewayConnection, GatewayConnectionStageActionDescriptor>(null);
             }
         }
 

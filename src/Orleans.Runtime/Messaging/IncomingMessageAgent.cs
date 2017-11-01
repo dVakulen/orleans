@@ -33,16 +33,7 @@ namespace Orleans.Runtime.Messaging
             if (Log.IsVerbose3) Log.Verbose3("Started incoming message agent for silo at {0} for {1} messages", messageCenter.MyAddress, category);
         }
 
-        public class IncomingMessageAgentStageActionDescriptor : IActionDescriptor, ActionFaultBehavior.RestartOnFault
-        {
-            // accept IncomingMessageAgent and run? 
-            public void Run()
-            {
-                throw new NotImplementedException();
-            }
-        }
-
-        protected override void Run() // should be part of action descriptor, right?
+        protected override void Run()
         {
             try
             {

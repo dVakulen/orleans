@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime
@@ -112,10 +113,27 @@ namespace Orleans.Runtime
         {
             if (mapping.TryGetValue(typeof(TStage), out var correspondingExecutor))
             {
-                correspondingExecutor.Execute<TStage>(workItem);
+                ThreadPool.QueueUserWorkItem(state =>
+                {
+                    correspondingExecutor.Execute<TStage>(workItem);
+                });
             }
             else
             {
+                ThreadPool.QueueUserWorkItem(state =>
+                {
+
+                    try
+                    {
+                        workItem();
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine(e);
+                        throw;
+                    }
+                });
+                return;
                 throw new Exception();
             }
         }
@@ -146,13 +164,13 @@ namespace Orleans.Runtime
     
     class StagedExecutorService : ExecutorService // rename.? most likely only ExecutorService is to remain
     {
-        public StagedExecutorService(NodeConfiguration config)
-        {
-        }
-
-        public StagedExecutorService(ClientConfiguration config)
-        {
-        }
+//        public StagedExecutorService(NodeConfiguration config)
+//        {
+//        }
+//
+//        public StagedExecutorService(ClientConfiguration config)
+//        {
+//        }
 
         // could be swappable at runtime
         private StagesExecutionPlan currentExecutionPlan = new ThreadPoolPerStageExecutionPlan();
@@ -183,6 +201,15 @@ namespace Orleans.Runtime
 
     class ConcreteStageExecutor : IStageExecutor// - will be abstract
     {
+
+        //        fork-join-executor {
+        //# Min number of threads to cap factor-based parallelism number to
+        //            parallelism-min = 2
+        //# Parallelism (threads) ... ceil(available processors * factor)
+        //            parallelism-factor = 2.0
+        //# Max number of threads to cap factor-based parallelism number to
+        //            parallelism-max = 10
+        //        }
         private Dictionary<Type, LinkedList<IActionWrapper>> workItemWrappers = null;
         // interceptors? currenlty there's no need in multiple wrappers per action  Action[] - will be stack\ likedlist be more descriptive? 
         public ConcreteStageExecutor()
@@ -316,68 +343,104 @@ namespace Orleans.Runtime
     // dispatcher accepts work items + stage definition
     // dispatcher has internal stages to executors mappings (plan)
     // current impl will be mapped to pools of adjusted workerPoolThreads
-//    internal abstract class SingleActionAsynchAgent: AsynchAgent
-//    {
-//        // need in empty ctors should be removed in following c# versions https://github.com/dotnet/csharplang/issues/806
-//        protected SingleActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
-//        {
-//        }
-//
-//        protected SingleActionAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
-//        {
-//        }
-//
-//        //        protected override void Run<Q>()
-//        //            where  Q : IActionDescriptor
-//        //        {
-//        //            
-//        //        }
-//
-//        // what does start means? - Stage start 
-//
-//        // for SingleActionAsynchAgent - does it means it should single action? (looks like yes) 
-//        public override void Start()
-//        {
-////            ApplyPartial((this, "") =>
-////            {
-////                executorService.SubmitqQ(this, null);
-////            })
-////            // consider submit typeof(this) as stage
-////            executorService.SubmitqQ(this,   null);
-//            // 'type inference 
-//            executorService.SubmitW(this, GetAction());
-//        }
-//        // this is agent business logic
-//        // run - also action , so will have action descriptor
-//        //   / protected abstract void Run<T>() where T: IActionDescriptor;
-//        // todo: verify fit in inheritors
-//        // being called at stage start
-//        public abstract IActionDescriptor GetAction() ;  // { get; } //where T : 
-//        public static Func<TResult> ApplyPartial<T1, TResult>
-//            (Func<T1, TResult> function, T1 arg1)
-//        {
-//            return () => function(arg1);
-//        }
-//    }
+    //    internal abstract class SingleActionAsynchAgent: AsynchAgent
+    //    {
+    //        // need in empty ctors should be removed in following c# versions https://github.com/dotnet/csharplang/issues/806
+    //        protected SingleActionAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
+    //        {
+    //        }
+    //
+    //        protected SingleActionAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
+    //        {
+    //        }
+    //
+    //        //        protected override void Run<Q>()
+    //        //            where  Q : IActionDescriptor
+    //        //        {
+    //        //            
+    //        //        }
+    //
+    //        // what does start means? - Stage start 
+    //
+    //        // for SingleActionAsynchAgent - does it means it should single action? (looks like yes) 
+    //        public override void Start()
+    //        {
+    ////            ApplyPartial((this, "") =>
+    ////            {
+    ////                executorService.SubmitqQ(this, null);
+    ////            })
+    ////            // consider submit typeof(this) as stage
+    ////            executorService.SubmitqQ(this,   null);
+    //            // 'type inference 
+    //            executorService.SubmitW(this, GetAction());
+    //        }
+    //        // this is agent business logic
+    //        // run - also action , so will have action descriptor
+    //        //   / protected abstract void Run<T>() where T: IActionDescriptor;
+    //        // todo: verify fit in inheritors
+    //        // being called at stage start
+    //        public abstract IActionDescriptor GetAction() ;  // { get; } //where T : 
+    //        public static Func<TResult> ApplyPartial<T1, TResult>
+    //            (Func<T1, TResult> function, T1 arg1)
+    //        {
+    //            return () => function(arg1);
+    //        }
+    //    }
 
 
-//
-//    internal abstract class DefaultAsynchAgent: DefaultActionAsynchAgent<DefaultAsynchAgent>
-//    {
-//        protected DefaultAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
-//        {
-//        }
-//
-//        protected DefaultAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
-//        {
-//        }
-//    }
+    //
+    //    internal abstract class DefaultAsynchAgent: DefaultActionAsynchAgent<DefaultAsynchAgent>
+    //    {
+    //        protected DefaultAsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(executorService, nameSuffix, loggerFactory)
+    //        {
+    //        }
+    //
+    //        protected DefaultAsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(executorService, loggerFactory)
+    //        {
+    //        }
+    //    }
+
+    //    internal abstract class AsynchAgent : StageWorkerThread, IStageDefinition, IDisposable
+    //    {
+    //        protected AsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory) : base(nameSuffix, loggerFactory)
+    //        {
+    //        }
+    //
+    //        protected AsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory) : base(loggerFactory)
+    //        {
+    //        }
+    //    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     internal abstract class AsynchAgent : IStageDefinition, IDisposable
-        //<TStage> :   where TStage : IStageDefinition// , for simplicity for now its not
-        // it is actually single stage.. .
-        //. Requires implementer to explicitly pass themselves so submit
-                                                     // on fault should be passed alongside concrete action 
+    //<TStage> :   where TStage : IStageDefinition// , for simplicity for now its not
+    // it is actually single stage.. .
+    //. Requires implementer to explicitly pass themselves so submit
+    // on fault should be passed alongside concrete action 
     {  // asyncg agent- stage reference. 
         protected readonly ExecutorService executorService;
         protected CancellationTokenSource Cts;
@@ -398,7 +461,7 @@ namespace Orleans.Runtime
 
             Cts = new CancellationTokenSource();
             var thisType = GetType();
-            
+
             type = thisType.Namespace + "." + thisType.Name;
             if (type.StartsWith("Orleans.", StringComparison.Ordinal))
             {
@@ -428,12 +491,64 @@ namespace Orleans.Runtime
         {
         }
 
+        private List<StageWorkerThread> wwww = new List<StageWorkerThread>();
         // there action must be submitted to executor service
         // start of the stage execution.
         public virtual void Start()
         {
+            Cts = new CancellationTokenSource();
+
+
             executorService.Submit(this, Run);
         }
+
+        //        public ThreadState State { get; private set; } = ThreadState.Unstarted;
+        //        public virtual void Start()
+        //        {
+        //            lock (Lockable)
+        //            {
+        //                if (State == ThreadState.Running)
+        //                {
+        //                    return;
+        //                }
+        //
+        //                if (State == ThreadState.Stopped)
+        //                {
+        //                    Cts = new CancellationTokenSource();
+        //
+        //                    t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
+        //                }
+        //
+        //                t.Start(this);
+        //                State = ThreadState.Running;
+        //            }
+        //            if (Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
+        //        }
+        //
+        //        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+        //        public virtual void Stop()
+        //        {
+        //            try
+        //            {
+        //                lock (Lockable)
+        //                {
+        //                    if (State == ThreadState.Running)
+        //                    {
+        //                        State = ThreadState.StopRequested;
+        //                        Cts.Cancel();
+        //                        State = ThreadState.Stopped;
+        //                    }
+        //                }
+        //            }
+        //            catch (Exception exc)
+        //            {
+        //                // ignore. Just make sure stop does not throw.
+        //                Log.Verbose("Ignoring error during Stop: {0}", exc);
+        //            }
+        //            Log.Verbose("Stopped agent");
+        //        }
+
+
         protected abstract void Run();
 
 
@@ -453,36 +568,36 @@ namespace Orleans.Runtime
 
             Cts.Cancel();
             Log.Verbose("Stopped agent");
-            
+
         }
 
-//
-//        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
-//        private static void AgentThreadProc(Object obj)// not neeeded
-//        {
-//            var agent = obj as AsynchAgent;
-//            if (agent == null)
-//            {
-//                throw new InvalidOperationException("Agent thread started with incorrect parameter type");
-//    }
-//
-//            try
-//            {
-//                LogStatus(agent.Log, "Starting AsyncAgent {0} on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
-//    CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
-//                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
-//    CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
-//
-//    agent.Run();
-//            }
-//            finally
-//            {
-//                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).DecrementBy(1);
-//agent.Log.Info(ErrorCode.Runtime_Error_100328, "Stopping AsyncAgent {0} that runs on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
-//            }
-//        }
+        //
+        //        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+        //        private static void AgentThreadProc(Object obj)// not neeeded
+        //        {
+        //            var agent = obj as AsynchAgent;
+        //            if (agent == null)
+        //            {
+        //                throw new InvalidOperationException("Agent thread started with incorrect parameter type");
+        //    }
+        //
+        //            try
+        //            {
+        //                LogStatus(agent.Log, "Starting AsyncAgent {0} on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+        //    CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
+        //                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
+        //    CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
+        //
+        //    agent.Run();
+        //            }
+        //            finally
+        //            {
+        //                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).DecrementBy(1);
+        //agent.Log.Info(ErrorCode.Runtime_Error_100328, "Stopping AsyncAgent {0} that runs on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+        //            }
+        //        }
 
-#region IDisposable Members
+        #region IDisposable Members
 
         public void Dispose()
         {
@@ -501,7 +616,7 @@ namespace Orleans.Runtime
             }
         }
 
-#endregion
+        #endregion
 
         public override string ToString()
         {
@@ -509,3 +624,63 @@ namespace Orleans.Runtime
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

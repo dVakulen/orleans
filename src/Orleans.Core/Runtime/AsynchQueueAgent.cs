@@ -9,7 +9,7 @@ namespace Orleans.Runtime
     // queue services? where to move the BlockingCollection ?
     // instead of accumulating work items to do in local collections - lambdas with it
     // will be storred in execution service, thus only 1 mention of BC should remain
-    internal abstract class AsynchQueueAgent<T> : AsynchAgent, IDisposable where T : IOutgoingMessage
+    internal abstract class AsynchQueueAgent<T> : AsynchAgent where T : IOutgoingMessage
     {
         private BlockingCollection<T> requestQueue;
         private QueueTrackingStatistic queueTracking;
@@ -24,10 +24,10 @@ namespace Orleans.Runtime
             }
         }
 
-        public override void Start()
-        {
-            // todo: submit to executor service? 
-        }
+//        public override void Start()
+//        {
+//            // todo: submit to executor service? 
+//        }
 
         public void QueueRequest(T request)
         {
