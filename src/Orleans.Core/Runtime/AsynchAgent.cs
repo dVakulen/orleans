@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
+using Orleans.Threading;
 
 namespace Orleans.Runtime
 {
@@ -108,15 +106,13 @@ namespace Orleans.Runtime
             mapping.Add(typeof(T), executor);
         }
 
-        public void Dispatch<TStage>(Action workItem)
+        public void Dispatch<TStage>(TStage stage, Action workItem)
             where TStage : IStageDefinition
         {
             if (mapping.TryGetValue(typeof(TStage), out var correspondingExecutor))
             {
-                ThreadPool.QueueUserWorkItem(state =>
-                {
-                    correspondingExecutor.Execute<TStage>(workItem);
-                });
+
+                correspondingExecutor.Execute<TStage>(stage, workItem);
             }
             else
             {
@@ -145,17 +141,14 @@ namespace Orleans.Runtime
 
         public ThreadPoolPerStageExecutionPlan()
         {
-            Register<ConcreteStageDefinition>(new ConcreteStageExecutor());
+            Register<ConcreteStageDefinition>(new LimitedСoncurrencyStageExecutor());
         }
 
         //  private readonly 
         //  protected override Dictionary<Type, IStageExecutor> currentMapping { get; }
     }
 
-    interface IStageExecutor
-    {
-        void Execute<T>(Action workItem) where T : IStageDefinition; // provide default handling? 
-    }
+    
 
 
     class ConcreteStageDefinition : IStageDefinition
@@ -195,141 +188,11 @@ namespace Orleans.Runtime
        
         public override void Submit<TStage>(TStage stage, Action work)
         {
-            currentExecutionPlan.Dispatch<TStage>(work);
+            currentExecutionPlan.Dispatch(stage, work);
         }
     }
 
-    class ConcreteStageExecutor : IStageExecutor// - will be abstract
-    {
-
-        //        fork-join-executor {
-        //# Min number of threads to cap factor-based parallelism number to
-        //            parallelism-min = 2
-        //# Parallelism (threads) ... ceil(available processors * factor)
-        //            parallelism-factor = 2.0
-        //# Max number of threads to cap factor-based parallelism number to
-        //            parallelism-max = 10
-        //        }
-        private Dictionary<Type, LinkedList<IActionWrapper>> workItemWrappers = null;
-        // interceptors? currenlty there's no need in multiple wrappers per action  Action[] - will be stack\ likedlist be more descriptive? 
-        public ConcreteStageExecutor()
-        {
-            // precalculate workItem wrapper lambdas?
-
-        }
-
-        public void Execute<T>(Action workItem) where T : IStageDefinition
-        {
-           
-            if (!workItemWrappers.TryGetValue(typeof(T), out var actionWrappers))
-            {
-                workItemWrappers[typeof(T)] = actionWrappers = GetActionWrappers<T>();
-            }
-            //            var qw  = new LinkedList<string>();
-            if (actionWrappers.Any())
-            {
-                var qwe = actionWrappers.First;
-                ExecuteActionV2(qwe, workItem);
-            }
-            else
-            {
-                workItem();
-            }
-            throw new NotImplementedException();
-        }
-       protected interface IActionWrapper
-        {
-            Type HandlingAttributeType { get; }
-            void ExecuteAction(Action action);
-
-        }
-        abstract class ActionBehaviorMixin<TActionAttribute> : IActionWrapper where TActionAttribute : IStageAttribute
-        {
-            public Type HandlingAttributeType { get; } = typeof(TActionAttribute);
-            public abstract void ExecuteAction(Action action);
-        }
-
-        void ExecuteActionV2(LinkedListNode<IActionWrapper> actionNode, Action action)
-        {
-            if (actionNode == null)
-            {
-                action();
-                //  workAction();
-            }
-            else
-            {
-                ExecuteActionV2(actionNode.Next, action);
-            }
-        }
-
-        //        ThreadPool.QueueUserWorkItem(state => // ashould be another action wrapper, iotsideschedulerrunnable  behavior
-        //                        {
-        //                            if (RuntimeContext.Current == null)
-        //                            {
-        //                                RuntimeContext.Current = new RuntimeContext
-        //                                {
-        //                                    Scheduler = TaskScheduler.Current
-        //    };
-        //}
-        //agent.Run();
-        //                        });
-
-        // todo: describe reasons fornaming
-        class OrleansContextRequiredMixin : ActionBehaviorMixin<OrleansContextRequired> // for .net threadpool based executor ( not only? )  // rename
-        {
-            private TaskScheduler taskScheduler;
-            public OrleansContextRequiredMixin(TaskScheduler scheduler)
-            {
-                taskScheduler = scheduler;
-            }
-
-            public override void ExecuteAction(Action action)
-            {
-                RuntimeContext.InitializeThread(taskScheduler);
-                try
-                {
-                    action();
-                }
-                finally
-                {
-                    // deinitialize will be needed for .net threadpool
-                }
-            }
-        }
-
-        class ActionCrashOnFaultBehavior : ActionBehaviorMixin<ActionFaultBehavior.CrashOnFault>
-        {
-            public override void ExecuteAction(Action action)
-            {
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    var todo = ex;
-                }
-            }
-        }
-        // each stageexecutor - should be able to add its own?
-        protected virtual LinkedList<IActionWrapper> GetActionWrappers<T>() where T : IStageDefinition
-        {
-            var actionWrappers = new LinkedList<IActionWrapper>();
-            var existingWrappersList = new List<IActionWrapper>
-            {
-                new ActionCrashOnFaultBehavior()
-            };
-
-            var tType = typeof(T);
-            return existingWrappersList
-                .Where(v => v.HandlingAttributeType.IsAssignableFrom(tType))
-                .Aggregate(actionWrappers, (list, wrapper) =>
-                {
-                    list.AddLast(wrapper);
-                    return list;
-                });
-        }
-    }
+   
 
     //  "Enable execution engine config\switch"
     // there should be ability to partially switch stages implementations
@@ -411,32 +274,14 @@ namespace Orleans.Runtime
     //        }
     //    }
 
+        
 
+    interface ILimitedСoncurrencyStage
+    {
+        int MaximumConcurrencyLevel { get; }
+    }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    internal abstract class AsynchAgent : IStageDefinition, IDisposable
+    internal abstract class AsynchAgent : IStageDefinition, ILimitedСoncurrencyStage, IDisposable
     //<TStage> :   where TStage : IStageDefinition// , for simplicity for now its not
     // it is actually single stage.. .
     //. Requires implementer to explicitly pass themselves so submit
@@ -448,6 +293,8 @@ namespace Orleans.Runtime
         protected Logger Log;
         private readonly string type;
 
+        // instance of AsynchAgent stage definition can have only 1  running thread, but there can be multiple definitions
+        public int MaximumConcurrencyLevel => 1;
 #if TRACK_DETAILED_STATS
         internal protected ThreadTrackingStatistic threadTracking;
 #endif
@@ -455,6 +302,7 @@ namespace Orleans.Runtime
         internal string Name { get; private set; }
         //   private Catalog Catalog => this.catalog ?? (this.catalog = this.ServiceProvider.GetRequiredService<Catalog>());
         // nameSuffix - maybe at some point should be removed.
+
         protected AsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory)
         {
             this.executorService = executorService;
@@ -492,13 +340,16 @@ namespace Orleans.Runtime
         }
 
         private List<StageWorkerThread> wwww = new List<StageWorkerThread>();
+
+   //     private ILimitedСoncurrencyStage _limitedСoncurrencyStageImplementation;
+
         // there action must be submitted to executor service
         // start of the stage execution.
         public virtual void Start()
         {
             Cts = new CancellationTokenSource();
-
-
+            // todo: executor service should ensure concurrent run number guarantees
+            // 
             executorService.Submit(this, Run);
         }
 
@@ -552,7 +403,6 @@ namespace Orleans.Runtime
         protected abstract void Run();
 
 
-        // todo: executor service should ensure concurrent run number guarantees
         //                if (State == ThreadState.Stopped)
         //                {
         //                    Cts = new CancellationTokenSource();
@@ -622,65 +472,6 @@ namespace Orleans.Runtime
         {
             return Name;
         }
+
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
