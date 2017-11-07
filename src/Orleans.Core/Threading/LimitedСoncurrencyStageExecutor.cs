@@ -37,7 +37,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
             Unstarted = 8,
             Stopped = 16
         }
-        class StageExecutionInfo // rename
+      public  class StageExecutionInfo // rename
         {
             private readonly StageState _state;
 
@@ -47,11 +47,14 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
                 _state = StageState.Unstarted;
             }
 
+            public int CurrentlyExecutingActions { get; set; }
+            // todo: add locks
             public IStageDefinition Stage { get; }
 
             public StageState State
             {
                 get { return _state; }
+                set { }
             }
         }
 
@@ -65,8 +68,17 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
         }
 
         // todo: should concurrency level be ensured by stage definition, or executors?
+        // asynch agent is responcible for stop. f.
+        // current eexecution pattern - rare submits of long running work
         public void Execute<T>(T stage, Action workItem) where T : IStageDefinition
-        { 
+        {
+            var q = executingStages[typeof(T)].FirstOrDefault(v => ReferenceEquals(v.Stage, stage));
+            // ensure concurrent executions here
+            if (!IsStageAvailableForFutherWork(q)) // nullref
+            {
+                return;
+            }
+
             if (!workItemWrappers.TryGetValue(typeof(T), out var actionWrappers))
             {
                 workItemWrappers[typeof(T)] = actionWrappers = GetActionWrappers<T>();
@@ -83,17 +95,42 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
             }
             throw new NotImplementedException();
         }
+
+        private bool IsStageAvailableForFutherWork(StageExecutionInfo executionInfo)
+        {
+            if (executionInfo.Stage is ILimitedСoncurrencyStage limitedСoncurrencyStage)
+            {  
+//                // LOCK..// todo
+//                if (stage.State == StageState.Running)
+//                {// probably will be executed in fresh thread,thus leading to unneccessary thread creations
+//                    // , but as such submit should be rare event - it shouldnt matter. Or it could be precondition before .. 
+//                    return;
+//                }
+//                if (stage.State == StageState.Stopped)
+//                {
+//                    return;
+//                }
+                if (executionInfo.CurrentlyExecutingActions >= limitedСoncurrencyStage.MaximumConcurrencyLevel)
+                {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
         protected interface IActionWrapper
         {
             Type HandlingAttributeType { get; }
 
-            void ExecuteAction(Action action);
+            void ExecuteAction(StageExecutionInfo stage, Action action);
 
         }
+        // todo: add stage as ExecuteAction parameter
+        // add limiting concurrency mixin. StageExecutionInfo should be its holder
         abstract class ActionBehaviorMixin<TActionAttribute> : IActionWrapper where TActionAttribute : IStageAttribute
         {
             public Type HandlingAttributeType { get; } = typeof(TActionAttribute);
-            public abstract void ExecuteAction(Action action);
+            public abstract void ExecuteAction(StageExecutionInfo stage, Action action);
         }
 
         void ExecuteActionV2(LinkedListNode<IActionWrapper> actionNode, Action action)
@@ -130,7 +167,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
                 taskScheduler = scheduler;
             }
 
-            public override void ExecuteAction(Action action)
+            public override void ExecuteAction(StageExecutionInfo stage, Action action)
             {
                 RuntimeContext.InitializeThread(taskScheduler);
                 try
@@ -146,7 +183,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
 
         class ActionCrashOnFaultBehavior : ActionBehaviorMixin<ActionFaultBehavior.CrashOnFault>
         {
-            public override void ExecuteAction(Action action)
+            public override void ExecuteAction(StageExecutionInfo stage, Action action)
             {
                 try
                 {
@@ -154,10 +191,21 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
                 }
                 catch (Exception ex)
                 {
+                    //Console.WriteLine(
+                    //    "The {0} agent has thrown an unhandled exception, {1}. The process will be terminated.",
+                    //    stage.Stage.Name, exc);
+                    //log.Error(ErrorCode.Runtime_Error_100023,
+                    //    "AsynchAgent Run method has thrown an unhandled exception. The process will be terminated.",
+                    //    exc);
+                    //log.Fail(ErrorCode.Runtime_Error_100024, "Terminating process because of an unhandled exception caught in AsynchAgent.Run.");
+
+                    stage.State = StageState.Stopped;// ??
                     var todo = ex;
                 }
             }
         }
+
+
         // each stageexecutor - should be able to add its own?
         protected virtual LinkedList<IActionWrapper> GetActionWrappers<T>() where T : IStageDefinition
         {

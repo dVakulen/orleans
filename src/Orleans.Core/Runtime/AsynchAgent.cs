@@ -276,7 +276,7 @@ namespace Orleans.Runtime
 
         
 
-    interface ILimitedСoncurrencyStage
+    interface ILimitedСoncurrencyStage : IStageAttribute
     {
         int MaximumConcurrencyLevel { get; }
     }
