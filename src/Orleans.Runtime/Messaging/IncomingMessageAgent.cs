@@ -7,7 +7,7 @@ namespace Orleans.Runtime.Messaging
 {
   
 
-    internal class IncomingMessageAgent : AsynchAgent, ActionFaultBehavior.RestartOnFault
+    internal class IncomingMessageAgent : AsynchAgent
     {
         private readonly IMessageCenter messageCenter;
         private readonly ActivationDirectory directory;
@@ -25,6 +25,7 @@ namespace Orleans.Runtime.Messaging
             scheduler = sched;
             this.dispatcher = dispatcher;
             this.messageFactory = messageFactory;
+            OnFault = FaultBehavior.RestartOnFault;
         }
 
         public override void Start()

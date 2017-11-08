@@ -30,24 +30,24 @@ namespace Orleans.Runtime
     // approach - copy existing, get tests green, delete old.
 
     interface OrleansContextRequired : IStageAttribute { }
-    static class ActionFaultBehavior
-    {
-        public interface IStageFaultBehavior : IStageAttribute // Crash the process if the agent faults
-        {
-        }
+    //static class ActionFaultBehavior
+    //{
+    //    public interface IStageFaultBehavior : IStageAttribute // Crash the process if the agent faults
+    //    {
+    //    }
 
-        public interface CrashOnFault : IStageFaultBehavior // Crash the process if the agent faults
-        {
-        }
+    //    public interface CrashOnFault : IStageFaultBehavior // Crash the process if the agent faults
+    //    {
+    //    }
 
-        public interface RestartOnFault : IStageFaultBehavior // Restart the agent if it faults
-        {
-        }
+    //    public interface RestartOnFault : IStageFaultBehavior // Restart the agent if it faults
+    //    {
+    //    }
 
-        public interface IgnoreFault : IStageFaultBehavior // Allow the agent to stop if it faults, but take no other action (other than logging)
-        {
-        }
-    }
+    //    public interface IgnoreFault : IStageFaultBehavior // Allow the agent to stop if it faults, but take no other action (other than logging)
+    //    {
+    //    }
+    //}
 
 
     interface IStageDefinition
@@ -106,6 +106,7 @@ namespace Orleans.Runtime
             mapping.Add(typeof(T), executor);
         }
 
+        // should be renamed into get executor.
         public void Dispatch<TStage>(TStage stage, Action workItem)
             where TStage : IStageDefinition
         {
@@ -287,11 +288,19 @@ namespace Orleans.Runtime
     //. Requires implementer to explicitly pass themselves so submit
     // on fault should be passed alongside concrete action 
     {  // asyncg agent- stage reference. 
+        public enum FaultBehavior
+        {
+            CrashOnFault,   // Crash the process if the agent faults
+            RestartOnFault, // Restart the agent if it faults
+            IgnoreFault     // Allow the agent to stop if it faults, but take no other action (other than logging)
+        }
+
         protected readonly ExecutorService executorService;
         protected CancellationTokenSource Cts;
         protected object Lockable;
         protected Logger Log;
         private readonly string type;
+        protected FaultBehavior OnFault;
 
         // instance of AsynchAgent stage definition can have only 1  running thread, but there can be multiple definitions
         public int MaximumConcurrencyLevel => 1;
@@ -324,6 +333,7 @@ namespace Orleans.Runtime
                 Name = type;
             }
 
+            OnFault = FaultBehavior.IgnoreFault;
             Lockable = new object();
             Log = new LoggerWrapper(Name, loggerFactory);
 #if TRACK_DETAILED_STATS

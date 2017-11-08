@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Orleans.Runtime;
 
@@ -11,6 +12,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
         void Execute<T>(T stage, Action workItem) where T : IStageDefinition; // provide default handling? 
     }
 
+    // perf stage definition
     class LimitedСoncurrencyStageExecutor : IStageExecutor// - will be abstract
     {
 
@@ -56,10 +58,19 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
                 get { return _state; }
                 set { }
             }
+
+            public StageWorkerThread th;
+        }
+        public class ThreadedStageExecutionInfo: StageExecutionInfo
+        {
+            public ThreadedStageExecutionInfo(IStageDefinition stage) : base(stage)
+            {
+            }
+
         }
 
-        private Dictionary<Type, List<StageExecutionInfo>> executingStages 
-            = new Dictionary<Type, List<StageExecutionInfo>>();
+        private List<StageExecutionInfo> executingStages 
+            = new List<StageExecutionInfo>();
         // interceptors? currenlty there's no need in multiple wrappers per action  Action[] - will be stack\ likedlist be more descriptive? 
         public LimitedСoncurrencyStageExecutor()
         {
@@ -72,18 +83,24 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
         // current eexecution pattern - rare submits of long running work
         public void Execute<T>(T stage, Action workItem) where T : IStageDefinition
         {
-            var q = executingStages[typeof(T)].FirstOrDefault(v => ReferenceEquals(v.Stage, stage));
+            var q = executingStages.FirstOrDefault(v => ReferenceEquals(v.Stage, stage));
             // ensure concurrent executions here
             if (!IsStageAvailableForFutherWork(q)) // nullref
             {
                 return;
             }
-
+            
+            // try start
+            if (q.State != StageState.Running)
+            {
+               // q.th = new StageWorkerThread(stage); //Name = q.Stage.Name 
+            }
             if (!workItemWrappers.TryGetValue(typeof(T), out var actionWrappers))
             {
                 workItemWrappers[typeof(T)] = actionWrappers = GetActionWrappers<T>();
             }
             //            var qw  = new LinkedList<string>();
+            // thread could be started here. with following as lambda
             if (actionWrappers.Any())
             {
                 var qwe = actionWrappers.First;
@@ -94,6 +111,68 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
                 workItem();
             }
             throw new NotImplementedException();
+        }
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
+        private static void AgentThreadProc(Object obj)
+        {
+            //var agent = obj as AsynchAgent;
+            //if (agent == null)
+            //{
+            //    throw new InvalidOperationException("Agent thread started with incorrect parameter type");
+            //}
+
+            //try
+            //{
+            //    LogStatus(agent.Log, "Starting AsyncAgent {0} on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+            //    CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
+            //    CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
+            //    CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
+            //    agent.Run();
+            //}
+            //catch (Exception exc)
+            //{
+            //    if (agent.State == ThreadState.Running) // If we're stopping, ignore exceptions
+            //    {
+            //        var log = agent.Log;
+            //        switch (agent.OnFault)
+            //        {
+            //            case FaultBehavior.CrashOnFault:
+            //                Console.WriteLine(
+            //                    "The {0} agent has thrown an unhandled exception, {1}. The process will be terminated.",
+            //                    agent.Name, exc);
+            //                log.Error(ErrorCode.Runtime_Error_100023,
+            //                    "AsynchAgent Run method has thrown an unhandled exception. The process will be terminated.",
+            //                    exc);
+            //                log.Fail(ErrorCode.Runtime_Error_100024, "Terminating process because of an unhandled exception caught in AsynchAgent.Run.");
+            //                break;
+            //            case FaultBehavior.IgnoreFault:
+            //                log.Error(ErrorCode.Runtime_Error_100025, "AsynchAgent Run method has thrown an unhandled exception. The agent will exit.",
+            //                    exc);
+            //                agent.State = ThreadState.Stopped;
+            //                break;
+            //            case FaultBehavior.RestartOnFault:
+            //                log.Error(ErrorCode.Runtime_Error_100026,
+            //                    "AsynchAgent Run method has thrown an unhandled exception. The agent will be restarted.",
+            //                    exc);
+            //                agent.State = ThreadState.Stopped;
+            //                try
+            //                {
+            //                    agent.Start();
+            //                }
+            //                catch (Exception ex)
+            //                {
+            //                    log.Error(ErrorCode.Runtime_Error_100027, "Unable to restart AsynchAgent", ex);
+            //                    agent.State = ThreadState.Stopped;
+            //                }
+            //                break;
+            //        }
+            //    }
+            //}
+            //finally
+            //{
+            //    CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).DecrementBy(1);
+            //    agent.Log.Info(ErrorCode.Runtime_Error_100328, "Stopping AsyncAgent {0} that runs on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+            //}
         }
 
         private bool IsStageAvailableForFutherWork(StageExecutionInfo executionInfo)
@@ -180,31 +259,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
                 }
             }
         }
-
-        class ActionCrashOnFaultBehavior : ActionBehaviorMixin<ActionFaultBehavior.CrashOnFault>
-        {
-            public override void ExecuteAction(StageExecutionInfo stage, Action action)
-            {
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    //Console.WriteLine(
-                    //    "The {0} agent has thrown an unhandled exception, {1}. The process will be terminated.",
-                    //    stage.Stage.Name, exc);
-                    //log.Error(ErrorCode.Runtime_Error_100023,
-                    //    "AsynchAgent Run method has thrown an unhandled exception. The process will be terminated.",
-                    //    exc);
-                    //log.Fail(ErrorCode.Runtime_Error_100024, "Terminating process because of an unhandled exception caught in AsynchAgent.Run.");
-
-                    stage.State = StageState.Stopped;// ??
-                    var todo = ex;
-                }
-            }
-        }
-
+        
 
         // each stageexecutor - should be able to add its own?
         protected virtual LinkedList<IActionWrapper> GetActionWrappers<T>() where T : IStageDefinition
@@ -212,7 +267,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
             var actionWrappers = new LinkedList<IActionWrapper>();
             var existingWrappersList = new List<IActionWrapper>
             {
-                new ActionCrashOnFaultBehavior()
+             ///  new ActionCrashOnFaultBehavior()
             };
 
             var tType = typeof(T);

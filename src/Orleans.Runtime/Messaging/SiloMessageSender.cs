@@ -8,7 +8,7 @@ using Orleans.Serialization;
 
 namespace Orleans.Runtime.Messaging
 {
-    internal class SiloMessageSender : OutgoingMessageSender, ActionFaultBehavior.RestartOnFault
+    internal class SiloMessageSender : OutgoingMessageSender
     {
         private readonly MessageCenter messageCenter;
         private const int DEFAULT_MAX_RETRIES = 0;
@@ -23,6 +23,7 @@ namespace Orleans.Runtime.Messaging
         {
             messageCenter = msgCtr;
             lastConnectionFailure = new Dictionary<SiloAddress, DateTime>();
+            OnFault = FaultBehavior.RestartOnFault;
         }
 
         protected override SocketDirection GetSocketDirection()

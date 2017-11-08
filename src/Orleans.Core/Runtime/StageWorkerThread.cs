@@ -1,14 +1,15 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Orleans.Runtime.Configuration;
+using Orleans.Threading;
 
 namespace Orleans.Runtime
 {
-    internal abstract class StageWorkerThread : IDisposable
+    internal  class StageWorkerThread : IDisposable
     {
         public enum FaultBehavior
         {
@@ -33,7 +34,7 @@ namespace Orleans.Runtime
         internal int ManagedThreadId { get { return t==null ? -1 : t.ManagedThreadId;  } }
         
         // nameSuffix - maybe at some point should be removed.
-        protected StageWorkerThread(string nameSuffix, ILoggerFactory loggerFactory)
+        public StageWorkerThread(string nameSuffix, ILoggerFactory loggerFactory)
         {
             Cts = new CancellationTokenSource();
             var thisType = GetType();
@@ -90,7 +91,7 @@ namespace Orleans.Runtime
             }
         }
 
-        public virtual void Start()
+        public virtual void Start(IStageDefinition stage)
         {
             lock (Lockable)
             {
@@ -105,7 +106,7 @@ namespace Orleans.Runtime
                     t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
                 }
 
-                t.Start(this);
+                t.Start(stage);
                 State = ThreadState.Running;
             }
             if(Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
@@ -135,71 +136,69 @@ namespace Orleans.Runtime
             }
             Log.Verbose("Stopped agent");
         }
-
-        protected abstract void Run();
-
+        
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         private static void AgentThreadProc(Object obj)
         {
-            var agent = obj as StageWorkerThread;
-            if (agent == null)
-            {
-                throw new InvalidOperationException("Agent thread started with incorrect parameter type");
-            }
+            //var agent = obj as LimitedСoncurrencyStageExecutor.StageExecutionInfo;
+            //if (agent == null)
+            //{
+            //    throw new InvalidOperationException("Agent thread started with incorrect parameter type");
+            //}
 
-            try
-            {
-                LogStatus(agent.Log, "Starting AsyncAgent {0} on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
-                CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
-                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
-                CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
+            //try
+            //{
+            //    LogStatus(agent.Log, "Starting AsyncAgent {0} on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+            //    CounterStatistic.SetOrleansManagedThread(); // do it before using CounterStatistic.
+            //    CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).Increment();
+            //    CounterStatistic.FindOrCreate(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_TOTAL_THREADS_CREATED).Increment();
 
-                agent.Run();
-            }
-            catch (Exception exc)
-            {
-                if (agent.State == ThreadState.Running) // If we're stopping, ignore exceptions
-                {
-                    var log = agent.Log;
-                    switch (agent.OnFault)
-                    {
-                        case FaultBehavior.CrashOnFault:
-                            Console.WriteLine(
-                                "The {0} agent has thrown an unhandled exception, {1}. The process will be terminated.",
-                                agent.Name, exc);
-                            log.Error(ErrorCode.Runtime_Error_100023,
-                                "AsynchAgent Run method has thrown an unhandled exception. The process will be terminated.",
-                                exc);
-                            log.Fail(ErrorCode.Runtime_Error_100024, "Terminating process because of an unhandled exception caught in AsynchAgent.Run.");
-                            break;
-                        case FaultBehavior.IgnoreFault:
-                            log.Error(ErrorCode.Runtime_Error_100025, "AsynchAgent Run method has thrown an unhandled exception. The agent will exit.",
-                                exc);
-                            agent.State = ThreadState.Stopped;
-                            break;
-                        case FaultBehavior.RestartOnFault:
-                            log.Error(ErrorCode.Runtime_Error_100026,
-                                "AsynchAgent Run method has thrown an unhandled exception. The agent will be restarted.",
-                                exc);
-                            agent.State = ThreadState.Stopped;
-                            try
-                            {
-                                agent.Start();
-                            }
-                            catch (Exception ex)
-                            {
-                                log.Error(ErrorCode.Runtime_Error_100027, "Unable to restart AsynchAgent", ex);
-                                agent.State = ThreadState.Stopped;
-                            }
-                            break;
-                    }
-                }
-            }
-            finally
-            {
-                CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).DecrementBy(1);
-                agent.Log.Info(ErrorCode.Runtime_Error_100328, "Stopping AsyncAgent {0} that runs on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
-            }
+            //    agent.Run();
+            //}
+            //catch (Exception exc)
+            //{
+            //    if (agent.State == ThreadState.Running) // If we're stopping, ignore exceptions
+            //    {
+            //        var log = agent.Log;
+            //        switch (agent.OnFault)
+            //        {
+            //            case FaultBehavior.CrashOnFault:
+            //                Console.WriteLine(
+            //                    "The {0} agent has thrown an unhandled exception, {1}. The process will be terminated.",
+            //                    agent.Name, exc);
+            //                log.Error(ErrorCode.Runtime_Error_100023,
+            //                    "AsynchAgent Run method has thrown an unhandled exception. The process will be terminated.",
+            //                    exc);
+            //                log.Fail(ErrorCode.Runtime_Error_100024, "Terminating process because of an unhandled exception caught in AsynchAgent.Run.");
+            //                break;
+            //            case FaultBehavior.IgnoreFault:
+            //                log.Error(ErrorCode.Runtime_Error_100025, "AsynchAgent Run method has thrown an unhandled exception. The agent will exit.",
+            //                    exc);
+            //                agent.State = ThreadState.Stopped;
+            //                break;
+            //            case FaultBehavior.RestartOnFault:
+            //                log.Error(ErrorCode.Runtime_Error_100026,
+            //                    "AsynchAgent Run method has thrown an unhandled exception. The agent will be restarted.",
+            //                    exc);
+            //                agent.State = ThreadState.Stopped;
+            //                try
+            //                {
+            //                    agent.Start(agent);
+            //                }
+            //                catch (Exception ex)
+            //                {
+            //                    log.Error(ErrorCode.Runtime_Error_100027, "Unable to restart AsynchAgent", ex);
+            //                    agent.State = ThreadState.Stopped;
+            //                }
+            //                break;
+            //        }
+            //    }
+            //}
+            //finally
+            //{
+            //    CounterStatistic.FindOrCreate(new StatisticName(StatisticNames.RUNTIME_THREADS_ASYNC_AGENT_PERAGENTTYPE, agent.type)).DecrementBy(1);
+            //    agent.Log.Info(ErrorCode.Runtime_Error_100328, "Stopping AsyncAgent {0} that runs on managed thread {1}", agent.Name, Thread.CurrentThread.ManagedThreadId);
+            //}
         }
 
 #region IDisposable Members
