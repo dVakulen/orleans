@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Orleans.Runtime.Configuration;
 using Orleans.Threading;
@@ -137,9 +138,57 @@ namespace Orleans.Runtime
         // predefined executors? 
         // should accept actionDescriptor instead of Action.
         // generics - enforcing contracts
-      
+
+
+        //@FunctionalInterface
+        //public interface Callable<V>
+        //{
+        //    /**
+        //     * Computes a result, or throws an exception if unable to do so.
+        //     *
+        //     * @return computed result
+        //     * @throws Exception if unable to compute a result
+        //     */
+        //    V call() throws Exception;
+        //}
+
+        // <T> Future<T> submit(Callable<T> task);
         public abstract void Submit<TStage>(TStage stage, Action work) // TStage,typ
             where TStage : IStageDefinition;
+
+        //       /**
+        //* Submits a Runnable task for execution and returns a Future
+        //* representing that task. The Future's {@code get} method will
+        //* return {@code null} upon <em>successful</em> completion.
+        //*
+        //* @param task the task to submit
+        //* @return a Future representing pending completion of the task
+        //* @throws RejectedExecutionException if the task cannot be
+        //*         scheduled for execution
+        //* @throws NullPointerException if the task is null
+        //*/
+
+
+        // Future<?> submit(Runnable task);
+
+
+
+        //public interface Runnable
+        //{
+        //    /**
+        //     * When an object implementing interface <code>Runnable</code> is used
+        //     * to create a thread, starting the thread causes the object's
+        //     * <code>run</code> method to be called in that separately executing
+        //     * thread.
+        //     * <p>
+        //     * The general contract of the method <code>run</code> is that it may
+        //     * take any action whatsoever.
+        //     *
+        //     * @see     java.lang.Thread#run()
+        //     */
+        //    public abstract void run();
+        //}
+
     }
 
     abstract class StagesExecutionPlan
@@ -218,7 +267,42 @@ namespace Orleans.Runtime
     class ConcreteStageDefinition : IStageDefinition
     {
     }
-    
+
+    class ConcreteStageAction : Task
+    {
+        // yup, lots of ctors.
+        public ConcreteStageAction(Action action) : base(action)
+        {
+        }
+
+        public ConcreteStageAction(Action action, CancellationToken cancellationToken) : base(action, cancellationToken)
+        {
+        }
+
+        public ConcreteStageAction(Action action, CancellationToken cancellationToken, TaskCreationOptions creationOptions) : base(action, cancellationToken, creationOptions)
+        {
+        }
+
+        public ConcreteStageAction(Action action, TaskCreationOptions creationOptions) : base(action, creationOptions)
+        {
+        }
+
+        public ConcreteStageAction(Action<object> action, object state) : base(action, state)
+        {
+        }
+
+        public ConcreteStageAction(Action<object> action, object state, CancellationToken cancellationToken) : base(action, state, cancellationToken)
+        {
+        }
+
+        public ConcreteStageAction(Action<object> action, object state, CancellationToken cancellationToken, TaskCreationOptions creationOptions) : base(action, state, cancellationToken, creationOptions)
+        {
+        }
+
+        public ConcreteStageAction(Action<object> action, object state, TaskCreationOptions creationOptions) : base(action, state, creationOptions)
+        {
+        }
+    }
     class StagedExecutorService : ExecutorService // rename.? most likely only ExecutorService is to remain
     {
 //        public StagedExecutorService(NodeConfiguration config)
