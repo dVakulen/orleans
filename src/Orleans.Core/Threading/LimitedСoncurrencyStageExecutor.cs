@@ -4,7 +4,29 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Orleans.Runtime;
+/// <summary>Provides a task scheduler that dedicates a thread per task.</summary>
+public class ThreadPerTaskScheduler : TaskScheduler
+{
+    /// <summary>Gets the tasks currently scheduled to this scheduler.</summary>
+    /// <remarks>This will always return an empty enumerable, as tasks are launched as soon as they're queued.</remarks>
+    protected override IEnumerable<Task> GetScheduledTasks() { return Enumerable.Empty<Task>(); }
 
+    /// <summary>Starts a new thread to process the provided task.</summary>
+    /// <param name="task">The task to be executed.</param>
+    protected override void QueueTask(Task task)
+    {
+        new Thread(() => TryExecuteTask(task)) { IsBackground = true }.Start();
+    }
+
+    /// <summary>Runs the provided task on the current thread.</summary>
+    /// <param name="task">The task to be executed.</param>
+    /// <param name="taskWasPreviouslyQueued">Ignored.</param>
+    /// <returns>Whether the task could be executed on the current thread.</returns>
+    protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
+    {
+        return TryExecuteTask(task);
+    }
+}
 
 //    * @since 1.5
 //    * @author Doug Lea
@@ -32,11 +54,13 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
     interface IStageExecutor
     {
         // should not know about stage, probably? 
-        void Execute<T>(T stage, Action workItem) where T : IStageDefinition; // provide default handling? 
+        // should accept only task
+        void ExecuteFromJava(Task workItem);
+
+        void Execute<T>(T stage, Action workItem) where T : IStageDefinition;
         
     }
-
-    // perf stage definition
+    
     class LimitedСoncurrencyStageExecutor : IStageExecutor// - will be abstract
     {
 
@@ -108,6 +132,15 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
         // current eexecution pattern - rare submits of long running work
         public void Execute<T>(T stage, Action workItem) where T : IStageDefinition
         {
+            // ensuring all of the bookkeeping. 
+            Task workItemFromJava = Task.CompletedTask;
+            var c = workItemFromJava as ConcreteStageAction;
+            if (c == null)
+            { // we in StageExecutor, and requiring its type to be StageAction
+                // warn of unexpected task
+              throw new InvalidOperationException();
+            }
+
             // all stage related activities should be managed in StagedExecutorsService
             var q = executingStages.FirstOrDefault(v => ReferenceEquals(v.Stage, stage));
             // ensure concurrent executions here
@@ -136,6 +169,11 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
             {
                 workItem();
             }
+
+
+            // there should be action - task conversion somewhere to support restarts, etc
+            var tpts = new ThreadPerTaskScheduler();
+            workItemFromJava.Start(tpts);
             throw new NotImplementedException();
         }
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]

@@ -156,6 +156,10 @@ namespace Orleans.Runtime
         public abstract void Submit<TStage>(TStage stage, Action work) // TStage,typ
             where TStage : IStageDefinition;
 
+        // default task being submitted to shared thread pool
+        public abstract void SubmitFromJava(Task work); // TStage,typ
+           // where TStage : IStageDefinition;
+        
         //       /**
         //* Submits a Runnable task for execution and returns a Future
         //* representing that task. The Future's {@code get} method will
@@ -270,6 +274,7 @@ namespace Orleans.Runtime
 
     class ConcreteStageAction : Task
     {
+        public IStageDefinition Stage { get; }
         // yup, lots of ctors.
         public ConcreteStageAction(Action action) : base(action)
         {
@@ -337,6 +342,20 @@ namespace Orleans.Runtime
         public override void Submit<TStage>(TStage stage, Action work)
         {
             currentExecutionPlan.Dispatch(stage, work);
+        }
+
+        public override void SubmitFromJava(Task work)
+        { //StagedExecutorService - actually work dispatcher. concrete executors are schedulers. 
+            if (work is ConcreteStageAction)
+            {
+                //Is executor service actually TaskScheduler? 
+                // fff... no way of adjusting action (is it even needed?)
+            }
+            else
+            {
+               work.Start();
+                // submit to shared thread pool
+            }
         }
     }
 
