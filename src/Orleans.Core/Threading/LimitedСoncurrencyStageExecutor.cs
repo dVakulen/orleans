@@ -5,11 +5,35 @@ using System.Threading;
 using System.Threading.Tasks;
 using Orleans.Runtime;
 
+
+//    * @since 1.5
+//    * @author Doug Lea
+//    */
+//public interface Executor
+//{
+
+//    /**
+//     * Executes the given command at some time in the future.  The command
+//     * may execute in a new thread, in a pooled thread, or in the calling
+//     * thread, at the discretion of the {@code Executor} implementation.
+//     *
+//     * @param command the runnable task
+//     * @throws RejectedExecutionException if this task cannot be
+//     * accepted for execution
+//     * @throws NullPointerException if command is null
+//     */
+//    void execute(Runnable command);
+//}
+
 namespace Orleans.Threading // could be Concurrency? \ Execution
 {
+    // to already existing Executor interface ( designed so that .Net ThreadPool could be one of the implementers)
+   // 
     interface IStageExecutor
     {
+        // should not know about stage, probably? 
         void Execute<T>(T stage, Action workItem) where T : IStageDefinition; // provide default handling? 
+        
     }
 
     // perf stage definition
@@ -45,6 +69,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
 
             public StageExecutionInfo(IStageDefinition stage)
             {
+              //  ThreadPool
                 Stage = stage;
                 _state = StageState.Unstarted;
             }
@@ -83,6 +108,7 @@ namespace Orleans.Threading // could be Concurrency? \ Execution
         // current eexecution pattern - rare submits of long running work
         public void Execute<T>(T stage, Action workItem) where T : IStageDefinition
         {
+            // all stage related activities should be managed in StagedExecutorsService
             var q = executingStages.FirstOrDefault(v => ReferenceEquals(v.Stage, stage));
             // ensure concurrent executions here
             if (!IsStageAvailableForFutherWork(q)) // nullref
