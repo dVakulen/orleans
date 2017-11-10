@@ -374,8 +374,8 @@ namespace Orleans.Runtime.Messaging
                 this.gateway = gateway;
                 this.messageFactory = messageFactory;
                 this.serializationManager = serializationManager;
-                OnFault = FaultBehavior.RestartOnFault;
                 gatewaySends = CounterStatistic.FindOrCreate(StatisticNames.GATEWAY_SENT);
+                OnFault = FaultBehavior.RestartOnFault;
             }
 
             protected override void Process(OutgoingClientMessage request)

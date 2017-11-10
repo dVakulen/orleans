@@ -44,7 +44,7 @@ namespace Orleans.Messaging
             this.openConnectionTimeout = openConnectionTimeout;
             Address = address;
             MsgCenter = mc;
-            receiver = new GatewayClientReceiver(this, executorService, mc.SerializationManager, loggerFactory);
+            receiver = new GatewayClientReceiver(this, mc.SerializationManager, executorService, loggerFactory);
             lastConnect = new DateTime();
             IsLive = true;
         }

@@ -34,8 +34,8 @@ namespace Orleans.Runtime.Messaging
         internal OutboundMessageQueue(MessageCenter mc, IOptions<SiloMessagingOptions> options, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory)
         {
             messageCenter = mc;
-            pingSender = new SiloMessageSender( "PingSender",  messageCenter, serializationManager, executorService, loggerFactory);
-            systemSender = new SiloMessageSender("SystemSender",  messageCenter, serializationManager, executorService, loggerFactory);
+            pingSender = new SiloMessageSender("PingSender", messageCenter, serializationManager, executorService, loggerFactory);
+            systemSender = new SiloMessageSender("SystemSender", messageCenter, serializationManager, executorService, loggerFactory);
             senders = new Lazy<SiloMessageSender>[options.Value.SiloSenderQueues];
 
             for (int i = 0; i < senders.Length; i++)

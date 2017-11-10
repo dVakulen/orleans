@@ -56,10 +56,10 @@ namespace Orleans.Runtime.Messaging
             if (here == null)
                 listenAddress = MessageCenter.MyAddress.Endpoint;
 
-            OnFault = FaultBehavior.CrashOnFault;
             AcceptingSocket = SocketManager.GetAcceptingSocketForEndpoint(listenAddress);
             Log.Info(ErrorCode.Messaging_IMA_OpenedListeningSocket, "Opened a listening socket at address " + AcceptingSocket.LocalEndPoint);
             OpenReceiveSockets = new HashSet<Socket>();
+            OnFault = FaultBehavior.CrashOnFault;
             SocketDirection = socketDirection;
 
             checkedOutSocketEventArgsCounter = CounterStatistic.FindOrCreate(StatisticNames.MESSAGE_ACCEPTOR_CHECKED_OUT_SOCKET_EVENT_ARGS, false);

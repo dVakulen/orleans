@@ -103,10 +103,10 @@ namespace Orleans.Messaging
             GrainId clientId,
             IGatewayListProvider gatewayListProvider,
             SerializationManager serializationManager,
-            ExecutorService executorService,
             IRuntimeClient runtimeClient,
             MessageFactory messageFactory,
             IClusterConnectionStatusListener connectionStatusListener,
+            ExecutorService executorService,
             ILoggerFactory loggerFactory,
             IOptions<ClientMessagingOptions> messagingOptions)
         {

@@ -34,9 +34,9 @@ namespace Orleans.Runtime.GrainDirectory
             this.router = router;
             this.cache = cache;
 
-            OnFault = FaultBehavior.RestartOnFault;
             lastNumAccesses = 0;
             lastNumHits = 0;
+            OnFault = FaultBehavior.RestartOnFault;
         }
 
         protected override void Run()

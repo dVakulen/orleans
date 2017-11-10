@@ -73,7 +73,10 @@ namespace Orleans.Runtime
         {
             try
             {
-                Stop();
+                if (State != ThreadState.Stopped)
+                {
+                    Stop();
+                }
             }
             catch (Exception exc)
             {
@@ -84,44 +87,39 @@ namespace Orleans.Runtime
 
         public virtual void Start()
         {
-            //lock (Lockable)
-            //{
-            //    if (State == ThreadState.Running)
-            //    {
-            //        return;
-            //    }
-
-            //    if (State == ThreadState.Stopped)
-            //    {
-            //        t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
-            //    }
-
-            //    t.Start(this);
-            //    State = ThreadState.Running;
-            //}
-            Cts = new CancellationTokenSource();
-            if (Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
-            EnsureCurrentTaskCreated();
-            executorService.RunTask(currentTask);
-        }
-
-        private void EnsureCurrentTaskCreated()
-        {
-            // should be cas? 
-            if (currentTask == null)
+            lock (Lockable)
             {
-                currentTask = new AsynchAgentTask(() => AgentThreadProc(this), Name);
-            }
-        }
+                if (State == ThreadState.Running)
+                {
+                    return;
+                }
 
-        private AsynchAgentTask currentTask;
+                if (State == ThreadState.Stopped)
+                {
+                    Cts = new CancellationTokenSource();
+                }
+
+                executorService.RunTask(new AsynchAgentTask(() => AgentThreadProc(this), Name));
+                State = ThreadState.Running;
+            }
+            if (Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
+        }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         public virtual void Stop()
         {
             try
             {
-                Cts.Cancel();
+                lock (Lockable)
+                {
+                    if (State == ThreadState.Running)
+                    {
+                        State = ThreadState.StopRequested;
+                        Cts.Cancel();
+                        State = ThreadState.Stopped;
+                    }
+                }
+
                 AppDomain.CurrentDomain.DomainUnload -= CurrentDomain_DomainUnload;
             }
             catch (Exception exc)
@@ -153,7 +151,6 @@ namespace Orleans.Runtime
             }
             catch (Exception exc)
             {
-                // nullify current task?
                 if (agent.State == ThreadState.Running) // If we're stopping, ignore exceptions
                 {
                     var log = agent.Log;
@@ -198,7 +195,7 @@ namespace Orleans.Runtime
             }
         }
 
-        #region IDisposable Members
+#region IDisposable Members
 
         public void Dispose()
         {
@@ -217,7 +214,7 @@ namespace Orleans.Runtime
             }
         }
 
-        #endregion
+ #endregion
 
         public override string ToString()
         {

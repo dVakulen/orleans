@@ -6,10 +6,7 @@ using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime
 {
-    // queue services? where to move the BlockingCollection ?
-    // instead of accumulating work items to do in local collections - lambdas with it
-    // will be storred in execution service, thus only 1 mention of BC should remain
-    internal abstract class AsynchQueueAgent<T> : AsynchAgent where T : IOutgoingMessage
+    internal abstract class AsynchQueueAgent<T> : AsynchAgent, IDisposable where T : IOutgoingMessage
     {
         private BlockingCollection<T> requestQueue;
         private QueueTrackingStatistic queueTracking;
@@ -23,11 +20,6 @@ namespace Orleans.Runtime
                 queueTracking = new QueueTrackingStatistic(base.Name);
             }
         }
-
-//        public override void Start()
-//        {
-//            // todo: submit to executor service? 
-//        }
 
         public void QueueRequest(T request)
         {
@@ -48,7 +40,6 @@ namespace Orleans.Runtime
 
         protected abstract void Process(T request);
 
-        // ???? wount be needed
         protected override void Run()
         {
 #if TRACK_DETAILED_STATS
