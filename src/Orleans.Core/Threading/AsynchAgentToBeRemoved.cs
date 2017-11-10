@@ -476,7 +476,7 @@ namespace Orleans.Runtime
             Cts = new CancellationTokenSource();
             // todo: executor service should ensure concurrent run number guarantees
             // 
-            executorService.Submit(this, Run);
+           // executorService.Submit(this, Run);
         }
 
         //        public ThreadState State { get; private set; } = ThreadState.Unstarted;

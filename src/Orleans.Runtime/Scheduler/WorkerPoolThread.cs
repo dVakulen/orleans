@@ -20,6 +20,8 @@ namespace Orleans.Runtime.Scheduler
         private bool ownsSemaphore;
         internal bool IsSystem { get; private set; }
 
+        internal int ManagedThreadId => Thread.CurrentThread.ManagedThreadId;
+
         [ThreadStatic]
         private static WorkerPoolThread current;
         internal static WorkerPoolThread CurrentWorkerThread { get { return current; } }
