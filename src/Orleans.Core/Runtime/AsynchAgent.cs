@@ -28,7 +28,7 @@ namespace Orleans.Runtime
         public ThreadState State { get; private set; }
         internal string Name { get; private set; }
 
-        protected AsynchAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory)
+        protected AsynchAgent(string nameSuffix, ExecutorService executorService, ILoggerFactory loggerFactory)
         {
             this.executorService = executorService;
             Cts = new CancellationTokenSource();
@@ -64,7 +64,7 @@ namespace Orleans.Runtime
         }
 
         protected AsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory)
-            : this(executorService, null, loggerFactory)
+            : this(null, executorService, loggerFactory)
         {
         }
 

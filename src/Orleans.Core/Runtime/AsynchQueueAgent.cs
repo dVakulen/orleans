@@ -14,8 +14,8 @@ namespace Orleans.Runtime
         private BlockingCollection<T> requestQueue;
         private QueueTrackingStatistic queueTracking;
 
-        protected AsynchQueueAgent(ExecutorService executorService, string nameSuffix, ILoggerFactory loggerFactory)
-            : base(executorService, nameSuffix, loggerFactory)
+        protected AsynchQueueAgent(string nameSuffix, ExecutorService executorService, ILoggerFactory loggerFactory)
+            : base(nameSuffix, executorService, loggerFactory)
         {
             requestQueue = new BlockingCollection<T>();
             if (StatisticsCollector.CollectQueueStats)

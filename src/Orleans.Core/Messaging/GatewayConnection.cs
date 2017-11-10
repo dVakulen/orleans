@@ -38,7 +38,7 @@ namespace Orleans.Messaging
         private DateTime lastConnect;
 
         internal GatewayConnection(Uri address, ProxiedMessageCenter mc, MessageFactory messageFactory, ExecutorService executorService, ILoggerFactory loggerFactory, TimeSpan openConnectionTimeout)
-            : base("GatewayClientSender_" + address, executorService, mc.SerializationManager, loggerFactory)
+            : base("GatewayClientSender_" + address, mc.SerializationManager, executorService, loggerFactory)
         {
             this.messageFactory = messageFactory;
             this.openConnectionTimeout = openConnectionTimeout;
@@ -54,18 +54,16 @@ namespace Orleans.Messaging
             if (Log.IsVerbose) Log.Verbose(ErrorCode.ProxyClient_GatewayConnStarted, "Starting gateway connection for gateway {0}", Address);
             lock (Lockable)
             {
-              //  if (State == ThreadState.Running)
+                if (State == ThreadState.Running)
                 {
-                 //   return;
-                } // todo: should be ensured by executor service
+                    return;
+                }
                 Connect();
                 if (!IsLive) return;
 
                 // If the Connect succeeded
                 receiver.Start();
-                //todo. (this is asynch queue agent. )
                 base.Start();
-                //  executorService.Submit<GatewayConnection, GatewayConnectionStageActionDescriptor>(null);
             }
         }
 

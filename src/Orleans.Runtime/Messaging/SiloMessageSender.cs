@@ -19,7 +19,7 @@ namespace Orleans.Runtime.Messaging
 
         
         internal SiloMessageSender(string nameSuffix, MessageCenter msgCtr, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory)
-            : base(nameSuffix, executorService, serializationManager, loggerFactory)
+            : base(nameSuffix, serializationManager, executorService, loggerFactory)
         {
             messageCenter = msgCtr;
             lastConnectionFailure = new Dictionary<SiloAddress, DateTime>();

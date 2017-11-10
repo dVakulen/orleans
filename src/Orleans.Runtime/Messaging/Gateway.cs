@@ -70,7 +70,7 @@ namespace Orleans.Runtime.Messaging
                 int capture = i;
                 senders[capture] = new Lazy<GatewaySender>(() =>
                 {
-                    var sender = new GatewaySender("GatewaySiloSender_" + capture, executorService, this, this.messageFactory, this.serializationManager, this.loggerFactory);
+                    var sender = new GatewaySender("GatewaySiloSender_" + capture, this, this.messageFactory, this.serializationManager, this.executorService, this.loggerFactory);
                     sender.Start();
                     return sender;
                 }, LazyThreadSafetyMode.ExecutionAndPublication);
@@ -368,8 +368,8 @@ namespace Orleans.Runtime.Messaging
             private readonly MessageFactory messageFactory;
             private readonly CounterStatistic gatewaySends;
             private readonly SerializationManager serializationManager;
-            internal GatewaySender(string name, ExecutorService executorService, Gateway gateway, MessageFactory messageFactory, SerializationManager serializationManager, ILoggerFactory loggerFactory)
-                : base(executorService, name, loggerFactory)
+            internal GatewaySender(string name, Gateway gateway, MessageFactory messageFactory, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory)
+                : base(name, executorService, loggerFactory)
             {
                 this.gateway = gateway;
                 this.messageFactory = messageFactory;
