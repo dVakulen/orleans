@@ -51,8 +51,8 @@ namespace Orleans.Runtime.Messaging
             SerializationManager serializationManager,
             ISiloPerformanceMetrics metrics,
             MessageFactory messageFactory,
-            ExecutorService executorService,
             Factory<MessageCenter, Gateway> gatewayFactory,
+            ExecutorService executorService,
             ILoggerFactory loggerFactory)
         {
             this.loggerFactory = loggerFactory;
