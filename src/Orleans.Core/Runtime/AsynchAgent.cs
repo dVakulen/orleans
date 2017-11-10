@@ -102,7 +102,7 @@ namespace Orleans.Runtime
             Cts = new CancellationTokenSource();
             if (Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
             EnsureCurrentTaskCreated();
-            executorService.SubmitFromJava(currentTask);
+            executorService.RunTask(currentTask);
         }
 
         private void EnsureCurrentTaskCreated()
@@ -110,11 +110,11 @@ namespace Orleans.Runtime
             // should be cas? 
             if (currentTask == null)
             {
-                this.currentTask = new Task(() => AgentThreadProc(this));
+                currentTask = new AsynchAgentTask(() => AgentThreadProc(this), Name);
             }
         }
 
-        private Task currentTask;
+        private AsynchAgentTask currentTask;
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
         public virtual void Stop()

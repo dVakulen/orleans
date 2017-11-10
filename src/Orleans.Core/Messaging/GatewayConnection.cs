@@ -69,14 +69,6 @@ namespace Orleans.Messaging
             }
         }
 
-        class GatewayConnectionStageActionDescriptor  : IActionDescriptor
-        {
-            public void Run()
-            {
-                throw new NotImplementedException();
-            }
-        }
-
         public override void Stop()
         {
             IsLive = false;
