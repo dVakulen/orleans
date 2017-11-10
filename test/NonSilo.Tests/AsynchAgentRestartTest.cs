@@ -16,7 +16,7 @@ namespace UnitTests.MessageCenterTests
             private readonly ITestOutputHelper output;
 
             public TestAgent(ITestOutputHelper output)
-                : base(new StagedExecutorService(), NullLoggerFactory.Instance)
+                : base(new ExecutorService(), NullLoggerFactory.Instance)
             {
                 this.output = output;
             }

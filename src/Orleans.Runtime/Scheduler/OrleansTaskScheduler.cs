@@ -39,7 +39,7 @@ namespace Orleans.Runtime.Scheduler
                 NodeConfiguration.ENABLE_WORKER_THREAD_INJECTION,
                 LimitManager.GetDefaultLimit(LimitNames.LIMIT_MAX_PENDING_ITEMS),
                 performanceMetrics,
-                new StagedExecutorService(), 
+                new ExecutorService(), 
                 loggerFactory);
         }
 
