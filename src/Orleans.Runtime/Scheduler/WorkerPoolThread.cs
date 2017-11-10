@@ -90,8 +90,8 @@ namespace Orleans.Runtime.Scheduler
         internal readonly int WorkerThreadStatisticsNumber;
         private readonly ICorePerformanceMetrics performanceMetrics;
 
-        internal WorkerPoolThread(WorkerPool gtp, OrleansTaskScheduler sched, ILoggerFactory loggerFactory, ICorePerformanceMetrics performanceMetrics, int threadNumber, bool system = false)
-            : base(new StagedExecutorService(), (system ? "System." : "") + threadNumber, loggerFactory) // todo. again. ( null)
+        internal WorkerPoolThread(WorkerPool gtp, OrleansTaskScheduler sched, ExecutorService executorService, ILoggerFactory loggerFactory, ICorePerformanceMetrics performanceMetrics, int threadNumber, bool system = false)
+            : base(executorService, (system ? "System." : "") + threadNumber, loggerFactory) // todo. again. ( null)
         {
             pool = gtp;
             scheduler = sched;
