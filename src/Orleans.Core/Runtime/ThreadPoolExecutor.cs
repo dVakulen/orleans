@@ -205,12 +205,9 @@ namespace Orleans.Runtime
             try
             {
                 while (!workQueue.IsCompleted &&
-                       (!executorOptions.CancellationToken.IsCancellationRequested || executorOptions.DrainAfterCancel))
+                       (!executorOptions.CancellationToken.IsCancellationRequested || executorOptions.DrainAfterCancel)
+                       && ExecuteWorkItem(workQueue.Take(), threadContext.WorkItemFilters))
                 {
-                    if (!ExecuteWorkItem(workQueue.Take(), threadContext.WorkItemFilters))
-                    {
-                        break;
-                    }
                 }
             }
             catch (Exception exc)
