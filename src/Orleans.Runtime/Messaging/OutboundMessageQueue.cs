@@ -2,10 +2,9 @@ using System;
 using System.Linq;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Orleans.Runtime.Configuration;
 using Orleans.Serialization;
-using Orleans.Configuration;
 using Microsoft.Extensions.Options;
+using Orleans.Hosting;
 
 namespace Orleans.Runtime.Messaging
 {
@@ -16,7 +15,7 @@ namespace Orleans.Runtime.Messaging
         private readonly SiloMessageSender pingSender;
         private readonly SiloMessageSender systemSender;
         private readonly MessageCenter messageCenter;
-        private readonly Logger logger;
+        private readonly ILogger logger;
         private bool stopped;
 
         public int Count
@@ -31,11 +30,11 @@ namespace Orleans.Runtime.Messaging
 
         internal const string QUEUED_TIME_METADATA = "QueuedTime";
 
-        internal OutboundMessageQueue(MessageCenter mc, IOptions<SiloMessagingOptions> options, SerializationManager serializationManager, ILoggerFactory loggerFactory)
+        internal OutboundMessageQueue(MessageCenter mc, IOptions<SiloMessagingOptions> options, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory)
         {
             messageCenter = mc;
-            pingSender = new SiloMessageSender("PingSender", messageCenter, serializationManager, loggerFactory);
-            systemSender = new SiloMessageSender("SystemSender", messageCenter, serializationManager, loggerFactory);
+            pingSender = new SiloMessageSender("PingSender", messageCenter, serializationManager, executorService, loggerFactory);
+            systemSender = new SiloMessageSender("SystemSender", messageCenter, serializationManager, executorService, loggerFactory);
             senders = new Lazy<SiloMessageSender>[options.Value.SiloSenderQueues];
 
             for (int i = 0; i < senders.Length; i++)
@@ -43,12 +42,12 @@ namespace Orleans.Runtime.Messaging
                 int capture = i;
                 senders[capture] = new Lazy<SiloMessageSender>(() =>
                 {
-                    var sender = new SiloMessageSender("AppMsgsSender_" + capture, messageCenter, serializationManager, loggerFactory);
+                    var sender = new SiloMessageSender("AppMsgsSender_" + capture, messageCenter, serializationManager, executorService, loggerFactory);
                     sender.Start();
                     return sender;
                 }, LazyThreadSafetyMode.ExecutionAndPublication);
             }
-            logger = new LoggerWrapper<OutboundMessageQueue>(loggerFactory);
+            logger = loggerFactory.CreateLogger<OutboundMessageQueue>();
             stopped = false;
         }
 
@@ -90,7 +89,7 @@ namespace Orleans.Runtime.Messaging
             // Shortcut messages to this silo
             if (msg.TargetSilo.Equals(messageCenter.MyAddress))
             {
-                if (logger.IsVerbose3) logger.Verbose3("Message has been looped back to this silo: {0}", msg);
+                if (logger.IsEnabled(LogLevel.Trace)) logger.Trace("Message has been looped back to this silo: {0}", msg);
                 MessagingStatisticsGroup.LocalMessagesSent.Increment();
                 messageCenter.InboundQueue.PostMessage(msg);
             }

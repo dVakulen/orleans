@@ -6,6 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using Microsoft.Extensions.Logging;
 using Orleans.CodeGeneration;
 
 namespace Orleans.Runtime
@@ -19,6 +20,11 @@ namespace Orleans.Runtime
         /// The assembly name of the core Orleans assembly.
         /// </summary>
         private static readonly AssemblyName OrleansCoreAssembly = typeof(RuntimeVersion).GetTypeInfo().Assembly.GetName();
+
+        /// <summary>
+        /// The assembly name of the core Orleans abstractions assembly.
+        /// </summary>
+        private static readonly AssemblyName OrleansAbstractionsAssembly = typeof(IGrain).GetTypeInfo().Assembly.GetName();
 
         private static readonly ConcurrentDictionary<Tuple<Type, TypeFormattingOptions>, string> ParseableNameCache = new ConcurrentDictionary<Tuple<Type, TypeFormattingOptions>, string>();
 
@@ -174,7 +180,7 @@ namespace Orleans.Runtime
             {
                 return GetParameterizedTemplateName(GetSimpleTypeName(typeInfo, fullName), typeInfo, applyRecursively, fullName);
             }
-            
+
             var t = typeInfo.AsType();
             if (fullName != null && fullName(t) == true)
             {
@@ -190,7 +196,7 @@ namespace Orleans.Runtime
                 fullName = tt => false;
 
             if (!typeInfo.IsGenericType) return baseName;
-            
+
             string s = baseName;
             s += "<";
             bool first = true;
@@ -401,7 +407,7 @@ namespace Orleans.Runtime
             }
 
             if (grainType == type || grainChevronType == type) return false;
-            
+
             if (!grainType.IsAssignableFrom(type)) return false;
 
             // exclude generated classes.
@@ -504,7 +510,7 @@ namespace Orleans.Runtime
 
             return generalType.IsAssignableFrom(type) && TypeHasAttribute(type, typeof(MethodInvokerAttribute));
         }
-        
+
 
         private static readonly Lazy<bool> canUseReflectionOnly = new Lazy<bool>(() =>
         {
@@ -543,12 +549,12 @@ namespace Orleans.Runtime
             }
         }
 
-        public static IEnumerable<Type> GetTypes(Assembly assembly, Predicate<Type> whereFunc, Logger logger)
+        public static IEnumerable<Type> GetTypes(Assembly assembly, Predicate<Type> whereFunc, ILogger logger)
         {
             return assembly.IsDynamic ? Enumerable.Empty<Type>() : GetDefinedTypes(assembly, logger).Select(t => t.AsType()).Where(type => !type.GetTypeInfo().IsNestedPrivate && whereFunc(type));
         }
 
-        public static IEnumerable<TypeInfo> GetDefinedTypes(Assembly assembly, Logger logger)
+        public static IEnumerable<TypeInfo> GetDefinedTypes(Assembly assembly, ILogger logger=null)
         {
             try
             {
@@ -556,13 +562,13 @@ namespace Orleans.Runtime
             }
             catch (Exception exception)
             {
-                if (logger != null && logger.IsWarning)
+                if (logger != null && logger.IsEnabled(LogLevel.Warning))
                 {
                     var message =
                         $"Exception loading types from assembly '{assembly.FullName}': {LogFormatter.PrintException(exception)}.";
                     logger.Warn(ErrorCode.Loader_TypeLoadError_5, message, exception);
                 }
-                
+
                 var typeLoadException = exception as ReflectionTypeLoadException;
                 if (typeLoadException != null)
                 {
@@ -573,7 +579,7 @@ namespace Orleans.Runtime
                 return Enumerable.Empty<TypeInfo>();
             }
         }
-        
+
         /// <summary>
         /// Returns a value indicating whether or not the provided <paramref name="methodInfo"/> is a grain method.
         /// </summary>
@@ -879,7 +885,7 @@ namespace Orleans.Runtime
 
             throw new ArgumentException("Expression type unsupported.");
         }
-        
+
         /// <summary>
         /// Returns the <see cref="PropertyInfo"/> for the simple member access in the provided <paramref name="expression"/>.
         /// </summary>
@@ -1063,7 +1069,8 @@ namespace Orleans.Runtime
             // We want to be loosely coupled to the assembly version if an assembly depends on an older Orleans,
             // but we want a strong assembly match for the Orleans binary itself 
             // (so we don't load 2 different versions of Orleans by mistake)
-            return DoReferencesContain(assembly.GetReferencedAssemblies(), OrleansCoreAssembly)
+            var references = assembly.GetReferencedAssemblies();
+            return DoReferencesContain(references, OrleansCoreAssembly) || DoReferencesContain(references, OrleansAbstractionsAssembly)
                    || string.Equals(assembly.GetName().FullName, OrleansCoreAssembly.FullName, StringComparison.Ordinal);
         }
 

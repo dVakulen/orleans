@@ -18,12 +18,11 @@ namespace Orleans.Runtime.Messaging
         internal static readonly TimeSpan CONNECTION_RETRY_DELAY = TimeSpan.FromMilliseconds(1000);
 
         
-        internal SiloMessageSender(string nameSuffix, MessageCenter msgCtr, SerializationManager serializationManager, ILoggerFactory loggerFactory)
-            : base(nameSuffix, serializationManager, loggerFactory)
+        internal SiloMessageSender(string nameSuffix, MessageCenter msgCtr, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory)
+            : base(nameSuffix, serializationManager, executorService, loggerFactory)
         {
             messageCenter = msgCtr;
             lastConnectionFailure = new Dictionary<SiloAddress, DateTime>();
-
             OnFault = FaultBehavior.RestartOnFault;
         }
 
@@ -147,7 +146,7 @@ namespace Orleans.Runtime.Messaging
             else
             {
                 msg.ReleaseBodyAndHeaderBuffers();
-                if (Log.IsVerbose3) Log.Verbose3("Sending queue delay time for: {0} is {1}", msg, DateTime.UtcNow.Subtract(msg.QueuedTime ?? DateTime.UtcNow));
+                if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Sending queue delay time for: {0} is {1}", msg, DateTime.UtcNow.Subtract(msg.QueuedTime ?? DateTime.UtcNow));
             }
         }
 
@@ -157,7 +156,7 @@ namespace Orleans.Runtime.Messaging
             MessagingStatisticsGroup.OnFailedSentMessage(msg);
             if (msg.Direction == Message.Directions.Request)
             {
-                if (Log.IsVerbose) Log.Verbose(ErrorCode.MessagingSendingRejection, "Silo {0} is rejecting message: {0}. Reason = {1}", messageCenter.MyAddress, msg, reason);
+                if (Log.IsEnabled(LogLevel.Debug)) Log.Debug(ErrorCode.MessagingSendingRejection, "Silo {0} is rejecting message: {0}. Reason = {1}", messageCenter.MyAddress, msg, reason);
                 // Done retrying, send back an error instead
                 messageCenter.SendRejection(msg, Message.RejectionTypes.Transient, String.Format("Silo {0} is rejecting message: {1}. Reason = {2}", messageCenter.MyAddress, msg, reason));
             }else

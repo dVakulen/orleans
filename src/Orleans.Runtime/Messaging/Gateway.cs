@@ -9,8 +9,8 @@ using Microsoft.Extensions.Logging;
 using Orleans.Messaging;
 using Orleans.Runtime.Configuration;
 using Orleans.Serialization;
-using Orleans.Configuration;
 using Microsoft.Extensions.Options;
+using Orleans.Hosting;
 
 namespace Orleans.Runtime.Messaging
 {
@@ -34,27 +34,29 @@ namespace Orleans.Runtime.Messaging
         private ClientObserverRegistrar clientRegistrar;
         private readonly object lockable;
         private readonly SerializationManager serializationManager;
+        private readonly ExecutorService executorService;
 
-        private readonly Logger logger;
+        private readonly ILogger logger;
         private readonly ILoggerFactory loggerFactory;
         private readonly SiloMessagingOptions messagingOptions;
         
-        public Gateway(MessageCenter msgCtr, NodeConfiguration nodeConfig, MessageFactory messageFactory, SerializationManager serializationManager, GlobalConfiguration globalConfig, ILoggerFactory loggerFactory, IOptions<SiloMessagingOptions> options)
+        public Gateway(MessageCenter msgCtr, ILocalSiloDetails siloDetails, MessageFactory messageFactory, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory, IOptions<SiloMessagingOptions> options, IOptions<MultiClusterOptions> multiClusterOptions)
         {
             this.messagingOptions = options.Value;
             this.loggerFactory = loggerFactory;
             messageCenter = msgCtr;
             this.messageFactory = messageFactory;
-            this.logger = new LoggerWrapper<Gateway>(this.loggerFactory);
+            this.logger = this.loggerFactory.CreateLogger<Gateway>();
             this.serializationManager = serializationManager;
-            acceptor = new GatewayAcceptor(msgCtr, this, nodeConfig.ProxyGatewayEndpoint, this.messageFactory, this.serializationManager, globalConfig, loggerFactory);
+            this.executorService = executorService;
+            acceptor = new GatewayAcceptor(msgCtr,this, siloDetails.GatewayAddress?.Endpoint, this.messageFactory, this.serializationManager, executorService, siloDetails, multiClusterOptions, loggerFactory);
             senders = new Lazy<GatewaySender>[messagingOptions.GatewaySenderQueues];
             nextGatewaySenderToUseForRoundRobin = 0;
-            dropper = new GatewayClientCleanupAgent(this, loggerFactory, messagingOptions.ClientDropTimeout);
+            dropper = new GatewayClientCleanupAgent(this, executorService, loggerFactory, messagingOptions.ClientDropTimeout);
             clients = new ConcurrentDictionary<GrainId, ClientState>();
             clientSockets = new ConcurrentDictionary<Socket, ClientState>();
             clientsReplyRoutingCache = new ClientsReplyRoutingCache(messagingOptions.ResponseTimeout);
-            this.gatewayAddress = SiloAddress.New(nodeConfig.ProxyGatewayEndpoint, 0);
+            this.gatewayAddress = siloDetails.GatewayAddress;
             lockable = new object();
         }
 
@@ -68,7 +70,7 @@ namespace Orleans.Runtime.Messaging
                 int capture = i;
                 senders[capture] = new Lazy<GatewaySender>(() =>
                 {
-                    var sender = new GatewaySender("GatewaySiloSender_" + capture, this, this.messageFactory, this.serializationManager, this.loggerFactory);
+                    var sender = new GatewaySender("GatewaySiloSender_" + capture, this, this.messageFactory, this.serializationManager, this.executorService, this.loggerFactory);
                     sender.Start();
                     return sender;
                 }, LazyThreadSafetyMode.ExecutionAndPublication);
@@ -289,8 +291,8 @@ namespace Orleans.Runtime.Messaging
             private readonly Gateway gateway;
             private readonly TimeSpan clientDropTimeout;
 
-            internal GatewayClientCleanupAgent(Gateway gateway, ILoggerFactory loggerFactory, TimeSpan clientDropTimeout)
-                :base(loggerFactory)
+            internal GatewayClientCleanupAgent(Gateway gateway, ExecutorService executorService, ILoggerFactory loggerFactory, TimeSpan clientDropTimeout)
+                :base(executorService, loggerFactory)
             {
                 this.gateway = gateway;
                 this.clientDropTimeout = clientDropTimeout;
@@ -359,16 +361,15 @@ namespace Orleans.Runtime.Messaging
                 return DateTime.UtcNow.Subtract(lastUsed) >= TIME_BEFORE_ROUTE_CACHED_ENTRY_EXPIRES;
             }
         }
-        
-        
+
         private class GatewaySender : AsynchQueueAgent<OutgoingClientMessage>
         {
             private readonly Gateway gateway;
             private readonly MessageFactory messageFactory;
             private readonly CounterStatistic gatewaySends;
             private readonly SerializationManager serializationManager;
-            internal GatewaySender(string name, Gateway gateway, MessageFactory messageFactory, SerializationManager serializationManager, ILoggerFactory loggerFactory)
-                : base(name, loggerFactory)
+            internal GatewaySender(string name, Gateway gateway, MessageFactory messageFactory, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory)
+                : base(name, executorService, loggerFactory)
             {
                 this.gateway = gateway;
                 this.messageFactory = messageFactory;
@@ -422,7 +423,7 @@ namespace Orleans.Runtime.Messaging
                 {
                     if (msg == null) return;
 
-                    if (Log.IsVerbose3) Log.Verbose3("Queued message {0} for client {1}", msg, client);
+                    if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Queued message {0} for client {1}", msg, client);
                     clientState.PendingToSend.Enqueue(msg);
                     return;
                 }
@@ -444,12 +445,12 @@ namespace Orleans.Runtime.Messaging
 
                 if (!Send(msg, clientState.Socket))
                 {
-                    if (Log.IsVerbose3) Log.Verbose3("Queued message {0} for client {1}", msg, client);
+                    if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Queued message {0} for client {1}", msg, client);
                     clientState.PendingToSend.Enqueue(msg);
                 }
                 else
                 {
-                    if (Log.IsVerbose3) Log.Verbose3("Sent message {0} to client {1}", msg, client);
+                    if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Sent message {0} to client {1}", msg, client);
                 }
             }
 
@@ -461,7 +462,7 @@ namespace Orleans.Runtime.Messaging
                     var m = clientState.PendingToSend.Peek();
                     if (Send(m, clientState.Socket))
                     {
-                        if (Log.IsVerbose3) Log.Verbose3("Sent queued message {0} to client {1}", m, clientState.Id);
+                        if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Sent queued message {0} to client {1}", m, clientState.Id);
                         clientState.PendingToSend.Dequeue();
                     }
                     else
@@ -488,7 +489,7 @@ namespace Orleans.Runtime.Messaging
                     {
                         Log.Info(ErrorCode.Messaging_LargeMsg_Outgoing, "Preparing to send large message Size={0} HeaderLength={1} BodyLength={2} #ArraySegments={3}. Msg={4}",
                             headerLength + bodyLength + Message.LENGTH_HEADER_SIZE, headerLength, bodyLength, data.Count, this.ToString());
-                        if (Log.IsVerbose3) Log.Verbose3("Sending large message {0}", msg.ToLongString());
+                        if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Sending large message {0}", msg.ToLongString());
                     }
                 }
                 catch (Exception exc)

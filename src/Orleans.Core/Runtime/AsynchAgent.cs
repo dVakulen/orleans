@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Orleans.Runtime
@@ -13,10 +14,10 @@ namespace Orleans.Runtime
             IgnoreFault     // Allow the agent to stop if it faults, but take no other action (other than logging)
         }
 
-        private Thread t;
+        protected readonly ExecutorService executorService;
         protected CancellationTokenSource Cts;
         protected object Lockable;
-        protected Logger Log;
+        protected ILogger Log;
         private readonly string type;
         protected FaultBehavior OnFault;
 
@@ -26,13 +27,13 @@ namespace Orleans.Runtime
 
         public ThreadState State { get; private set; }
         internal string Name { get; private set; }
-        internal int ManagedThreadId { get { return t==null ? -1 : t.ManagedThreadId;  } } 
 
-        protected AsynchAgent(string nameSuffix, ILoggerFactory loggerFactory)
+        protected AsynchAgent(string nameSuffix, ExecutorService executorService, ILoggerFactory loggerFactory)
         {
+            this.executorService = executorService;
             Cts = new CancellationTokenSource();
             var thisType = GetType();
-            
+
             type = thisType.Namespace + "." + thisType.Name;
             if (type.StartsWith("Orleans.", StringComparison.Ordinal))
             {
@@ -50,7 +51,7 @@ namespace Orleans.Runtime
             Lockable = new object();
             State = ThreadState.Unstarted;
             OnFault = FaultBehavior.IgnoreFault;
-            Log = new LoggerWrapper(Name, loggerFactory);
+            Log = loggerFactory.CreateLogger(Name);
 
             AppDomain.CurrentDomain.DomainUnload += CurrentDomain_DomainUnload;
 
@@ -60,11 +61,10 @@ namespace Orleans.Runtime
                 threadTracking = new ThreadTrackingStatistic(Name);
             }
 #endif
-            t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
         }
 
-        protected AsynchAgent(ILoggerFactory loggerFactory)
-            : this(null, loggerFactory)
+        protected AsynchAgent(ExecutorService executorService, ILoggerFactory loggerFactory)
+            : this(null, executorService, loggerFactory)
         {
         }
 
@@ -81,7 +81,7 @@ namespace Orleans.Runtime
             catch (Exception exc)
             {
                 // ignore. Just make sure DomainUnload handler does not throw.
-                Log.Verbose("Ignoring error during Stop: {0}", exc);
+                Log.Debug("Ignoring error during Stop: {0}", exc);
             }
         }
 
@@ -97,13 +97,12 @@ namespace Orleans.Runtime
                 if (State == ThreadState.Stopped)
                 {
                     Cts = new CancellationTokenSource();
-                    t = new Thread(AgentThreadProc) { IsBackground = true, Name = this.Name };
                 }
 
-                t.Start(this);
+                executorService.RunTask(new AsynchAgentTask(() => AgentThreadProc(this), Name));
                 State = ThreadState.Running;
             }
-            if(Log.IsVerbose) Log.Verbose("Started asynch agent " + this.Name);
+            if (Log.IsEnabled(LogLevel.Debug)) Log.Debug("Started asynch agent " + this.Name);
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
@@ -126,34 +125,11 @@ namespace Orleans.Runtime
             catch (Exception exc)
             {
                 // ignore. Just make sure stop does not throw.
-                Log.Verbose("Ignoring error during Stop: {0}", exc);
+                Log.Debug("Ignoring error during Stop: {0}", exc);
             }
-            Log.Verbose("Stopped agent");
+            Log.Debug("Stopped agent");
         }
-
-        public void Abort(object stateInfo)
-        {
-            if(t!=null)
-                t.Abort(stateInfo);
-        }
-
-        public void Join(TimeSpan timeout)
-        {
-            try
-            {
-                var agentThread = t;
-                if (agentThread != null)
-                {
-                    bool joined = agentThread.Join((int)timeout.TotalMilliseconds);
-                    Log.Verbose("{0} the agent thread {1} after {2} time.", joined ? "Joined" : "Did not join", Name, timeout);
-                }
-            }catch(Exception exc)
-            {
-                // ignore. Just make sure Join does not throw.
-                Log.Verbose("Ignoring error during Join: {0}", exc);
-            }
-        }
-
+        
         protected abstract void Run();
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
@@ -247,12 +223,12 @@ namespace Orleans.Runtime
 
         internal static bool IsStarting { get; set; }
 
-        private static void LogStatus(Logger log, string msg, params object[] args)
+        private static void LogStatus(ILogger log, string msg, params object[] args)
         {
             if (IsStarting)
             {
                 // Reduce log noise during silo startup
-                if (log.IsVerbose) log.Verbose(msg, args);
+                if (log.IsEnabled(LogLevel.Debug)) log.Debug(msg, args);
             }
             else
             {

@@ -7,6 +7,7 @@ using Orleans.Configuration;
 using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
 using Orleans.Runtime.MembershipService;
+using Orleans.Runtime.Scheduler;
 
 namespace Orleans.Hosting
 {
@@ -14,6 +15,8 @@ namespace Orleans.Hosting
     {
         public static IServiceCollection AddLegacyClusterConfigurationSupport(this IServiceCollection services, ClusterConfiguration configuration)
         {
+            if (configuration == null) throw new ArgumentNullException(nameof(configuration));
+
             if (services.Any(service => service.ServiceType == typeof(ClusterConfiguration)))
             {
                 throw new InvalidOperationException("Cannot configure legacy ClusterConfiguration support twice");
@@ -21,18 +24,48 @@ namespace Orleans.Hosting
 
             // these will eventually be removed once our code doesn't depend on the old ClientConfiguration
             services.AddSingleton(configuration);
-            services.TryAddSingleton<SiloInitializationParameters>();
-            services.TryAddFromExisting<ILocalSiloDetails, SiloInitializationParameters>();
-            services.TryAddSingleton(sp => sp.GetRequiredService<SiloInitializationParameters>().ClusterConfig);
-            services.TryAddSingleton(sp => sp.GetRequiredService<SiloInitializationParameters>().ClusterConfig.Globals);
-            services.TryAddTransient(sp => sp.GetRequiredService<SiloInitializationParameters>().NodeConfig);
+            services.TryAddSingleton<LegacyConfigurationWrapper>();
+            services.TryAddSingleton(sp => sp.GetRequiredService<LegacyConfigurationWrapper>().ClusterConfig.Globals);
+            services.TryAddTransient(sp => sp.GetRequiredService<LegacyConfigurationWrapper>().NodeConfig);
             services.TryAddSingleton<Factory<NodeConfiguration>>(
                 sp =>
                 {
-                    var initializationParams = sp.GetRequiredService<SiloInitializationParameters>();
+                    var initializationParams = sp.GetRequiredService<LegacyConfigurationWrapper>();
                     return () => initializationParams.NodeConfig;
                 });
+
+            services.Configure<SiloOptions>(options =>
+            {
+                if (string.IsNullOrWhiteSpace(options.ClusterId) && !string.IsNullOrWhiteSpace(configuration.Globals.ClusterId))
+                {
+                    options.ClusterId = configuration.Globals.ClusterId;
+                }
+
+                if (options.ServiceId == Guid.Empty)
+                {
+                    options.ServiceId = configuration.Globals.ServiceId;
+                }
+            });
+
+            services.Configure<MultiClusterOptions>(options =>
+            {
+                var globals = configuration.Globals;
+                if (globals.HasMultiClusterNetwork)
+                {
+                    options.HasMultiClusterNetwork = true;
+                    options.BackgroundGossipInterval = globals.BackgroundGossipInterval;
+                    options.DefaultMultiCluster = globals.DefaultMultiCluster?.ToList();
+                    options.GlobalSingleInstanceNumberRetries = globals.GlobalSingleInstanceNumberRetries;
+                    options.GlobalSingleInstanceRetryInterval = globals.GlobalSingleInstanceRetryInterval;
+                    options.MaxMultiClusterGateways = globals.MaxMultiClusterGateways;
+                    options.UseGlobalSingleInstanceByDefault = globals.UseGlobalSingleInstanceByDefault;
+                }
+            });
+
             services.TryAddFromExisting<IMessagingConfiguration, GlobalConfiguration>();
+
+            services.AddOptions<StatisticsOptions>()
+                .Configure<NodeConfiguration>((options, nodeConfig) => LegacyConfigurationExtensions.CopyStatisticsOptions(nodeConfig, options));
 
             // Translate legacy configuration to new Options
             services.Configure<SiloMessagingOptions>(options =>
@@ -45,39 +78,43 @@ namespace Orleans.Hosting
                 options.ClientDropTimeout = configuration.Globals.ClientDropTimeout;
             });
 
+            services.Configure<NetworkingOptions>(options => LegacyConfigurationExtensions.CopyNetworkingOptions(configuration.Globals, options));
+
+            services.AddOptions<EndpointOptions>()
+                .Configure<IOptions<SiloOptions>>((options, siloOptions) =>
+                {
+                    var nodeConfig = configuration.GetOrCreateNodeConfigurationForSilo(siloOptions.Value.SiloName);
+                    if (options.IPAddress == null && string.IsNullOrWhiteSpace(options.HostNameOrIPAddress))
+                    {
+                        options.IPAddress = nodeConfig.Endpoint.Address;
+                        options.Port = nodeConfig.Endpoint.Port;
+                    }
+                    if (options.ProxyPort == 0 && nodeConfig.ProxyGatewayEndpoint != null)
+                    {
+                        options.ProxyPort = nodeConfig.ProxyGatewayEndpoint.Port;
+                    }
+                });
+
             services.Configure<SerializationProviderOptions>(options =>
             {
                 options.SerializationProviders = configuration.Globals.SerializationProviders;
                 options.FallbackSerializationProvider = configuration.Globals.FallbackSerializationProvider;
             });
 
-            services.Configure<IOptions<SiloIdentityOptions>, GrainClassOptions>((identityOptions, options) =>
+            services.AddOptions<GrainClassOptions>().Configure<IOptions<SiloOptions>>((options, siloOptions) =>
             {
-                var nodeConfig = configuration.GetOrCreateNodeConfigurationForSilo(identityOptions.Value.SiloName);
+                var nodeConfig = configuration.GetOrCreateNodeConfigurationForSilo(siloOptions.Value.SiloName);
                 options.ExcludedGrainTypes.AddRange(nodeConfig.ExcludedGrainTypes);
             });
 
             LegacyMembershipConfigurator.ConfigureServices(configuration.Globals, services);
-            return services;
-        }
 
-        internal static void Configure<TService, TOptions>(this IServiceCollection services, Action<TService, TOptions> configure) where TOptions : class
-        {
-            services.AddTransient<IConfigureOptions<TOptions>>(sp => new ServiceBasedConfigurator<TService, TOptions>(sp.GetRequiredService<TService>(), configure));
-        }
-
-        private class ServiceBasedConfigurator<TService, TOptions> : IConfigureOptions<TOptions> where TOptions : class
-        {
-            private readonly Action<TService, TOptions> configure;
-            private readonly TService service;
-
-            public ServiceBasedConfigurator(TService service, Action<TService, TOptions> configure)
+            services.AddOptions<SchedulingOptions>().Configure<GlobalConfiguration>((options, config) =>
             {
-                this.service = service;
-                this.configure = configure;
-            }
-
-            public void Configure(TOptions options) => this.configure(this.service, options);
+                options.AllowCallChainReentrancy = config.AllowCallChainReentrancy;
+                options.PerformDeadlockDetection = config.PerformDeadlockDetection;
+            });
+            return services;
         }
     }
 }

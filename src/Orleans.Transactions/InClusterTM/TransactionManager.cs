@@ -5,16 +5,18 @@ using System.Collections.Concurrent;
 using System.Threading;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging;
+using Orleans.Runtime;
 using Orleans.Transactions.Abstractions;
+using Orleans.Runtime.Configuration;
 
 namespace Orleans.Transactions
-{
+{ 
     public class TransactionManager : ITransactionManager
     {
         private const int MaxCheckpointBatchSize = 200;
         private static readonly TimeSpan DefaultLogMaintenanceInterval = TimeSpan.FromSeconds(1);
 
-        private readonly TransactionsConfiguration config;
+        private readonly TransactionsOptions options;
         private readonly TransactionLog transactionLog;
         private readonly ActiveTransactionsTracker activeTransactionsTracker;
         private readonly TimeSpan logMaintenanceInterval;
@@ -43,11 +45,12 @@ namespace Orleans.Transactions
         protected readonly ILogger logger;
         private bool IsRunning;
         private Task transactionLogMaintenanceTask;
-
-        public TransactionManager(TransactionLog transactionLog, IOptions<TransactionsConfiguration> configOption, ILoggerFactory loggerFactory, TimeSpan? logMaintenanceInterval = null)
+        private TransactionManagerMetrics metrics;
+        public TransactionManager(TransactionLog transactionLog, IOptions<TransactionsOptions> configOption, ILoggerFactory loggerFactory, ITelemetryProducer telemetryProducer,
+            Factory<NodeConfiguration> getNodeConfig, TimeSpan? logMaintenanceInterval = null)
         {
             this.transactionLog = transactionLog;
-            this.config = configOption.Value;
+            this.options = configOption.Value;
             this.logger = loggerFactory.CreateLogger<TransactionManager>();
             this.logMaintenanceInterval = logMaintenanceInterval ?? DefaultLogMaintenanceInterval;
 
@@ -64,7 +67,8 @@ namespace Orleans.Transactions
             this.checkpointLock = new InterlockedExchangeLock();
             this.resources = new Dictionary<ITransactionalResource, long>();
             this.transactions = new List<Transaction>();
-
+            this.metrics =
+                new TransactionManagerMetrics(telemetryProducer, getNodeConfig().StatisticsMetricsTableWriteInterval);
             this.checkpointedLSN = 0;
             this.IsRunning = false;
         }
@@ -129,8 +133,8 @@ namespace Orleans.Transactions
 
         public long StartTransaction(TimeSpan timeout)
         {
+            this.metrics.StartTransactionRequestCounter++;
             var transactionId = activeTransactionsTracker.GetNewTransactionId();
-
             Transaction tx = new Transaction(transactionId)
             {
                 State = TransactionState.Started,
@@ -144,6 +148,9 @@ namespace Orleans.Transactions
 
         public void AbortTransaction(long transactionId, OrleansTransactionAbortedException reason)
         {
+            this.metrics.AbortTransactionRequestCounter++;
+            this.metrics.AbortedTransactionCounter++;
+            if(this.logger.IsEnabled(LogLevel.Debug)) this.logger.LogDebug($"Abort transaction {transactionId} due to reason {reason}");
             if (transactionsTable.TryGetValue(transactionId, out Transaction tx))
             {
                 bool justAborted = false;
@@ -162,7 +169,7 @@ namespace Orleans.Transactions
                 {
                     foreach (var waiting in tx.WaitingTransactions)
                     {
-                        var cascading = new OrleansCascadingAbortException(waiting.Info.TransactionId, tx.TransactionId);
+                        var cascading = new OrleansCascadingAbortException(waiting.Info.TransactionId.ToString(), tx.TransactionId.ToString());
                         AbortTransaction(waiting.Info.TransactionId, cascading);
                     }
 
@@ -174,6 +181,7 @@ namespace Orleans.Transactions
 
         public void CommitTransaction(TransactionInfo transactionInfo)
         {
+            this.metrics.CommitTransactionRequestCounter++;
             if (transactionsTable.TryGetValue(transactionInfo.TransactionId, out Transaction tx))
             {
                 bool abort = false;
@@ -200,7 +208,9 @@ namespace Orleans.Transactions
                             if (!transactionsTable.TryGetValue(dependentId, out Transaction dependentTx))
                             {
                                 abort = true;
+                                if(this.logger.IsEnabled(LogLevel.Debug)) this.logger.LogDebug($"Will abort transaction {transactionInfo.TransactionId} because it doesn't exist in the transaction table");
                                 cascadingDependentId = dependentId;
+                                this.metrics.AbortedTransactionDueToMissingInfoInTransactionTableCounter++;
                                 break;
                             }
 
@@ -212,7 +222,9 @@ namespace Orleans.Transactions
                                 if (dependentTx.State == TransactionState.Aborted)
                                 {
                                     abort = true;
+                                    if(this.logger.IsEnabled(LogLevel.Debug)) this.logger.LogDebug($"Will abort transaction {transactionInfo.TransactionId} because one of its dependent transaction {dependentTx.TransactionId} has aborted");
                                     cascadingDependentId = dependentId;
+                                    this.metrics.AbortedTransactionDueToDependencyCounter++;
                                     break;
                                 }
 
@@ -229,7 +241,7 @@ namespace Orleans.Transactions
 
                         if (abort)
                         {
-                            AbortTransaction(transactionInfo.TransactionId, new OrleansCascadingAbortException(transactionInfo.TransactionId, cascadingDependentId));
+                            AbortTransaction(transactionInfo.TransactionId, new OrleansCascadingAbortException(transactionInfo.TransactionId.ToString(), cascadingDependentId.ToString()));
                         }
                         else if (pending)
                         {
@@ -252,7 +264,7 @@ namespace Orleans.Transactions
             else
             {
                 // Don't have a record of the transaction any more so presumably it's aborted.
-                throw new OrleansTransactionAbortedException(transactionInfo.TransactionId, "Transaction presumed to be aborted");
+                throw new OrleansTransactionAbortedException(transactionInfo.TransactionId.ToString(), "Transaction presumed to be aborted");
             }
         }
 
@@ -601,7 +613,7 @@ namespace Orleans.Transactions
                 {
                     this.logger.Error(OrleansTransactionsErrorCode.TransactionManager_TransactionLogMaintenanceError, $"Error while maintaining transaction log.", ex);
                 }
-
+                this.metrics.TryReportMetrics();
                 await Task.Delay(this.logMaintenanceInterval);
             }
         }
@@ -632,7 +644,7 @@ namespace Orleans.Transactions
                 if (txRecord.Value.State == TransactionState.Started &&
                     txRecord.Value.ExpirationTime < now)
                 {
-                    AbortTransaction(txRecord.Key, new OrleansTransactionTimeoutException(txRecord.Key));
+                    AbortTransaction(txRecord.Key, new OrleansTransactionTimeoutException(txRecord.Key.ToString()));
                 }
             }
 
@@ -665,7 +677,7 @@ namespace Orleans.Transactions
             foreach (var txRecord in transactionsTable)
             {
                 if (txRecord.Value.State == TransactionState.Aborted &&
-                    txRecord.Value.CompletionTimeUtc + this.config.TransactionRecordPreservationDuration < DateTime.UtcNow)
+                    txRecord.Value.CompletionTimeUtc + this.options.TransactionRecordPreservationDuration < DateTime.UtcNow)
                 {
                     transactionsTable.TryRemove(txRecord.Key, out Transaction temp);
                 }
@@ -674,7 +686,7 @@ namespace Orleans.Transactions
                     lock (txRecord.Value)
                     {
                         if (txRecord.Value.HighestActiveTransactionIdAtCheckpoint < activeTransactionsTracker.GetSmallestActiveTransactionId() &&
-                            txRecord.Value.CompletionTimeUtc + this.config.TransactionRecordPreservationDuration < DateTime.UtcNow)
+                            txRecord.Value.CompletionTimeUtc + this.options.TransactionRecordPreservationDuration < DateTime.UtcNow)
                         {
                             // The oldest active transaction started after this transaction was checkpointed
                             // so no in progress transaction is going to take a dependency on this transaction

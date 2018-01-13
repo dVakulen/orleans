@@ -17,8 +17,8 @@ namespace Orleans.Messaging
         private readonly IncomingMessageBuffer buffer;
         private Socket socket;
 
-        internal GatewayClientReceiver(GatewayConnection gateway, SerializationManager serializationManager, ILoggerFactory loggerFactory)
-            : base(gateway.Address.ToString(), loggerFactory)
+        internal GatewayClientReceiver(GatewayConnection gateway, SerializationManager serializationManager, ExecutorService executorService, ILoggerFactory loggerFactory)
+            : base(gateway.Address.ToString(), executorService, loggerFactory)
         {
             gatewayConnection = gateway;
             OnFault = FaultBehavior.RestartOnFault;
@@ -43,7 +43,7 @@ namespace Orleans.Messaging
                     while (buffer.TryDecodeMessage(out msg))
                     {
                         gatewayConnection.MsgCenter.QueueIncomingMessage(msg);
-                        if (Log.IsVerbose3) Log.Verbose3("Received a message from gateway {0}: {1}", gatewayConnection.Address, msg);
+                        if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Received a message from gateway {0}: {1}", gatewayConnection.Address, msg);
                     }
                 }
             }

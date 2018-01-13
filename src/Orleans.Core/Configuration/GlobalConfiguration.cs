@@ -215,41 +215,28 @@ namespace Orleans.Runtime.Configuration
         public Guid ServiceId { get; set; }
 
         /// <summary>
-        /// Deployment Id.
+        /// Cluster identity. Silos with the same cluster identity will join together. 
+        /// When deploying different versions of the application simultaneously, be sure to change the ID if they should not join the same logical cluster.
+        /// In a multi-cluster network, the cluster ID must be unique for each cluster.
         /// </summary>
-        public string DeploymentId { get; set; }
+        public string ClusterId { get; set; }
+
+        /// <summary>
+        /// Deployment Id. This is the same as ClusterId and has been deprecated in favor of it.
+        /// </summary>
+        [Obsolete("DeploymentId is the same as ClusterId.")]
+        public string DeploymentId
+        {
+            get => this.ClusterId;
+            set => this.ClusterId = value;
+        }
 
         #region MultiClusterNetwork
-
-        private string clusterId;
 
         /// <summary>
         /// Whether this cluster is configured to be part of a multicluster network
         /// </summary>
-        public bool HasMultiClusterNetwork
-        {
-            get
-            {
-                return !(string.IsNullOrEmpty(this.clusterId));
-            }
-        }
-
-        /// <summary>
-        /// Cluster id (one per deployment, unique across all the deployments/clusters)
-        /// </summary>
-        public string ClusterId
-        {
-            get
-            {
-                var configuredId = this.HasMultiClusterNetwork ? this.clusterId : this.DeploymentId;
-                return string.IsNullOrEmpty(configuredId) ? DefaultClusterId : configuredId;
-            }
-
-            set
-            {
-                this.clusterId = value;
-            }
-        }
+        public bool HasMultiClusterNetwork { get; set; }
 
         /// <summary>
         ///A list of cluster ids, to be used if no multicluster configuration is found in gossip channels.
@@ -448,7 +435,9 @@ namespace Orleans.Runtime.Configuration
         public TimeSpan ClientRegistrationRefresh { get; set; }
 
         internal bool PerformDeadlockDetection { get; set; }
-
+        
+        public bool AllowCallChainReentrancy { get; set; }
+        
         public string DefaultPlacementStrategy { get; set; }
 
         public CompatibilityStrategy DefaultCompatibilityStrategy { get; set; }
@@ -503,7 +492,7 @@ namespace Orleans.Runtime.Configuration
             }
         }
 
-        internal bool RunsInAzure { get { return UseAzureSystemStore && !String.IsNullOrWhiteSpace(DeploymentId); } }
+        internal bool RunsInAzure { get { return UseAzureSystemStore && !String.IsNullOrWhiteSpace(this.ClusterId); } }
 
         private static readonly TimeSpan DEFAULT_LIVENESS_PROBE_TIMEOUT = TimeSpan.FromSeconds(10);
         private static readonly TimeSpan DEFAULT_LIVENESS_TABLE_REFRESH_TIMEOUT = TimeSpan.FromSeconds(60);
@@ -534,6 +523,7 @@ namespace Orleans.Runtime.Configuration
         private static readonly TimeSpan DEFAULT_UNREGISTER_RACE_DELAY = TimeSpan.FromMinutes(1);
         private static readonly TimeSpan DEFAULT_CLIENT_REGISTRATION_REFRESH = TimeSpan.FromMinutes(5);
         public const bool DEFAULT_PERFORM_DEADLOCK_DETECTION = false;
+        public const bool DEFAULT_ALLOW_CALL_CHAIN_REENTRANCY = false;
         public static readonly string DEFAULT_PLACEMENT_STRATEGY = typeof(RandomPlacement).Name;
         public static readonly string DEFAULT_MULTICLUSTER_REGISTRATION_STRATEGY = typeof(GlobalSingleInstanceRegistration).Name;
         private static readonly TimeSpan DEFAULT_DEPLOYMENT_LOAD_PUBLISHER_REFRESH_TIME = TimeSpan.FromSeconds(1);
@@ -571,7 +561,7 @@ namespace Orleans.Runtime.Configuration
             GlobalSingleInstanceNumberRetries = DEFAULT_GLOBAL_SINGLE_INSTANCE_NUMBER_RETRIES;
             ExpectedClusterSizeConfigValue = new ConfigValue<int>(DEFAULT_LIVENESS_EXPECTED_CLUSTER_SIZE, true);
             ServiceId = Guid.Empty;
-            DeploymentId = "";
+            this.ClusterId = "";
             DataConnectionString = "";
 
             // Assume the ado invariant is for sql server storage if not explicitly specified
@@ -589,6 +579,7 @@ namespace Orleans.Runtime.Configuration
             ClientRegistrationRefresh = DEFAULT_CLIENT_REGISTRATION_REFRESH;
 
             PerformDeadlockDetection = DEFAULT_PERFORM_DEADLOCK_DETECTION;
+            AllowCallChainReentrancy = DEFAULT_ALLOW_CALL_CHAIN_REENTRANCY;
             reminderServiceType = ReminderServiceProviderType.NotSpecified;
             DefaultPlacementStrategy = DEFAULT_PLACEMENT_STRATEGY;
             DeploymentLoadPublisherRefreshTime = DEFAULT_DEPLOYMENT_LOAD_PUBLISHER_REFRESH_TIME;
@@ -612,7 +603,7 @@ namespace Orleans.Runtime.Configuration
             var sb = new StringBuilder();
             sb.AppendFormat("   System Ids:").AppendLine();
             sb.AppendFormat("      ServiceId: {0}", ServiceId).AppendLine();
-            sb.AppendFormat("      DeploymentId: {0}", DeploymentId).AppendLine();
+            sb.AppendFormat("      ClusterId: {0}", this.ClusterId).AppendLine();
             sb.Append("   Subnet: ").Append(Subnet == null ? "" : Subnet.ToStrings(x => x.ToString(CultureInfo.InvariantCulture), ".")).AppendLine();
             sb.Append("   Seed nodes: ");
             bool first = true;
@@ -842,7 +833,7 @@ namespace Orleans.Runtime.Configuration
                         }
                         if (child.HasAttribute("DeploymentId"))
                         {
-                            DeploymentId = child.GetAttribute("DeploymentId");
+                            this.ClusterId = child.GetAttribute("DeploymentId");
                         }
                         if (child.HasAttribute(Constants.DATA_CONNECTION_STRING_NAME))
                         {
@@ -890,6 +881,7 @@ namespace Orleans.Runtime.Configuration
                         }
                         break;
                     case "MultiClusterNetwork":
+                        HasMultiClusterNetwork = true;
                         ClusterId = child.GetAttribute("ClusterId");
 
                         // we always trim cluster ids to avoid surprises when parsing comma-separated lists

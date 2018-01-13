@@ -12,6 +12,7 @@ using Orleans.Runtime.Configuration;
 using Orleans.Runtime.Host;
 using Orleans.TestingHost.Utils;
 using TestExtensions;
+using UnitTests.GrainInterfaces;
 using UnitTests.StorageTests;
 using Xunit;
 using Xunit.Abstractions;
@@ -560,7 +561,10 @@ namespace UnitTests
         {
             const string filename = "ClientConfig_NewAzure.xml";
 
-            var client = new ClientBuilder().LoadConfiguration(filename).Build();
+            var client = new ClientBuilder()
+                .ConfigureApplicationParts(parts => parts.AddApplicationPart(typeof(ISimpleGrain).Assembly))
+                .LoadConfiguration(filename)
+                .Build();
             try
             {
                 ClientConfiguration config = client.Configuration;
@@ -737,7 +741,7 @@ namespace UnitTests
             Assert.Equal(GlobalConfiguration.LivenessProviderType.AzureTable, siloConfig.Globals.LivenessType); // LivenessType
             Assert.Equal(GlobalConfiguration.ReminderServiceProviderType.AzureTable, siloConfig.Globals.ReminderServiceType); // ReminderServiceType
 
-            Assert.Equal(deploymentId, siloConfig.Globals.DeploymentId); // DeploymentId
+            Assert.Equal(deploymentId, siloConfig.Globals.ClusterId); // ClusterId
             Assert.Equal(connectionString, siloConfig.Globals.DataConnectionString); // DataConnectionString
 
             Assert.True(siloConfig.Globals.UseAzureSystemStore, "Should be using Azure storage");
@@ -768,7 +772,7 @@ namespace UnitTests
 
             var config = new ClientConfiguration();
 
-            config.DeploymentId = deploymentId;
+            config.ClusterId = deploymentId;
             config.DataConnectionString = "UseDevelopmentStorage=true";
             config.GatewayProvider = ClientConfiguration.GatewayProviderType.AzureTable;
 
@@ -890,7 +894,7 @@ namespace UnitTests
             Assert.Equal(numProviders, providerConfigs.Providers.Count); // Num provider configs
         }
     }
-
+#pragma warning disable 618
     public class DummyLogConsumer : ILogConsumer
     {
         public void Log(Severity severity, LoggerType loggerType, string caller, string message, IPEndPoint myIPEndPoint, Exception exception, int eventCode = 0)
@@ -898,6 +902,7 @@ namespace UnitTests
             throw new NotImplementedException();
         }
     }
+#pragma warning restore 618
 
     public class DummyMetricTelemetryConsumer : IMetricTelemetryConsumer
     {

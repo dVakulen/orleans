@@ -2,18 +2,21 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Orleans.Runtime.Configuration;
 
 namespace Orleans.Runtime.MultiClusterNetwork
 {
     internal class MultiClusterGossipChannelFactory
     {
+        private readonly SiloOptions siloOptions;
         private readonly GlobalConfiguration globalConfig;
         private readonly IServiceProvider serviceProvider;
-        private readonly Logger logger;
+        private readonly ILogger logger;
 
-        public MultiClusterGossipChannelFactory(GlobalConfiguration globalConfig, IServiceProvider serviceProvider, LoggerWrapper<MultiClusterGossipChannelFactory> logger)
+        public MultiClusterGossipChannelFactory(IOptions<SiloOptions> siloOptions, GlobalConfiguration globalConfig, IServiceProvider serviceProvider, ILogger<MultiClusterGossipChannelFactory> logger)
         {
+            this.siloOptions = siloOptions.Value;
             this.globalConfig = globalConfig;
             this.serviceProvider = serviceProvider;
             this.logger = logger;
@@ -32,8 +35,8 @@ namespace Orleans.Runtime.MultiClusterNetwork
                     switch (channelConfiguration.ChannelType)
                     {
                         case GlobalConfiguration.GossipChannelType.AzureTable:
-                            var tableChannel = AssemblyLoader.LoadAndCreateInstance<IGossipChannel>(Constants.ORLEANS_AZURE_UTILS_DLL, logger, this.serviceProvider);
-                            await tableChannel.Initialize(globalConfig.ServiceId, channelConfiguration.ConnectionString);
+                            var tableChannel = AssemblyLoader.LoadAndCreateInstance<IGossipChannel>(Constants.ORLEANS_CLUSTERING_AZURESTORAGE, logger, this.serviceProvider);
+                            await tableChannel.Initialize(this.siloOptions.ServiceId, channelConfiguration.ConnectionString);
                             gossipChannels.Add(tableChannel);
                             break;
 

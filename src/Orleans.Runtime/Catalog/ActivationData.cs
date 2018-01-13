@@ -166,7 +166,7 @@ namespace Orleans.Runtime
         private readonly TimeSpan maxWarningRequestProcessingTime;
         private readonly NodeConfiguration nodeConfiguration;
         public readonly TimeSpan CollectionAgeLimit;
-        private readonly Logger logger;
+        private readonly ILogger logger;
         private IGrainMethodInvoker lastInvoker;
         private IServiceScope serviceScope;
 
@@ -191,8 +191,8 @@ namespace Orleans.Runtime
             if (null == placedUsing) throw new ArgumentNullException(nameof(placedUsing));
             if (null == collector) throw new ArgumentNullException(nameof(collector));
 
-            logger = new LoggerWrapper<ActivationData>(loggerFactory);
-            this.lifecycle = new GrainLifecycle(logger);
+            logger = loggerFactory.CreateLogger<ActivationData>();
+            this.lifecycle = new GrainLifecycle(loggerFactory);
             this.maxRequestProcessingTime = maxRequestProcessingTime;
             this.maxWarningRequestProcessingTime = maxWarningRequestProcessingTime;
             this.nodeConfiguration = nodeConfiguration;
@@ -267,6 +267,8 @@ namespace Orleans.Runtime
 
         #endregion
 
+        public HashSet<ActivationId> RunningRequestsSenders { get; } = new HashSet<ActivationId>();
+
         public ISchedulingContext SchedulingContext { get; }
 
         public string GrainTypeName
@@ -314,7 +316,7 @@ namespace Orleans.Runtime
             var contextFactory = sp.GetRequiredService<GrainActivationContextFactory>();
             contextFactory.Context = context;
         }
-
+        
         private Streams.StreamDirectory streamDirectory;
         internal Streams.StreamDirectory GetStreamDirectory()
         {
@@ -477,6 +479,13 @@ namespace Orleans.Runtime
             // Note: This method is always called while holding lock on this activation, so no need for additional locks here
 
             numRunning++;
+            if (message.Direction != Message.Directions.OneWay 
+                && message.SendingActivation != null
+                && !message.SendingGrain?.IsClient == true)
+            {
+                RunningRequestsSenders.Add(message.SendingActivation);
+            }
+
             if (Running != null) return;
 
             // This logic only works for non-reentrant activations
@@ -489,6 +498,7 @@ namespace Orleans.Runtime
         {
             // Note: This method is always called while holding lock on this activation, so no need for additional locks here
             numRunning--;
+            RunningRequestsSenders.Remove(message.SendingActivation);
             if (numRunning == 0)
             {
                 becameIdle = DateTime.UtcNow;
@@ -605,7 +615,7 @@ namespace Orleans.Runtime
         /// </summary>
         /// <param name="log">Logger to use for reporting any overflow condition</param>
         /// <returns>Returns LimitExceededException if overloaded, otherwise <c>null</c>c></returns>
-        public LimitExceededException CheckOverloaded(Logger log)
+        public LimitExceededException CheckOverloaded(ILogger log)
         {
             LimitValue limitValue = GetMaxEnqueuedRequestLimit();
 

@@ -7,6 +7,56 @@ All notable end-user facing changes are documented in this file.
 *Here are all the changes in `master` branch, and will be moved to the appropriate release once they are included in a published nuget package.
 The idea is to track end-user facing changes as they occur.*
 
+### [2.0.0-beta3]
+
+- Breaking changes
+  - Remove legacy initialization from Silo class (#3795) 
+
+- Non-breaking improvements
+  - Move ServiceId to SiloOptions (#3779)
+  - Do not generate serializers for classes which require the use of serialization hooks. (#3790)
+  - CodeGen: reduce aggressiveness of serializer generation (#3789)
+  - CodeGen: avoid potential confusion between overridden properties in a type hierarchy (#3791)
+  - Fix Exception serialization on .NET Core (#3794)
+  - Fix shutdown sequence in linuxcontainer (#3796)
+  - Fix potential dependency cycles with user-supplied IGrainCallFilter implementations (#3798)
+  - Include required provider name in GetStorageProvider exception message. (#3797)
+  - Strongly typed endpoint options (#3799)
+  - Fix wrong config usages (#3800)
+  - Split AWSUtils into separate packages, keep original as meta package (#3720)
+  - Add ClusterClientOptions to configure ClusterId (#3801)
+  - Refactor transaction abstractions to enable injection of alternate protocols (#3785)
+  - Wrap the connection preamble read check in a task (#3729)
+  - Split OrleansSQLUtils into separate packages (#3793)
+
+### [2.0.0-beta2]
+
+- Known issues
+  - Code generation is too aggressive in generating serializers for most available types instead of just those that are directly used in grain methods. This causes excessive code being generated and compiled.
+
+- Breaking changes
+  - Remove `IGrainInvokeInterceptor` that got replaced with `IGrainCallFilter` (#3647)
+  - Migrate more configuration settings to typed options (#3492, #3736)
+  - Replace DeploymentId with ClusterId and collapse them where both are defined (#3728)
+
+- Non-breaking improvements
+  - Better align silo hosting APIs with the future generic Microsoft.Extensions.Hosting.HostBuilder (#3631, #3634, #3696, #3697)
+  - Multiple improvements to code generation (#3639, #3643, #3649, #3645, #3666, #3682, #3717)
+  - Throw an exception when trying to build a silo with no application assemblies specified (#3644)
+  - Multiple improvements to transactions (#3672, #3677, #3730, #3731)
+  - Integrate Service Fabric clustering provider with `SiloHostBuilder` (#3638)
+  - Split Service Fabric support assembly and NuGet package into two: for silo hosting and clustering (#3638, #3766)
+  - Split `OrleansAzureUtils` assembly and NuGet package into more granular assemblies and packages (#3668, #3719)
+  - Support for non-static serializers (#3595)
+  - Add a timeout for synchronous socket read operations (#3716)
+  - Support for multiple fallback serializers (#3688)
+  - Enable TCP FastPath support (#3710)
+  - Re-introduce run time code generation that can be enabled at silo host build time (#3669)
+  - Support for Oracle in AdoNet (SQL) clustering provider (#3576)
+  - Disallow creating an observer reference via `CreateObjectReference` from within a grain (#3757)
+  - Expedite gateway retries when gateway list is exhausted (#3758)
+  - Support for serialization life cycle methods that re-enables serialization of F# types and other such types (#3749)
+
 ### [2.0.0-beta1]
 
 - Breaking changes

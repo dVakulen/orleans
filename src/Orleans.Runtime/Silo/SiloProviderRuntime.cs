@@ -9,12 +9,12 @@ using Orleans.Runtime.Scheduler;
 using Orleans.Streams;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Orleans.Runtime.Providers
 {
     internal class SiloProviderRuntime : ISiloSideStreamProviderRuntime
     {
-        private readonly SiloInitializationParameters siloDetails;
         private readonly ISiloStatusOracle siloStatusOracle;
         private readonly OrleansTaskScheduler scheduler;
         private readonly ActivationDirectory activationDirectory;
@@ -24,7 +24,6 @@ namespace Orleans.Runtime.Providers
         private readonly IStreamPubSub implictPubSub;
         private readonly IStreamPubSub combinedGrainBasedAndImplicitPubSub;
         private readonly ILoggerFactory loggerFactory;
-        private InvokeInterceptor invokeInterceptor;
 
         public IGrainFactory GrainFactory => this.runtimeClient.InternalGrainFactory;
         public IServiceProvider ServiceProvider => this.runtimeClient.ServiceProvider;
@@ -33,8 +32,8 @@ namespace Orleans.Runtime.Providers
         public string SiloIdentity { get; }
 
         public SiloProviderRuntime(
-            SiloInitializationParameters siloDetails,
-            GlobalConfiguration config,
+            ILocalSiloDetails siloDetails,
+            IOptions<SiloOptions> siloOptions,
             IConsistentRingProvider consistentRingProvider,
             ISiloRuntimeClient runtimeClient,
             ImplicitStreamSubscriberTable implicitStreamSubscriberTable,
@@ -44,34 +43,18 @@ namespace Orleans.Runtime.Providers
             ILoggerFactory loggerFactory)
         {
             this.loggerFactory = loggerFactory;
-            this.siloDetails = siloDetails;
             this.siloStatusOracle = siloStatusOracle;
             this.scheduler = scheduler;
             this.activationDirectory = activationDirectory;
             this.consistentRingProvider = consistentRingProvider;
             this.runtimeClient = runtimeClient;
-            this.ServiceId = config.ServiceId;
+            this.ServiceId = siloOptions.Value.ServiceId;
             this.SiloIdentity = siloDetails.SiloAddress.ToLongString();
 
             this.grainBasedPubSub = new GrainBasedPubSubRuntime(this.GrainFactory);
             var tmp = new ImplicitStreamPubSub(this.runtimeClient.InternalGrainFactory, implicitStreamSubscriberTable);
             this.implictPubSub = tmp;
             this.combinedGrainBasedAndImplicitPubSub = new StreamPubSubImpl(this.grainBasedPubSub, tmp);
-        }
-
-        public void SetInvokeInterceptor(InvokeInterceptor interceptor)
-        {
-            this.invokeInterceptor = interceptor;
-        }
-
-        public InvokeInterceptor GetInvokeInterceptor()
-        {
-            return this.invokeInterceptor;
-        }
-
-        public Logger GetLogger(string loggerName)
-        {
-            return new LoggerWrapper(loggerName, this.loggerFactory);
         }
 
         public SiloAddress ExecutingSiloAddress => this.siloStatusOracle.SiloAddress;

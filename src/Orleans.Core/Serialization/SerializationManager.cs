@@ -19,7 +19,6 @@ using Microsoft.Extensions.Options;
 using Orleans.ApplicationParts;
 using Orleans.CodeGeneration;
 using Orleans.Runtime;
-using Orleans.Configuration;
 using Orleans.Hosting;
 using Orleans.Metadata;
 using Orleans.Utilities;
@@ -35,16 +34,21 @@ namespace Orleans.Serialization
 
         private readonly HashSet<Type> registeredTypes;
         private readonly List<IExternalSerializer> externalSerializers;
+        private readonly Dictionary<KeyedSerializerId, IKeyedSerializer> keyedSerializers = new Dictionary<KeyedSerializerId, IKeyedSerializer>();
+        private readonly List<IKeyedSerializer> orderedKeyedSerializers = new List<IKeyedSerializer>();
         private readonly ConcurrentDictionary<Type, IExternalSerializer> typeToExternalSerializerDictionary;
         private readonly CachedReadConcurrentDictionary<string, Type> types;
         private readonly Dictionary<string, string> typeKeysToQualifiedNames = new Dictionary<string, string>();
         private readonly Dictionary<RuntimeTypeHandle, DeepCopier> copiers;
         private readonly Dictionary<RuntimeTypeHandle, Serializer> serializers;
+
+        private readonly CachedReadConcurrentDictionary<Type, IKeyedSerializer> typeToKeyedSerializer =
+            new CachedReadConcurrentDictionary<Type, IKeyedSerializer>();
         private readonly Dictionary<RuntimeTypeHandle, Deserializer> deserializers;
         private readonly ConcurrentDictionary<Type, Func<GrainReference, GrainReference>> grainRefConstructorDictionary;
 
         private readonly IExternalSerializer fallbackSerializer;
-        private readonly Logger logger;
+        private readonly ILogger logger;
         
         // Semi-constants: type handles for simple types
         private static readonly RuntimeTypeHandle shortTypeHandle = typeof(short).TypeHandle;
@@ -99,12 +103,11 @@ namespace Orleans.Serialization
 
         #endregion
 
-        #region Static initialization
+        #region initialization
 
         public SerializationManager(
             IServiceProvider serviceProvider,
             IOptions<SerializationProviderOptions> serializatonProviderOptions,
-            ApplicationPartManager applicationPartManager,
             ILoggerFactory loggerFactory,
             ITypeResolver typeResolver)
         {
@@ -112,7 +115,7 @@ namespace Orleans.Serialization
             this.serializationContext = new ThreadLocal<SerializationContext>(() => new SerializationContext(this));
             this.deserializationContext = new ThreadLocal<DeserializationContext>(() => new DeserializationContext(this));
 
-            logger = new LoggerWrapper<SerializationManager>(loggerFactory);
+            logger = loggerFactory.CreateLogger<SerializationManager>();
             this.serviceProvider = serviceProvider;
             this.typeResolver = typeResolver;
 
@@ -124,12 +127,6 @@ namespace Orleans.Serialization
             serializers = new Dictionary<RuntimeTypeHandle, Serializer>();
             deserializers = new Dictionary<RuntimeTypeHandle, Deserializer>();
             grainRefConstructorDictionary = new ConcurrentDictionary<Type, Func<GrainReference, GrainReference>>();
-
-            var serializerFeature = applicationPartManager.CreateAndPopulateFeature<SerializerFeature>();
-            this.RegisterSerializers(serializerFeature);
-
-            var grainInterfaceFeature = applicationPartManager.CreateAndPopulateFeature<GrainInterfaceFeature>();
-            this.RegisterGrainReferenceSerializers(grainInterfaceFeature);
 
             var serializatonProviderOptionsValue = serializatonProviderOptions.Value;
 
@@ -171,6 +168,15 @@ namespace Orleans.Serialization
             }
 
             RegisterSerializationProviders(serializatonProviderOptionsValue.SerializationProviders);
+        }
+
+        public void RegisterSerializers(IApplicationPartManager applicationPartManager)
+        {
+            var serializerFeature = applicationPartManager.CreateAndPopulateFeature<SerializerFeature>();
+            this.RegisterSerializers(serializerFeature);
+
+            var grainInterfaceFeature = applicationPartManager.CreateAndPopulateFeature<GrainInterfaceFeature>();
+            this.RegisterGrainReferenceSerializers(grainInterfaceFeature);
         }
 
         private void RegisterGrainReferenceSerializers(GrainInterfaceFeature grainInterfaceFeature)
@@ -220,6 +226,23 @@ namespace Orleans.Serialization
         public void Register(Type t, DeepCopier cop, Serializer ser, Deserializer deser)
         {
             Register(t, cop, ser, deser, false);
+        }
+
+        private object InitializeSerializer(Type serializerType)
+        {
+            if (this.ServiceProvider == null)
+                return null;
+
+            // If the type lacks a Serializer attribute then it's a self-serializing type and all serialization methods must be static
+            if (!serializerType.GetCustomAttributes(typeof(SerializerAttribute), true).Any())
+                return null;
+
+            var constructors = serializerType.GetConstructors();
+            if (constructors == null || constructors.Length < 1)
+                return null;
+
+            var serializer = ActivatorUtilities.GetServiceOrCreateInstance(this.ServiceProvider, serializerType);
+            return serializer;
         }
 
         /// <summary>
@@ -304,7 +327,7 @@ namespace Orleans.Serialization
                         }
                     }
 
-                    if (logger.IsVerbose3) logger.Verbose3("Registered type {0} as {1}", t, name);
+                    if (logger.IsEnabled(LogLevel.Trace)) logger.Trace("Registered type {0} as {1}", t, name);
                 }
             }
 
@@ -345,7 +368,7 @@ namespace Orleans.Serialization
                 registeredTypes.Add(t);
                 types[name] = t;
             }
-            if (logger.IsVerbose3) logger.Verbose3("Registered type {0} as {1}", t, name);
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace("Registered type {0} as {1}", t, name);
 
             // Register any interfaces this type implements, in order to support passing values that are statically of the interface type
             // but dynamically of this (implementation) type
@@ -428,11 +451,12 @@ namespace Orleans.Serialization
                 }
                 else
                 {
+                    var serializerInstance = this.InitializeSerializer(serializerType);
                     this.Register(
                         type,
-                        copier?.CreateDelegate(typeof(DeepCopier)) as DeepCopier,
-                        serializer?.CreateDelegate(typeof(Serializer)) as Serializer,
-                        deserializer?.CreateDelegate(typeof(Deserializer)) as Deserializer,
+                        CreateDelegate<DeepCopier>(copier, serializerInstance),
+                        CreateDelegate<Serializer>(serializer, serializerInstance),
+                        CreateDelegate<Deserializer>(deserializer, serializerInstance),
                         true);
                 }
             }
@@ -445,8 +469,8 @@ namespace Orleans.Serialization
                 throw;
             }
 
-            if (this.logger.IsVerbose3)
-                this.logger.Verbose3(
+            if (this.logger.IsEnabled(LogLevel.Trace))
+                this.logger.Trace(
                     "Loaded serialization info for type {0} from assembly {1}",
                     type.Name,
                     serializerType.Assembly.GetName().Name);
@@ -545,10 +569,12 @@ namespace Orleans.Serialization
             }
 
             GetSerializationMethods(concreteSerializerType, out copier, out serializer, out deserializer);
-            var concreteCopier = (DeepCopier)copier.CreateDelegate(typeof(DeepCopier));
-            var concreteSerializer = (Serializer)serializer.CreateDelegate(typeof(Serializer));
-            var concreteDeserializer = (Deserializer)deserializer.CreateDelegate(typeof(Deserializer));
-            Register(concreteType, concreteCopier, concreteSerializer, concreteDeserializer, true);
+            var serializerInstance = this.InitializeSerializer(concreteSerializerType);
+            var concreteCopier = CreateDelegate<DeepCopier>(copier, serializerInstance);
+            var concreteSerializer = CreateDelegate<Serializer>(serializer, serializerInstance);
+            var concreteDeserializer = CreateDelegate<Deserializer>(deserializer, serializerInstance);
+
+            this.Register(concreteType, concreteCopier, concreteSerializer, concreteDeserializer, true);
 
             return new SerializerMethods(concreteCopier, concreteSerializer, concreteDeserializer);
         }
@@ -558,7 +584,7 @@ namespace Orleans.Serialization
             copier = null;
             serializer = null;
             deserializer = null;
-            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
             {
                 if (method.GetCustomAttributes(typeof(CopierMethodAttribute), true).Any())
                 {
@@ -573,6 +599,19 @@ namespace Orleans.Serialization
                     deserializer = method;
                 }
             }
+        }
+
+        private T CreateDelegate<T>(MethodInfo methodInfo, object target) where T : class
+        {
+            if (this.ServiceProvider == null)
+                return default(T);
+
+            if (methodInfo == null)
+                return default(T);
+
+            return (methodInfo.IsStatic
+                ? methodInfo.CreateDelegate(typeof(T))
+                : methodInfo.CreateDelegate(typeof(T), target)) as T;
         }
 
         #endregion
@@ -757,6 +796,12 @@ namespace Orleans.Serialization
 
             }
 
+            IKeyedSerializer keyedSerializer;
+            if (this.TryLookupKeyedSerializer(t, out keyedSerializer))
+            {
+                return keyedSerializer.DeepCopy(original, context);
+            }
+
             if (fallbackSerializer.IsSupportedType(t))
                 return FallbackSerializationDeepCopy(original, context);
 
@@ -919,6 +964,14 @@ namespace Orleans.Serialization
             {
                 writer.WriteTypeHeader(t, expected);
                 ser(obj, context, expected);
+                return;
+            }
+
+            if (sm.TryLookupKeyedSerializer(t, out var keyedSerializer))
+            {
+                writer.Write((byte)SerializationTokenType.KeyedSerializer);
+                writer.Write((byte)keyedSerializer.SerializerId);
+                keyedSerializer.Serialize(obj, context, expected);
                 return;
             }
 
@@ -1262,6 +1315,16 @@ namespace Orleans.Serialization
                 {
                     resultType = reader.ReadSpecifiedTypeHeader(sm);
                 }
+                else if (token == SerializationTokenType.KeyedSerializer)
+                {
+                    var serializerId = (KeyedSerializerId)reader.ReadByte();
+                    if (!sm.keyedSerializers.TryGetValue(serializerId, out var keyedSerializer))
+                    {
+                        throw new SerializationException($"Specified serializer {serializerId} not configured.");
+                    }
+
+                    return keyedSerializer.Deserialize(expected, context);
+                }
                 else
                 {
                     throw new SerializationException("Unexpected token '" + token + "' introducing type specifier");
@@ -1566,6 +1629,29 @@ namespace Orleans.Serialization
             return serializer != null;
         }
 
+        private bool TryLookupKeyedSerializer(Type type, out IKeyedSerializer serializer)
+        {
+            if (this.orderedKeyedSerializers.Count == 0)
+            {
+                serializer = null;
+                return false;
+            }
+
+            if (this.typeToKeyedSerializer.TryGetValue(type, out serializer)) return true;
+
+            foreach (var keyedSerializer in this.orderedKeyedSerializers)
+            {
+                if (keyedSerializer.IsSupportedType(type))
+                {
+                    this.typeToKeyedSerializer[type] = keyedSerializer;
+                    serializer = keyedSerializer;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
 #endregion
 
 #region Fallback serializer and deserializer
@@ -1620,8 +1706,6 @@ namespace Orleans.Serialization
             {
                 serializer = new BinaryFormatterSerializer();
             }
-
-            serializer.Initialize(this.logger);
             return serializer;
         }
 
@@ -1763,7 +1847,7 @@ namespace Orleans.Serialization
             }
 
             var report = String.Format("Registered artifacts for {0} types:" + Environment.NewLine + "{1}", count, lines);
-            logger.Verbose(ErrorCode.SerMgr_ArtifactReport, report);
+            logger.Debug(ErrorCode.SerMgr_ArtifactReport, report);
         }
 
         /// <summary>
@@ -1784,8 +1868,7 @@ namespace Orleans.Serialization
                 {
                     try
                     {
-                        var serializer = Activator.CreateInstance(typeInfo.AsType()) as IExternalSerializer;
-                        serializer.Initialize(logger);
+                        var serializer = ActivatorUtilities.CreateInstance(serviceProvider, typeInfo.AsType()) as IExternalSerializer;
                         externalSerializers.Add(serializer);
                     }
                     catch (Exception exception)
@@ -1793,6 +1876,15 @@ namespace Orleans.Serialization
                         logger.Error(ErrorCode.SerMgr_ErrorLoadingAssemblyTypes, "Failed to create instance of type: " + typeInfo.FullName, exception);
                     }
                 });
+
+            if (this.ServiceProvider != null)
+            {
+                foreach (var serializer in this.ServiceProvider.GetServices<IKeyedSerializer>())
+                {
+                    this.orderedKeyedSerializers.Add(serializer);
+                    this.keyedSerializers[serializer.SerializerId] = serializer;
+                }
+            }
         }
 
         public void Dispose()

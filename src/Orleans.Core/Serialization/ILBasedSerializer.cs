@@ -8,7 +8,7 @@
     /// <summary>
     /// Fallback serializer to be used when other serializers are unavailable.
     /// </summary>
-    public class ILBasedSerializer : IExternalSerializer
+    public class ILBasedSerializer : IKeyedSerializer
     {
         private static readonly Type ExceptionType = typeof(Exception);
         private static readonly Type TypeType = typeof(Type);
@@ -72,14 +72,6 @@
                         return this.typeSerializer.ReadNamedType(reader1);
                     }));
             this.generateSerializer = this.GenerateSerializer;
-        }
-
-        /// <summary>
-        /// Initializes the external serializer. Called once when the serialization manager creates 
-        /// an instance of this type
-        /// </summary>
-        public void Initialize(Logger logger)
-        {
         }
 
         /// <summary>
@@ -194,5 +186,8 @@
                 this.Methods = methods;
             }
         }
+
+        /// <inheritdoc />
+        KeyedSerializerId IKeyedSerializer.SerializerId => KeyedSerializerId.ILBasedSerializer;
     }
 }

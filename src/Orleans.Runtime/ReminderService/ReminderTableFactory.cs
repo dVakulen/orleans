@@ -9,13 +9,13 @@ namespace Orleans.Runtime.ReminderService
         private readonly GlobalConfiguration globalConfiguration;
         private readonly IGrainFactory grainFactory;
         private readonly IServiceProvider serviceProvider;
-        private readonly Logger logger;
+        private readonly ILogger logger;
 
         public ReminderTableFactory(
             GlobalConfiguration globalConfiguration,
             IGrainFactory grainFactory,
             IServiceProvider serviceProvider,
-            LoggerWrapper<ReminderTableFactory> logger)
+            ILogger<ReminderTableFactory> logger)
         {
             this.globalConfiguration = globalConfiguration;
             this.grainFactory = grainFactory;
@@ -35,12 +35,12 @@ namespace Orleans.Runtime.ReminderService
                               $"The reminder table does not currently support service provider {serviceType}.");
                 case GlobalConfiguration.ReminderServiceProviderType.SqlServer:
                     return AssemblyLoader.LoadAndCreateInstance<IReminderTable>(
-                        Constants.ORLEANS_SQL_UTILS_DLL,
+                        Constants.ORLEANS_REMINDERS_ADONET,
                         logger,
                         this.serviceProvider);
                 case GlobalConfiguration.ReminderServiceProviderType.AzureTable:
                     return AssemblyLoader.LoadAndCreateInstance<IReminderTable>(
-                        Constants.ORLEANS_AZURE_UTILS_DLL,
+                        Constants.ORLEANS_REMINDERS_AZURESTORAGE,
                         logger,
                         this.serviceProvider);
                 case GlobalConfiguration.ReminderServiceProviderType.ReminderTableGrain:

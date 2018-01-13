@@ -1,25 +1,22 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Net;
 using System.Reflection;
 using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters;
+using Microsoft.Extensions.DependencyInjection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Orleans.CodeGeneration;
 using Orleans.Runtime;
 
 namespace Orleans.Serialization
 {
     using Orleans.Providers;
-    
+
     public class OrleansJsonSerializer : IExternalSerializer
     {
         public const string UseFullAssemblyNamesProperty = "UseFullAssemblyNames";
         public const string IndentJsonProperty = "IndentJSON";
         public const string TypeNameHandlingProperty = "TypeNameHandling";
         private readonly JsonSerializerSettings settings;
-        private Logger logger;
 
         public OrleansJsonSerializer(SerializationManager serializationManager, IGrainFactory grainFactory)
         {
@@ -32,6 +29,8 @@ namespace Orleans.Serialization
         /// <returns>The default serializer settings.</returns>
         public static JsonSerializerSettings GetDefaultSerializerSettings(SerializationManager serializationManager, IGrainFactory grainFactory)
         {
+            var typeResolver = serializationManager.ServiceProvider.GetRequiredService<ITypeResolver>();
+            var serializationBinder = new OrleansJsonSerializationBinder(typeResolver);
             var settings = new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.All,
@@ -45,7 +44,8 @@ namespace Orleans.Serialization
 
                 // Types such as GrainReference need context during deserialization, so provide that context now.
                 Context = new StreamingContext(StreamingContextStates.All, new SerializationContext(serializationManager)),
-                Formatting = Formatting.None
+                Formatting = Formatting.None,
+                SerializationBinder = serializationBinder
             };
 
             settings.Converters.Add(new IPAddressConverter());
@@ -53,7 +53,7 @@ namespace Orleans.Serialization
             settings.Converters.Add(new GrainIdConverter());
             settings.Converters.Add(new SiloAddressConverter());
             settings.Converters.Add(new UniqueKeyConverter());
-            settings.Converters.Add(new GrainReferenceConverter(grainFactory));
+            settings.Converters.Add(new GrainReferenceConverter(grainFactory, serializationBinder));
 
             return settings;
         }
@@ -94,12 +94,6 @@ namespace Orleans.Serialization
                 }
             }
             return settings;
-        }
-
-        /// <inheritdoc />
-        public void Initialize(Logger logger)
-        {
-            this.logger = logger;
         }
 
         /// <inheritdoc />
@@ -297,7 +291,7 @@ namespace Orleans.Serialization
         private readonly IGrainFactory grainFactory;
         private readonly JsonSerializer internalSerializer;
 
-        public GrainReferenceConverter(IGrainFactory grainFactory)
+        public GrainReferenceConverter(IGrainFactory grainFactory, OrleansJsonSerializationBinder serializationBinder)
         {
             this.grainFactory = grainFactory;
 
@@ -313,6 +307,7 @@ namespace Orleans.Serialization
                 NullValueHandling = NullValueHandling.Ignore,
                 ConstructorHandling = ConstructorHandling.AllowNonPublicDefaultConstructor,
                 Formatting = Formatting.None,
+                SerializationBinder = serializationBinder,
                 Converters =
                 {
                     new IPAddressConverter(),

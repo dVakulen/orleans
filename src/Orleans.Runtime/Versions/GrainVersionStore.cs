@@ -1,9 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
-using Orleans.Runtime.Configuration;
 using Orleans.Storage;
 using Orleans.Versions;
 using Orleans.Versions.Compatibility;
@@ -15,15 +11,15 @@ namespace Orleans.Runtime.Versions
     internal class GrainVersionStore : IVersionStore
     {
         private readonly IInternalGrainFactory grainFactory;
-        private readonly string deploymentId;
-        private IVersionStoreGrain StoreGrain => this.grainFactory.GetGrain<IVersionStoreGrain>(this.deploymentId);
+        private readonly string clusterId;
+        private IVersionStoreGrain StoreGrain => this.grainFactory.GetGrain<IVersionStoreGrain>(this.clusterId);
 
         public bool IsEnabled { get; private set; }
 
-        public GrainVersionStore(IInternalGrainFactory grainFactory, GlobalConfiguration configuration)
+        public GrainVersionStore(IInternalGrainFactory grainFactory, ILocalSiloDetails siloDetails)
         {
             this.grainFactory = grainFactory;
-            this.deploymentId = configuration.DeploymentId;
+            this.clusterId = siloDetails.ClusterId;
             this.IsEnabled = false;
         }
 

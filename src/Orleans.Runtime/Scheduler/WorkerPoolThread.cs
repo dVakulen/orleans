@@ -20,6 +20,8 @@ namespace Orleans.Runtime.Scheduler
         private bool ownsSemaphore;
         internal bool IsSystem { get; private set; }
 
+        internal int ManagedThreadId => Thread.CurrentThread.ManagedThreadId;
+
         [ThreadStatic]
         private static WorkerPoolThread current;
         internal static WorkerPoolThread CurrentWorkerThread { get { return current; } }
@@ -88,8 +90,8 @@ namespace Orleans.Runtime.Scheduler
         internal readonly int WorkerThreadStatisticsNumber;
         private readonly ICorePerformanceMetrics performanceMetrics;
 
-        internal WorkerPoolThread(WorkerPool gtp, OrleansTaskScheduler sched, ILoggerFactory loggerFactory, ICorePerformanceMetrics performanceMetrics, int threadNumber, bool system = false)
-            : base((system ? "System." : "") + threadNumber, loggerFactory)
+        internal WorkerPoolThread(WorkerPool gtp, OrleansTaskScheduler sched, ExecutorService executorService, ILoggerFactory loggerFactory, ICorePerformanceMetrics performanceMetrics, int threadNumber, bool system = false)
+            : base((system ? "System." : "") + threadNumber, executorService, loggerFactory)
         {
             pool = gtp;
             scheduler = sched;
@@ -132,7 +134,7 @@ namespace Orleans.Runtime.Scheduler
                     try
                     {
 #if DEBUG
-                        if (Log.IsVerbose3) Log.Verbose3("Worker thread {0} - Waiting for {1} work item", this.ManagedThreadId, IsSystem ? "System" : "Any");
+                        if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Worker thread {0} - Waiting for {1} work item", this.ManagedThreadId, IsSystem ? "System" : "Any");
 #endif
                         // Get some work to do
                         IWorkItem todo;
@@ -160,7 +162,7 @@ namespace Orleans.Runtime.Scheduler
                                 Log.Warn(ErrorCode.SchedulerWorkerPoolThreadQueueWaitTime, "Queue wait time of {0} for Item {1}", waitTime, todo);
                             }
 #if DEBUG
-                            if (Log.IsVerbose3) Log.Verbose3("Queue wait time for {0} work item is {1}", todo.ItemType, waitTime);
+                            if (Log.IsEnabled(LogLevel.Trace)) Log.Trace("Queue wait time for {0} work item is {1}", todo.ItemType, waitTime);
 #endif
                             // Do the work
                             try
@@ -235,7 +237,7 @@ namespace Orleans.Runtime.Scheduler
                     catch (ThreadAbortException tae)
                     {
                         // Can be reported from RunQueue.Get when Silo is being shutdown, so downgrade to verbose log
-                        if (Log.IsVerbose) Log.Verbose("Received thread abort exception -- exiting. {0}", tae);
+                        if (Log.IsEnabled(LogLevel.Debug)) Log.Debug("Received thread abort exception -- exiting. {0}", tae);
                         Thread.ResetAbort();
                         break;
                     }
@@ -257,7 +259,7 @@ namespace Orleans.Runtime.Scheduler
                     if (!IsSystem && (maxWorkQueueWait.Multiply(noWorkCount) > TimeSpan.FromMinutes(1)) && pool.CanExit())
                     {
 #if DEBUG
-                        if (Log.IsVerbose) Log.Verbose("Scheduler thread leaving because there's not enough work to do");
+                        if (Log.IsEnabled(LogLevel.Debug)) Log.Debug("Scheduler thread leaving because there's not enough work to do");
 #endif
                         break;
                     }

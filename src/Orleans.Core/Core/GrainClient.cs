@@ -33,12 +33,16 @@ namespace Orleans
     /// Client runtime for connecting to Orleans system
     /// </summary>
     /// TODO: Make this class non-static and inject it where it is needed.
+    [Obsolete(DeprecationMessage)]
     public static class GrainClient
     {
+        private const string DeprecationMessage = "Deprecated in favor of ClientBuilder.";
+
         /// <summary>
         /// Whether the client runtime has already been initialized
         /// </summary>
         /// <returns><c>true</c> if client runtime is already initialized</returns>
+        [Obsolete(DeprecationMessage)]
         public static bool IsInitialized => isFullyInitialized && client.IsInitialized;
 
         internal static ClientConfiguration CurrentConfig => client.Configuration;
@@ -49,12 +53,15 @@ namespace Orleans
         private static IInternalClusterClient client;
 
         private static readonly object initLock = new Object();
-        public static IClusterClient Instance => client;
 
-        //TODO: prevent client code from using this from inside a Grain or provider
+        [Obsolete(DeprecationMessage)]
+        public static IClusterClient Instance => client;
+        
+        [Obsolete(DeprecationMessage)]
         public static IGrainFactory GrainFactory => GetGrainFactory();
 
         /// <summary>delegate to configure logging, default to none logger configured</summary>
+        [Obsolete(DeprecationMessage)]
         public static Action<ILoggingBuilder> ConfigureLoggingDelegate { get; set; } = builder => { };
         private static IGrainFactory GetGrainFactory()
         {
@@ -69,6 +76,7 @@ namespace Orleans
         /// <summary>
         /// Initializes the client runtime from the standard client configuration file.
         /// </summary>
+        [Obsolete(DeprecationMessage)]
         public static void Initialize()
         {
             ClientConfiguration config = ClientConfiguration.StandardLoad();
@@ -78,8 +86,7 @@ namespace Orleans
                 throw new ArgumentException("Error loading standard client configuration file");
             }
             var orleansClient = (IInternalClusterClient)new ClientBuilder()
-                .AddApplicationPartsFromAppDomain()
-                .AddApplicationPartsFromBasePath()
+                .ConfigureApplicationParts(parts => parts.AddFromAppDomain().AddFromApplicationBaseDirectory())
                 .UseConfiguration(config)
                 .ConfigureLogging(ConfigureLoggingDelegate)
                 .Build();
@@ -91,6 +98,7 @@ namespace Orleans
         /// If an error occurs reading the specified configuration file, the initialization fails.
         /// </summary>
         /// <param name="configFilePath">A relative or absolute pathname for the client configuration file.</param>
+        [Obsolete(DeprecationMessage)]
         public static void Initialize(string configFilePath)
         {
             Initialize(new FileInfo(configFilePath));
@@ -102,6 +110,7 @@ namespace Orleans
         /// </summary>
         /// <param name="configFile">The client configuration file.</param>
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1011:ConsiderPassingBaseTypesAsParameters")]
+        [Obsolete(DeprecationMessage)]
         public static void Initialize(FileInfo configFile)
         {
             ClientConfiguration config;
@@ -120,8 +129,7 @@ namespace Orleans
                 throw new ArgumentException(string.Format("Error loading client configuration file {0}:", configFile.FullName), nameof(configFile));
             }
             var orleansClient = (IInternalClusterClient)new ClientBuilder()
-                .AddApplicationPartsFromAppDomain()
-                .AddApplicationPartsFromBasePath()
+                .ConfigureApplicationParts(parts => parts.AddFromAppDomain().AddFromApplicationBaseDirectory())
                 .UseConfiguration(config)
                 .ConfigureLogging(ConfigureLoggingDelegate)
                 .Build();
@@ -133,6 +141,7 @@ namespace Orleans
         /// If the configuration object is null, the initialization fails.
         /// </summary>
         /// <param name="config">A ClientConfiguration object.</param>
+        [Obsolete(DeprecationMessage)]
         public static void Initialize(ClientConfiguration config)
         {
             if (config == null)
@@ -141,8 +150,7 @@ namespace Orleans
                 throw new ArgumentException("Initialize was called with null ClientConfiguration object.", nameof(config));
             }
             var orleansClient = (IInternalClusterClient)new ClientBuilder()
-                .AddApplicationPartsFromAppDomain()
-                .AddApplicationPartsFromBasePath()
+                .ConfigureApplicationParts(parts => parts.AddFromAppDomain().AddFromApplicationBaseDirectory())
                 .UseConfiguration(config)
                 .ConfigureLogging(ConfigureLoggingDelegate)
                 .Build();
@@ -178,8 +186,7 @@ namespace Orleans
             }
             config.PreferedGatewayIndex = config.Gateways.IndexOf(gatewayAddress);
             var orleansClient = (IInternalClusterClient)new ClientBuilder()
-                .AddApplicationPartsFromAppDomain()
-                .AddApplicationPartsFromBasePath()
+                .ConfigureApplicationParts(parts => parts.AddFromAppDomain().AddFromApplicationBaseDirectory())
                 .UseConfiguration(config)
                 .ConfigureLogging(ConfigureLoggingDelegate)
                 .Build();
@@ -238,6 +245,7 @@ namespace Orleans
         /// <summary>
         /// Uninitializes client runtime.
         /// </summary>
+        [Obsolete(DeprecationMessage)]
         public static void Uninitialize()
         {
             lock (initLock)
@@ -249,6 +257,7 @@ namespace Orleans
         /// <summary>
         /// Test hook to uninitialize client without cleanup
         /// </summary>
+        [Obsolete(DeprecationMessage)]
         public static void HardKill()
         {
             lock (initLock)
@@ -302,23 +311,11 @@ namespace Orleans
         }
 
         /// <summary>
-        /// Provides logging facility for applications.
-        /// </summary>
-        /// <exception cref="InvalidOperationException">Thrown if Orleans runtime is not correctly initialized before this call.</exception>
-        public static Logger Logger
-        {
-            get
-            {
-                CheckInitialized();
-                return client.Logger;
-            }
-        }
-
-        /// <summary>
         /// Set a timeout for responses on this Orleans client.
         /// </summary>
         /// <param name="timeout"></param>
         /// <exception cref="InvalidOperationException">Thrown if Orleans runtime is not correctly initialized before this call.</exception>
+        [Obsolete(DeprecationMessage)]
         public static void SetResponseTimeout(TimeSpan timeout)
         {
             CheckInitialized();
@@ -330,6 +327,7 @@ namespace Orleans
         /// </summary>
         /// <returns>The response timeout.</returns>
         /// <exception cref="InvalidOperationException">Thrown if Orleans runtime is not correctly initialized before this call.</exception>
+        [Obsolete(DeprecationMessage)]
         public static TimeSpan GetResponseTimeout()
         {
             CheckInitialized();
@@ -345,6 +343,7 @@ namespace Orleans
         /// and a <see cref="IGrain"/> which is the GrainReference this request is being sent through
         /// </summary>
         /// <remarks>This callback method should return promptly and do a minimum of work, to avoid blocking calling thread or impacting throughput.</remarks>
+        [Obsolete(DeprecationMessage + " Please use the AddClientInvokeCallback extension method on IClientBuilder.")]
         public static ClientInvokeCallback ClientInvokeCallback
         {
             get
@@ -359,6 +358,7 @@ namespace Orleans
             }
         }
 
+        [Obsolete(DeprecationMessage)]
         public static IEnumerable<Streams.IStreamProvider> GetStreamProviders()
         {
             CheckInitialized();
@@ -374,12 +374,14 @@ namespace Orleans
             }
         }
 
+        [Obsolete(DeprecationMessage)]
         public static IStreamProvider GetStreamProvider(string name)
         {
             CheckInitialized();
             return client.GetStreamProvider(name);
         }
 
+        [Obsolete(DeprecationMessage + " Please use the AddClusterConnectionLostHandler extension method on IClientBuilder.")]
         public static event ConnectionToClusterLostHandler ClusterConnectionLost
         {
             add

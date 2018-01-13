@@ -25,19 +25,6 @@ namespace Orleans.Providers
 
         public IGrainFactory GrainFactory { get { return runtime.GrainFactory; }}
         public IServiceProvider ServiceProvider { get { return runtime.ServiceProvider; } }
-        public void SetInvokeInterceptor(InvokeInterceptor interceptor)
-        {
-#pragma warning disable 618
-            runtime.SetInvokeInterceptor(interceptor);
-#pragma warning restore 618
-        }
-
-        public InvokeInterceptor GetInvokeInterceptor()
-        {
-#pragma warning disable 618
-            return runtime.GetInvokeInterceptor();
-#pragma warning restore 618
-        }
 
         public Task<Tuple<TExtension, TExtensionInterface>> BindExtension<TExtension, TExtensionInterface>(Func<TExtension> newExtensionFunc) where TExtension : IGrainExtension where TExtensionInterface : IGrainExtension
         {
@@ -99,11 +86,6 @@ namespace Orleans.Providers
                 await provider.Init(name, this, config);
                 statisticsProviderLoader.AddProvider(name, provider, config);
             }
-        }
-
-        public Logger GetLogger(string loggerName)
-        {
-            return new LoggerWrapper(loggerName, this.loggerFactory);
         }
 
         public Guid ServiceId

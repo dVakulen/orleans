@@ -7,7 +7,9 @@ using Microsoft.Extensions.Logging;
 using Orleans.Logging;
 using System.Threading.Tasks;
 using Orleans.Runtime.Configuration;
-
+using Microsoft.Extensions.DependencyInjection;
+using Orleans.Hosting;
+using Orleans.Runtime.Startup;
 
 namespace Orleans.Runtime.Host
 {
@@ -44,7 +46,7 @@ namespace Orleans.Runtime.Host
         /// </remarks>
         public bool ConfigLoaded { get; private set; }
 
-        /// <summary> Deployment Id (if any) for the cluster this silo is running in. </summary>
+        /// <summary> Cluster Id (if any) for the cluster this silo is running in. </summary>
         public string DeploymentId { get; set; }
 
         /// <summary> Whether this silo started successfully and is currently running. </summary>
@@ -99,8 +101,26 @@ namespace Orleans.Runtime.Host
             try
             {
                 if (!ConfigLoaded) LoadOrleansConfig();
-                orleans = new Silo(Name, Type, Config);
-                logger.Info(ErrorCode.Runtime_Error_100288, "Successfully initialized Orleans silo '{0}' as a {1} node.", orleans.Name, orleans.Type);
+                var builder = new SiloHostBuilder()
+                    .ConfigureSiloName(Name)
+                    .UseConfiguration(Config)
+                    .ConfigureApplicationParts(parts => parts
+                        .AddFromAppDomain()
+                        .AddFromApplicationBaseDirectory());
+
+                if (!string.IsNullOrWhiteSpace(Config.Defaults.StartupTypeName))
+                {
+                    builder.UseServiceProviderFactory(services =>
+                        StartupBuilder.ConfigureStartup(Config.Defaults.StartupTypeName, services));
+                }
+
+                var host = builder.Build();
+
+                orleans = host.Services.GetRequiredService<Silo>();
+                var localConfig = host.Services.GetRequiredService<NodeConfiguration>();
+                host.Services.GetService<TelemetryManager>()?.AddFromConfiguration(host.Services, localConfig.TelemetryConfiguration);
+
+                logger.Info(ErrorCode.Runtime_Error_100288, "Successfully initialized Orleans silo '{0}'.", orleans.Name);
             }
             catch (Exception exc)
             {
@@ -114,7 +134,7 @@ namespace Orleans.Runtime.Host
         /// </summary>
         public void UnInitializeOrleansSilo()
         {
-            Utils.SafeExecute(UnobservedExceptionsHandlerClass.ResetUnobservedExceptionHandler);
+            //currently an empty method, keep this method for backward-compatibility
         }
 
         /// <summary>
@@ -325,18 +345,18 @@ namespace Orleans.Runtime.Host
         }
 
         /// <summary>
-        /// Set the DeploymentId for this silo, 
+        /// Set the ClusterId for this silo, 
         /// as well as the connection string to use the silo system data, 
         /// such as the cluster membership table..
         /// </summary>
-        /// <param name="deploymentId">DeploymentId this silo is part of.</param>
+        /// <param name="clusterId">ClusterId this silo is part of.</param>
         /// <param name="connectionString">Azure connection string to use the silo system data.</param>
-        public void SetDeploymentId(string deploymentId, string connectionString)
+        public void SetDeploymentId(string clusterId, string connectionString)
         {
             logger.Info(ErrorCode.SiloSetDeploymentId, "Setting Deployment Id to {0} and data connection string to {1}",
-                deploymentId, ConfigUtilities.RedactConnectionStringInfo(connectionString));
+                clusterId, ConfigUtilities.RedactConnectionStringInfo(connectionString));
 
-            Config.Globals.DeploymentId = deploymentId;
+            Config.Globals.ClusterId = clusterId;
             Config.Globals.DataConnectionString = connectionString;
         }
 
@@ -509,7 +529,7 @@ namespace Orleans.Runtime.Host
             Config = config;
 
             if (!String.IsNullOrEmpty(DeploymentId))
-                Config.Globals.DeploymentId = DeploymentId;
+                Config.Globals.ClusterId = DeploymentId;
 
             if (string.IsNullOrWhiteSpace(Name))
                 throw new ArgumentException("SiloName not defined - cannot initialize config");

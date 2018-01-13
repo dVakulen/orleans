@@ -5,10 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.Orleans.ServiceFabric;
-using Microsoft.Orleans.ServiceFabric.Models;
+using Orleans.Clustering.ServiceFabric;
 using Orleans.Runtime;
 using Orleans.Runtime.Configuration;
+using Orleans.ServiceFabric;
 using TestExtensions;
 using Xunit;
 
@@ -25,7 +25,7 @@ namespace TestServiceFabric
         private ITestOutputHelper Output { get; }
         private readonly FabricMembershipOracle oracle;
         private readonly UnknownSiloMonitor unknownSiloMonitor;
-        private readonly ServiceFabricMembershipOptions fabricMembershipOptions;
+        private readonly ServiceFabricClusteringOptions fabricClusteringOptions;
 
         public FabricMembershipOracleTests(ITestOutputHelper output)
         {
@@ -38,12 +38,13 @@ namespace TestServiceFabric
 
             this.resolver = new MockResolver();
             var globalConfig = new ClusterConfiguration().Globals;
+            globalConfig.HasMultiClusterNetwork = true;
             globalConfig.MaxMultiClusterGateways = 2;
             globalConfig.ClusterId = "MegaGoodCluster";
 
-            this.fabricMembershipOptions = new ServiceFabricMembershipOptions();
+            this.fabricClusteringOptions = new ServiceFabricClusteringOptions();
             this.unknownSiloMonitor = new UnknownSiloMonitor(
-                new OptionsWrapper<ServiceFabricMembershipOptions>(this.fabricMembershipOptions),
+                new OptionsWrapper<ServiceFabricClusteringOptions>(this.fabricClusteringOptions),
                 new TestOutputLogger<UnknownSiloMonitor>(this.Output));
             this.oracle = new FabricMembershipOracle(
                 this.siloDetails,
@@ -233,7 +234,7 @@ namespace TestServiceFabric
             // The status should not have changed.
             Assert.Equal(SiloStatus.None, this.oracle.GetApproximateSiloStatus(unknownSilo1));
 
-            now[0] += this.fabricMembershipOptions.UnknownSiloRemovalPeriod + TimeSpan.FromMilliseconds(1);
+            now[0] += this.fabricClusteringOptions.UnknownSiloRemovalPeriod + TimeSpan.FromMilliseconds(1);
             this.resolver.Notify(silos);
             listener.WaitForVersion(5);
 
@@ -263,7 +264,10 @@ namespace TestServiceFabric
         private class MockSiloDetails : ILocalSiloDetails
         {
             public string Name { get; set; }
+            public string ClusterId { get; }
+            public string DnsHostName { get; }
             public SiloAddress SiloAddress { get; set; }
+            public SiloAddress GatewayAddress { get; }
         }
 
         private void AssertStatus(SiloStatus expected)

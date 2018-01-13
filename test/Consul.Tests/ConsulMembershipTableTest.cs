@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Orleans.ConsulUtils.Configuration;
+using Orleans.ConsulUtils.Options;
 using Orleans.Runtime.Configuration;
 using Orleans.Runtime.Membership;
-using OrleansConsulUtils.Options;
 using TestExtensions;
 using UnitTests;
 using UnitTests.MembershipTests;
@@ -35,24 +35,24 @@ namespace Consul.Tests
             return filters;
         }
 
-        protected override IMembershipTable CreateMembershipTable(Logger logger)
+        protected override IMembershipTable CreateMembershipTable(ILogger logger)
         {
             ConsulTestUtils.EnsureConsul();
             var options = new ConsulMembershipOptions()
             {
                 Address = new Uri(this.connectionString)
             };
-            return new ConsulBasedMembershipTable(loggerFactory.CreateLogger<ConsulBasedMembershipTable>(), Options.Create<ConsulMembershipOptions>(options), this.globalConfiguration);
+            return new ConsulBasedMembershipTable(loggerFactory.CreateLogger<ConsulBasedMembershipTable>(), Options.Create(options), this.siloOptions);
         }
 
-        protected override IGatewayListProvider CreateGatewayListProvider(Logger logger)
+        protected override IGatewayListProvider CreateGatewayListProvider(ILogger logger)
         {
             ConsulTestUtils.EnsureConsul();
             var options = new ConsulGatewayListProviderOptions()
             {
                 Address = new Uri(this.connectionString)
             };
-            return new ConsulGatewayListProvider(loggerFactory.CreateLogger<ConsulGatewayListProvider>(), this.clientConfiguration, Options.Create(options));
+            return new ConsulGatewayListProvider(loggerFactory.CreateLogger<ConsulGatewayListProvider>(), this.clientConfiguration, Options.Create(options), this.clientOptions);
         }
 
         protected override async Task<string> GetConnectionString()

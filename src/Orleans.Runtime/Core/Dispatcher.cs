@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Orleans.CodeGeneration;
 using Orleans.GrainDirectory;
 using Orleans.Runtime.Configuration;
@@ -22,16 +23,16 @@ namespace Orleans.Runtime
 
         private readonly OrleansTaskScheduler scheduler;
         private readonly Catalog catalog;
-        private readonly Logger logger;
+        private readonly ILogger logger;
         private readonly ClusterConfiguration config;
         private readonly PlacementDirectorsManager placementDirectorsManager;
         private readonly ILocalGrainDirectory localGrainDirectory;
         private readonly MessageFactory messagefactory;
         private readonly SerializationManager serializationManager;
         private readonly CompatibilityDirectorManager compatibilityDirectorManager;
+        private readonly SchedulingOptions schedulingOptions;
         private readonly SafeRandom random;
         private readonly ILogger invokeWorkItemLogger;
-        private readonly ILoggerFactory loggerFactory;
         internal Dispatcher(
             OrleansTaskScheduler scheduler, 
             ISiloMessageCenter transport, 
@@ -42,9 +43,9 @@ namespace Orleans.Runtime
             MessageFactory messagefactory,
             SerializationManager serializationManager,
             CompatibilityDirectorManager compatibilityDirectorManager,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            IOptions<SchedulingOptions> schedulerOptions)
         {
-            this.loggerFactory = loggerFactory;
             this.scheduler = scheduler;
             this.catalog = catalog;
             Transport = transport;
@@ -55,7 +56,8 @@ namespace Orleans.Runtime
             this.messagefactory = messagefactory;
             this.serializationManager = serializationManager;
             this.compatibilityDirectorManager = compatibilityDirectorManager;
-            logger = new LoggerWrapper<Dispatcher>(loggerFactory);
+            this.schedulingOptions = schedulerOptions.Value;
+            logger = loggerFactory.CreateLogger<Dispatcher>();
             random = new SafeRandom();
         }
 
@@ -136,7 +138,7 @@ namespace Orleans.Runtime
 
                     if (nea.IsStatelessWorker)
                     {
-                        if (logger.IsVerbose) logger.Verbose(ErrorCode.Dispatcher_Intermediate_GetOrCreateActivation,
+                        if (logger.IsEnabled(LogLevel.Debug)) logger.Debug(ErrorCode.Dispatcher_Intermediate_GetOrCreateActivation,
                            String.Format("Intermediate StatelessWorker NonExistentActivation for message {0}", message), ex);
                     }
                     else
@@ -173,7 +175,7 @@ namespace Orleans.Runtime
                                             nonExistentActivation), exc);
                                 }
                             },
-                            () => "LocalGrainDirectory.UnregisterAfterNonexistingActivation"),
+                            "LocalGrainDirectory.UnregisterAfterNonexistingActivation"),
                             catalog.SchedulingContext);
 
                         ProcessRequestToInvalidActivation(message, nonExistentActivation, null, "Non-existent activation");
@@ -273,7 +275,7 @@ namespace Orleans.Runtime
                 else if (!ActivationMayAcceptRequest(targetActivation, message))
                 {
                     // Check for deadlock before Enqueueing.
-                    if (config.Globals.PerformDeadlockDetection && !message.TargetGrain.IsSystemTarget)
+                    if (schedulingOptions.PerformDeadlockDetection && !message.TargetGrain.IsSystemTarget)
                     {
                         try
                         {
@@ -325,12 +327,34 @@ namespace Orleans.Runtime
         public bool CanInterleave(ActivationData targetActivation, Message incoming)
         {
             bool canInterleave = 
-                   catalog.CanInterleave(targetActivation.ActivationId, incoming)
-                || incoming.IsAlwaysInterleave
+                   incoming.IsAlwaysInterleave
                 || targetActivation.Running == null
-                || (targetActivation.Running.IsReadOnly && incoming.IsReadOnly);
+                || (targetActivation.Running.IsReadOnly && incoming.IsReadOnly)
+                || (schedulingOptions.AllowCallChainReentrancy && targetActivation.ActivationId.Equals(incoming.SendingActivation))
+                || catalog.CanInterleave(targetActivation.ActivationId, incoming);
 
             return canInterleave;
+        }
+
+        /// <summary>
+        /// https://github.com/dotnet/orleans/issues/3184
+        /// Checks whether reentrancy is allowed for calls to grains that are already part of the call chain.
+        /// Covers following case: grain A calls grain B, and while executing the invoked method B calls back to A. 
+        /// Design: Senders collection `RunningRequestsSenders` contains sending grains references
+        /// during duration of request processing. If target of outgoing request is found in that collection - 
+        /// such request will be marked as interleaving in order to prevent deadlocks.
+        /// </summary>
+        private void MarkSameCallChainMessageAsInterleaving(ActivationData sendingActivation, Message outgoing)
+        {
+            if (!schedulingOptions.AllowCallChainReentrancy)
+            {
+                return;
+            }
+
+            if (sendingActivation?.RunningRequestsSenders.Contains(outgoing.TargetActivation) == true)
+            {
+                outgoing.IsAlwaysInterleave = true;
+            }
         }
 
         /// <summary>
@@ -437,7 +461,7 @@ namespace Orleans.Runtime
 #if DEBUG
             // This is a hot code path, so using #if to remove diags from Release version
             // Note: Caller already holds lock on activation
-            if (logger.IsVerbose2) logger.Verbose2(ErrorCode.Dispatcher_EnqueueMessage,
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace(ErrorCode.Dispatcher_EnqueueMessage,
                 "EnqueueMessage for {0}: targetActivation={1}", message.TargetActivation, targetActivation.DumpStatus());
 #endif
         }
@@ -474,7 +498,7 @@ namespace Orleans.Runtime
                 this.localGrainDirectory.InvalidateCacheEntry(oldAddress);
             }
 
-            if (logger.IsInfo)
+            if (logger.IsEnabled(LogLevel.Information))
             {
                 logger.Info(ErrorCode.Messaging_Dispatcher_ForwardingRequests,
                     string.Format("Forwarding {0} requests destined for address {1} to address {2} after {3}.",
@@ -582,7 +606,7 @@ namespace Orleans.Runtime
 
         private void ResendMessageImpl(Message message, ActivationAddress forwardingAddress = null)
         {
-            if (logger.IsVerbose) logger.Verbose("Resend {0}", message);
+            if (logger.IsEnabled(LogLevel.Debug)) logger.Debug("Resend {0}", message);
             message.TargetHistory = message.GetTargetHistory();
 
             if (message.TargetGrain.IsSystemTarget)
@@ -642,7 +666,7 @@ namespace Orleans.Runtime
                     return;
                 }
 
-                TransportMessage(message);
+                TransportMessage(message, sendingActivation);
             };
 
             try
@@ -650,7 +674,7 @@ namespace Orleans.Runtime
                 var messageAddressingTask = AddressMessage(message);
                 if (messageAddressingTask.Status == TaskStatus.RanToCompletion)
                 {
-                    TransportMessage(message);
+                    TransportMessage(message, sendingActivation);
                 }
                 else
                 {
@@ -734,7 +758,7 @@ namespace Orleans.Runtime
             {
                 CounterStatistic.FindOrCreate(StatisticNames.DISPATCHER_NEW_PLACEMENT).Increment();
             }
-            if (logger.IsVerbose2) logger.Verbose2(ErrorCode.Dispatcher_AddressMsg_SelectTarget, "AddressMessage Placement SelectTarget {0}", message);
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace(ErrorCode.Dispatcher_AddressMsg_SelectTarget, "AddressMessage Placement SelectTarget {0}", message);
         }
 
         internal void SendResponse(Message request, Response response)
@@ -774,9 +798,10 @@ namespace Orleans.Runtime
         /// Directly send a message to the transport without processing
         /// </summary>
         /// <param name="message"></param>
-        public void TransportMessage(Message message)
+        public void TransportMessage(Message message, ActivationData sendingActivation = null)
         {
-            if (logger.IsVerbose2) logger.Verbose2(ErrorCode.Dispatcher_Send_AddressedMessage, "Addressed message {0}", message);
+            MarkSameCallChainMessageAsInterleaving(sendingActivation, message);
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace(ErrorCode.Dispatcher_Send_AddressedMessage, "Addressed message {0}", message);
             Transport.SendMessage(message);
         }
 
@@ -795,9 +820,9 @@ namespace Orleans.Runtime
             {
 #if DEBUG
                 // This is a hot code path, so using #if to remove diags from Release version
-                if (logger.IsVerbose2)
+                if (logger.IsEnabled(LogLevel.Trace))
                 {
-                    logger.Verbose2(ErrorCode.Dispatcher_OnActivationCompletedRequest_Waiting,
+                    logger.Trace(ErrorCode.Dispatcher_OnActivationCompletedRequest_Waiting,
                         "OnActivationCompletedRequest {0}: Activation={1}", activation.ActivationId, activation.DumpStatus());
                 }
 #endif
@@ -818,9 +843,9 @@ namespace Orleans.Runtime
 #if DEBUG
             // This is a hot code path, so using #if to remove diags from Release version
             // Note: Caller already holds lock on activation
-            if (logger.IsVerbose2)
+            if (logger.IsEnabled(LogLevel.Trace))
             {
-                logger.Verbose2(ErrorCode.Dispatcher_ActivationEndedTurn_Waiting,
+                logger.Trace(ErrorCode.Dispatcher_ActivationEndedTurn_Waiting,
                     "RunMessagePump {0}: Activation={1}", activation.ActivationId, activation.DumpStatus());
             }
 #endif

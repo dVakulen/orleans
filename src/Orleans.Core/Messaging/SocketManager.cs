@@ -2,26 +2,28 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Extensions.Logging;
-using Orleans.Runtime.Configuration;
-using Orleans.Configuration;
 using Microsoft.Extensions.Options;
+using Orleans.Messaging;
+using Orleans.Hosting;
+
 
 namespace Orleans.Runtime
 {
     internal class SocketManager
     {
         private readonly LRU<IPEndPoint, Socket> cache;
-        private TimeSpan connectionTimeout;
-        private ILogger logger;
+        private readonly TimeSpan connectionTimeout;
+        private readonly ILogger logger;
         private const int MAX_SOCKETS = 200;
 
-        internal SocketManager(IOptions<MessagingOptions> options, ILoggerFactory loggerFactory)
+        internal SocketManager(IOptions<NetworkingOptions> options, ILoggerFactory loggerFactory)
         {
-            var messagingOptions = options.Value;
-            connectionTimeout = messagingOptions.OpenConnectionTimeout;
-            cache = new LRU<IPEndPoint, Socket>(MAX_SOCKETS, messagingOptions.MaxSocketAge, SendingSocketCreator);
+            var networkingOptions = options.Value;
+            connectionTimeout = networkingOptions.OpenConnectionTimeout;
+            cache = new LRU<IPEndPoint, Socket>(MAX_SOCKETS, networkingOptions.MaxSocketAge, SendingSocketCreator);
             this.logger = loggerFactory.CreateLogger<SocketManager>();
             cache.RaiseFlushEvent += FlushHandler;
         }
@@ -32,7 +34,7 @@ namespace Orleans.Runtime
         /// </summary>
         /// <param name="address">The address to bind to.</param>
         /// <returns>The new socket, appropriately bound.</returns>
-        internal static Socket GetAcceptingSocketForEndpoint(IPEndPoint address)
+        internal Socket GetAcceptingSocketForEndpoint(IPEndPoint address)
         {
             var s = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             try
@@ -40,6 +42,12 @@ namespace Orleans.Runtime
                 // Prep the socket so it will reset on close
                 s.LingerState = new LingerOption(true, 0);
                 s.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                s.EnableFastpath();
+                // The following timeout is only effective when calling the synchronous
+                // Socket.Receive method. We should only use this method when we are reading
+                // the connection preamble
+                s.ReceiveTimeout = (int) this.connectionTimeout.TotalMilliseconds;
+
                 // And bind it to the address
                 s.Bind(address);
             }
@@ -68,6 +76,7 @@ namespace Orleans.Runtime
             var s = new Socket(target.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
             try
             {
+                s.EnableFastpath();
                 Connect(s, target, connectionTimeout);
                 // Prep the socket so it will reset on close and won't Nagle
                 s.LingerState = new LingerOption(true, 0);
@@ -225,7 +234,10 @@ namespace Orleans.Runtime
 
             try
             {
-                s.Disconnect(false);
+                if (s.Connected)
+                    s.Disconnect(false);
+                else
+                    s.Close();
             }
             catch (Exception)
             {
@@ -241,5 +253,10 @@ namespace Orleans.Runtime
                 // Ignore
             }
         }
+
+       
+
+
+
     }
 }

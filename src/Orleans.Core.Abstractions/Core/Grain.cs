@@ -19,11 +19,9 @@ namespace Orleans
         // from within client code (including subclasses of this class), should be exposed through IGrainRuntime.
         // The better solution is to refactor this interface and make it injectable through the constructor.
         internal IActivationData Data;
-
         public GrainReference GrainReference { get { return Data.GrainReference; } }
 
         internal IGrainRuntime Runtime { get; set; }
-
         /// <summary>
         /// Gets an object which can be used to access other grains. Null if this grain is not associated with a Runtime, such as when created directly for unit testing.
         /// </summary>
@@ -37,7 +35,7 @@ namespace Orleans
         /// </summary>
         protected IServiceProvider ServiceProvider 
         {
-            get { return Data.ServiceProvider ?? Runtime?.ServiceProvider; }
+            get { return Data?.ServiceProvider ?? Runtime?.ServiceProvider; }
         }
 
         internal IGrainIdentity Identity;
@@ -114,6 +112,9 @@ namespace Orleans
         /// <seealso cref="IDisposable"/>
         protected virtual IDisposable RegisterTimer(Func<object, Task> asyncCallback, object state, TimeSpan dueTime, TimeSpan period)
         {
+            if (asyncCallback == null) 
+                throw new ArgumentNullException(nameof(asyncCallback));
+
             EnsureRuntime();
             return Runtime.TimerRegistry.RegisterTimer(this, asyncCallback, state, dueTime, period);
         }
@@ -131,10 +132,10 @@ namespace Orleans
         /// <returns>Promise for Reminder handle.</returns>
         protected virtual Task<IGrainReminder> RegisterOrUpdateReminder(string reminderName, TimeSpan dueTime, TimeSpan period)
         {
+            if (string.IsNullOrWhiteSpace(reminderName))
+                throw new ArgumentNullException(nameof(reminderName));
             if (!(this is IRemindable))
-            {
-                throw new InvalidOperationException(string.Format("Grain {0} is not 'IRemindable'. A grain should implement IRemindable to use the persistent reminder service", IdentityString));
-            }
+                throw new InvalidOperationException($"Grain {IdentityString} is not 'IRemindable'. A grain should implement IRemindable to use the persistent reminder service");
 
             EnsureRuntime();
             return Runtime.ReminderRegistry.RegisterOrUpdateReminder(reminderName, dueTime, period);
@@ -147,6 +148,9 @@ namespace Orleans
         /// <returns>Completion promise for this operation.</returns>
         protected virtual Task UnregisterReminder(IGrainReminder reminder)
         {
+            if (reminder == null)
+                throw new ArgumentNullException(nameof(reminder));
+
             EnsureRuntime();
             return Runtime.ReminderRegistry.UnregisterReminder(reminder);
         }
@@ -158,6 +162,9 @@ namespace Orleans
         /// <returns>Promise for Reminder handle.</returns>
         protected virtual Task<IGrainReminder> GetReminder(string reminderName)
         {
+            if (string.IsNullOrWhiteSpace(reminderName))
+                throw new ArgumentNullException(nameof(reminderName));
+
             EnsureRuntime();
             return Runtime.ReminderRegistry.GetReminder(reminderName);
         }
@@ -175,7 +182,8 @@ namespace Orleans
         protected virtual IStreamProvider GetStreamProvider(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
-                throw new ArgumentNullException("name");
+                throw new ArgumentNullException(nameof(name));
+                
             EnsureRuntime();
             return this.ServiceProvider.GetServiceByName<IStreamProvider>(name);
         }
@@ -220,26 +228,6 @@ namespace Orleans
         public virtual Task OnDeactivateAsync()
         {
             return Task.CompletedTask;
-        }
-
-        /// <summary>
-        /// Returns a logger object that this grain's code can use for tracing.
-        /// </summary>
-        /// <returns>Name of the logger to use.</returns>
-        protected virtual Logger GetLogger(string loggerName)
-        {
-            EnsureRuntime();
-            return Runtime.GetLogger(loggerName);
-        }
-
-        /// <summary>
-        /// Returns a logger object that this grain's code can use for tracing.
-        /// The name of the logger will be derived from the grain class name.
-        /// </summary>
-        /// <returns>A logger for this grain.</returns>
-        protected Logger GetLogger()
-        {
-            return GetLogger(GetType().Name);
         }
 
         private void EnsureRuntime()

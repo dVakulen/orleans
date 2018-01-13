@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Orleans.Messaging;
 using Orleans.Runtime.Configuration;
+using Orleans.Hosting;
+using Orleans.Runtime;
 
 namespace Orleans.Configuration
 {
@@ -20,6 +22,14 @@ namespace Orleans.Configuration
             services.TryAddSingleton(configuration);
             services.TryAddFromExisting<IMessagingConfiguration, ClientConfiguration>();
 
+            services.Configure<ClusterClientOptions>(options =>
+            {
+                if (string.IsNullOrWhiteSpace(options.ClusterId) && !string.IsNullOrWhiteSpace(configuration.ClusterId))
+                {
+                    options.ClusterId = configuration.ClusterId;
+                }
+            });
+
             // Translate legacy configuration to new Options
             services.Configure<ClientMessagingOptions>(options =>
             {
@@ -28,28 +38,50 @@ namespace Orleans.Configuration
                 options.ClientSenderBuckets = configuration.ClientSenderBuckets;
             });
 
+            services.Configure<NetworkingOptions>(options => CopyNetworkingOptions(configuration, options));
+
             services.Configure<SerializationProviderOptions>(options =>
             {
                 options.SerializationProviders = configuration.SerializationProviders;
                 options.FallbackSerializationProvider = configuration.FallbackSerializationProvider;
             });
 
+            services.Configure<StatisticsOptions>((options) =>
+            {
+                CopyStatisticsOptions(configuration, options);
+            });
+
             // GatewayProvider
             LegacyGatewayListProviderConfigurator.ConfigureServices(configuration, services);
+
             return services;
         }
 
         internal static void CopyCommonMessagingOptions(IMessagingConfiguration configuration, MessagingOptions options)
         {
-            options.OpenConnectionTimeout = configuration.OpenConnectionTimeout;
             options.ResponseTimeout = configuration.ResponseTimeout;
             options.MaxResendCount = configuration.MaxResendCount;
             options.ResendOnTimeout = configuration.ResendOnTimeout;
-            options.MaxSocketAge = configuration.MaxSocketAge;
             options.DropExpiredMessages = configuration.DropExpiredMessages;
             options.BufferPoolBufferSize = configuration.BufferPoolBufferSize;
             options.BufferPoolMaxSize = configuration.BufferPoolMaxSize;
             options.BufferPoolPreallocationSize = configuration.BufferPoolPreallocationSize;
+        }
+
+        internal static void CopyNetworkingOptions(IMessagingConfiguration configuration, NetworkingOptions options)
+        {
+            options.OpenConnectionTimeout = configuration.OpenConnectionTimeout;
+            options.MaxSocketAge = configuration.MaxSocketAge;
+        }
+
+        internal static void CopyStatisticsOptions(IStatisticsConfiguration configuration, StatisticsOptions options)
+        {
+            options.MetricsTableWriteInterval = configuration.StatisticsMetricsTableWriteInterval;
+            options.PerfCountersWriteInterval = configuration.StatisticsPerfCountersWriteInterval;
+            options.LogWriteInterval = configuration.StatisticsLogWriteInterval;
+            options.WriteLogStatisticsToTable = configuration.StatisticsWriteLogStatisticsToTable;
+            options.CollectionLevel = configuration.StatisticsCollectionLevel;
+            options.ProviderName = configuration.StatisticsProviderName;
         }
     }
 }

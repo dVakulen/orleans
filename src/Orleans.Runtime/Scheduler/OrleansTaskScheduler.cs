@@ -14,7 +14,7 @@ namespace Orleans.Runtime.Scheduler
     [DebuggerDisplay("OrleansTaskScheduler RunQueue={RunQueue.Length}")]
     internal class OrleansTaskScheduler : TaskScheduler, ITaskScheduler, IHealthCheckParticipant
     {
-        private readonly Logger logger;
+        private readonly ILogger logger;
         private readonly ILoggerFactory loggerFactory;
         private readonly ILogger taskWorkItemLogger;
         private readonly ConcurrentDictionary<ISchedulingContext, WorkItemGroup> workgroupDirectory; // work group directory
@@ -39,20 +39,22 @@ namespace Orleans.Runtime.Scheduler
                 NodeConfiguration.ENABLE_WORKER_THREAD_INJECTION,
                 LimitManager.GetDefaultLimit(LimitNames.LIMIT_MAX_PENDING_ITEMS),
                 performanceMetrics,
+                new ExecutorService(), 
                 loggerFactory);
         }
 
-        public OrleansTaskScheduler(NodeConfiguration config, ICorePerformanceMetrics performanceMetrics, ILoggerFactory loggerFactory)
+        public OrleansTaskScheduler(NodeConfiguration config, ICorePerformanceMetrics performanceMetrics, ExecutorService executorService, ILoggerFactory loggerFactory)
             : this(config.MaxActiveThreads, config.DelayWarningThreshold, config.ActivationSchedulingQuantum,
                     config.TurnWarningLengthThreshold, config.EnableWorkerThreadInjection, config.LimitManager.GetLimit(LimitNames.LIMIT_MAX_PENDING_ITEMS),
-                    performanceMetrics, loggerFactory)
+                    performanceMetrics, executorService, loggerFactory)
         {
         }
 
         private OrleansTaskScheduler(int maxActiveThreads, TimeSpan delayWarningThreshold, TimeSpan activationSchedulingQuantum,
-            TimeSpan turnWarningLengthThreshold, bool injectMoreWorkerThreads, LimitValue maxPendingItemsLimit, ICorePerformanceMetrics performanceMetrics, ILoggerFactory loggerFactory)
+            TimeSpan turnWarningLengthThreshold, bool injectMoreWorkerThreads, LimitValue maxPendingItemsLimit, 
+            ICorePerformanceMetrics performanceMetrics, ExecutorService executorService, ILoggerFactory loggerFactory)
         {
-            this.logger = new LoggerWrapper<OrleansTaskScheduler>(loggerFactory);
+            this.logger = loggerFactory.CreateLogger<OrleansTaskScheduler>();
             this.loggerFactory = loggerFactory;
             DelayWarningThreshold = delayWarningThreshold;
             WorkItemGroup.ActivationSchedulingQuantum = activationSchedulingQuantum;
@@ -63,7 +65,7 @@ namespace Orleans.Runtime.Scheduler
             RunQueue = new WorkQueue();
             this.taskWorkItemLogger = loggerFactory.CreateLogger<TaskWorkItem>();
             logger.Info("Starting OrleansTaskScheduler with {0} Max Active application Threads and 1 system thread.", maxActiveThreads);
-            Pool = new WorkerPool(this, performanceMetrics, loggerFactory, maxActiveThreads, injectMoreWorkerThreads);
+            Pool = new WorkerPool(this, performanceMetrics, executorService, loggerFactory, maxActiveThreads, injectMoreWorkerThreads);
             IntValueStatistic.FindOrCreate(StatisticNames.SCHEDULER_WORKITEMGROUP_COUNT, () => WorkItemGroupCount);
             IntValueStatistic.FindOrCreate(new StatisticName(StatisticNames.QUEUES_QUEUE_SIZE_INSTANTANEOUS_PER_QUEUE, "Scheduler.LevelOne"), () => RunQueueLength);
 
@@ -144,7 +146,7 @@ namespace Orleans.Runtime.Scheduler
         public void StopApplicationTurns()
         {
 #if DEBUG
-            if (logger.IsVerbose) logger.Verbose("StopApplicationTurns");
+            logger.Debug("StopApplicationTurns");
 #endif
             // Do not RunDown the application run queue, since it is still used by low priority system targets.
 
@@ -171,7 +173,7 @@ namespace Orleans.Runtime.Scheduler
         {
             var contextObj = task.AsyncState;
 #if DEBUG
-            if (logger.IsVerbose2) logger.Verbose2("QueueTask: Id={0} with Status={1} AsyncState={2} when TaskScheduler.Current={3}", task.Id, task.Status, task.AsyncState, Current);
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace("QueueTask: Id={0} with Status={1} AsyncState={2} when TaskScheduler.Current={3}", task.Id, task.Status, task.AsyncState, Current);
 #endif
             var context = contextObj as ISchedulingContext;
             var workItemGroup = GetWorkItemGroup(context);
@@ -201,7 +203,7 @@ namespace Orleans.Runtime.Scheduler
         public void QueueWorkItem(IWorkItem workItem, ISchedulingContext context)
         {
 #if DEBUG
-            if (logger.IsVerbose2) logger.Verbose2("QueueWorkItem " + context);
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace("QueueWorkItem " + context);
 #endif
             if (workItem is TaskWorkItem)
             {
@@ -304,9 +306,9 @@ namespace Orleans.Runtime.Scheduler
             bool canExecuteInline = ctx == null || ctx.ActivationContext==null;
 
 #if DEBUG
-            if (logger.IsVerbose2) 
+            if (logger.IsEnabled(LogLevel.Trace)) 
             {
-                logger.Verbose2("TryExecuteTaskInline Id={0} with Status={1} PreviouslyQueued={2} CanExecute={3}",
+                logger.Trace("TryExecuteTaskInline Id={0} with Status={1} PreviouslyQueued={2} CanExecute={3}",
                     task.Id, task.Status, taskWasPreviouslyQueued, canExecuteInline);
             }
 #endif
@@ -334,7 +336,7 @@ namespace Orleans.Runtime.Scheduler
         public void RunTask(Task task)
         {
 #if DEBUG
-            if (logger.IsVerbose2) logger.Verbose2("RunTask: Id={0} with Status={1} AsyncState={2} when TaskScheduler.Current={3}", task.Id, task.Status, task.AsyncState, Current);
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace("RunTask: Id={0} with Status={1} AsyncState={2} when TaskScheduler.Current={3}", task.Id, task.Status, task.AsyncState, Current);
 #endif
             var context = RuntimeContext.CurrentActivationContext;
             var workItemGroup = GetWorkItemGroup(context);
@@ -356,7 +358,7 @@ namespace Orleans.Runtime.Scheduler
             }
 
 #if DEBUG
-            if (logger.IsVerbose2) logger.Verbose2("RunTask: Completed Id={0} with Status={1} task.AsyncState={2} when TaskScheduler.Current={3}", task.Id, task.Status, task.AsyncState, Current);
+            if (logger.IsEnabled(LogLevel.Trace)) logger.Trace("RunTask: Completed Id={0} with Status={1} task.AsyncState={2} when TaskScheduler.Current={3}", task.Id, task.Status, task.AsyncState, Current);
 #endif
         }
 
@@ -368,7 +370,7 @@ namespace Orleans.Runtime.Scheduler
 
         internal void PrintStatistics()
         {
-            if (!logger.IsInfo) return;
+            if (!logger.IsEnabled(LogLevel.Information)) return;
 
             var stats = Utils.EnumerableToString(workgroupDirectory.Values.OrderBy(wg => wg.Name), wg => string.Format("--{0}", wg.DumpStatus()), Environment.NewLine);
             if (stats.Length > 0)
@@ -379,7 +381,7 @@ namespace Orleans.Runtime.Scheduler
 
         internal void DumpSchedulerStatus(bool alwaysOutput = true)
         {
-            if (!logger.IsVerbose && !alwaysOutput) return;
+            if (!logger.IsEnabled(LogLevel.Debug) && !alwaysOutput) return;
 
             PrintStatistics();
 

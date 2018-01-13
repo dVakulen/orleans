@@ -1,9 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Orleans.Runtime.Configuration;
 using Orleans.Transactions;
-using Orleans.Configuration;
+using Orleans.Hosting;
 
 namespace Orleans.Runtime
 {
@@ -31,9 +30,9 @@ namespace Orleans.Runtime
         private TimeSpan timeout;
         private SafeTimer timer;
         private ITimeInterval timeSinceIssued;
-        private readonly Logger logger;
+        private readonly ILogger logger;
         private readonly ILogger timerLogger;
-        public TransactionInfo TransactionInfo { get; set; }
+        public ITransactionInfo TransactionInfo { get; set; }
 
         public Message Message { get; set; } // might hold metadata used by response pipeline
 
@@ -44,7 +43,7 @@ namespace Orleans.Runtime
             Message msg, 
             Action<Message> unregisterDelegate,
             MessagingOptions messagingOptions,
-            Logger logger,
+            ILogger logger,
             ILogger timerLogger)
         {
             // We are never called without a callback func, but best to double check.
@@ -186,7 +185,7 @@ namespace Orleans.Runtime
 
                 if (messagingOptions.ResendOnTimeout && resendFunc(msg))
                 {
-                    if (logger.IsVerbose) logger.Verbose(resendLogMessageFormat, msg.ResendCount, msg);
+                    if (logger.IsEnabled(LogLevel.Debug)) logger.Debug(resendLogMessageFormat, msg.ResendCount, msg);
                     return;
                 }
 

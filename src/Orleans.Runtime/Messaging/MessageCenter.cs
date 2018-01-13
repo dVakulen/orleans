@@ -5,8 +5,8 @@ using Microsoft.Extensions.Logging;
 using Orleans.Messaging;
 using Orleans.Runtime.Configuration;
 using Orleans.Serialization;
-using Orleans.Configuration;
 using Microsoft.Extensions.Options;
+using Orleans.Hosting;
 
 namespace Orleans.Runtime.Messaging
 {
@@ -14,7 +14,7 @@ namespace Orleans.Runtime.Messaging
     {
         private Gateway Gateway { get; set; }
         private IncomingMessageAcceptor ima;
-        private readonly Logger log;
+        private readonly ILogger log;
         private Action<Message> rerouteHandler;
         internal Func<Message, bool> ShouldDrop;
 
@@ -29,6 +29,8 @@ namespace Orleans.Runtime.Messaging
         private readonly SerializationManager serializationManager;
         private readonly MessageFactory messageFactory;
         private readonly ILoggerFactory loggerFactory;
+        private readonly ExecutorService executorService;
+
         internal bool IsBlockingApplicationMessages { get; private set; }
         internal ISiloPerformanceMetrics Metrics { get; private set; }
         
@@ -44,40 +46,42 @@ namespace Orleans.Runtime.Messaging
 
         public MessageCenter(
             ILocalSiloDetails siloDetails,
-            NodeConfiguration nodeConfig,
-            IOptions<SiloMessagingOptions> options,
+            IOptions<SiloMessagingOptions> messagingOptions,
+            IOptions<NetworkingOptions> networkingOptions,
             SerializationManager serializationManager,
             ISiloPerformanceMetrics metrics,
             MessageFactory messageFactory,
             Factory<MessageCenter, Gateway> gatewayFactory,
+            ExecutorService executorService,
             ILoggerFactory loggerFactory)
         {
             this.loggerFactory = loggerFactory;
-            this.log = new LoggerWrapper<MessageCenter>(loggerFactory);
+            this.log = loggerFactory.CreateLogger<MessageCenter>();
             this.serializationManager = serializationManager;
             this.messageFactory = messageFactory;
-            this.Initialize(siloDetails.SiloAddress.Endpoint, nodeConfig.Generation, options, metrics);
-            if (nodeConfig.IsGatewayNode)
+            this.executorService = executorService;
+            this.Initialize(siloDetails.SiloAddress.Endpoint, siloDetails.SiloAddress.Generation, messagingOptions, networkingOptions, metrics);
+            if (siloDetails.GatewayAddress != null)
             {
                 Gateway = gatewayFactory(this);
             }
         }
 
-        private void Initialize(IPEndPoint here, int generation, IOptions<SiloMessagingOptions> options, ISiloPerformanceMetrics metrics = null)
+        private void Initialize(IPEndPoint here, int generation, IOptions<SiloMessagingOptions> messagingOptions, IOptions<NetworkingOptions> networkingOptions, ISiloPerformanceMetrics metrics = null)
         {
-            if(log.IsVerbose3) log.Verbose3("Starting initialization.");
+            if(log.IsEnabled(LogLevel.Trace)) log.Trace("Starting initialization.");
 
-            SocketManager = new SocketManager(options, this.loggerFactory);
-            ima = new IncomingMessageAcceptor(this, here, SocketDirection.SiloToSilo, this.messageFactory, this.serializationManager, this.loggerFactory);
+            SocketManager = new SocketManager(networkingOptions, this.loggerFactory);
+            ima = new IncomingMessageAcceptor(this, here, SocketDirection.SiloToSilo, this.messageFactory, this.serializationManager, this.executorService, this.loggerFactory);
             MyAddress = SiloAddress.New((IPEndPoint)ima.AcceptingSocket.LocalEndPoint, generation);
             InboundQueue = new InboundMessageQueue(this.loggerFactory);
-            OutboundQueue = new OutboundMessageQueue(this, options, this.serializationManager, this.loggerFactory);
+            OutboundQueue = new OutboundMessageQueue(this, messagingOptions, this.serializationManager, this.executorService, this.loggerFactory);
             Metrics = metrics;
             
             sendQueueLengthCounter = IntValueStatistic.FindOrCreate(StatisticNames.MESSAGE_CENTER_SEND_QUEUE_LENGTH, () => SendQueueLength);
             receiveQueueLengthCounter = IntValueStatistic.FindOrCreate(StatisticNames.MESSAGE_CENTER_RECEIVE_QUEUE_LENGTH, () => ReceiveQueueLength);
 
-            if (log.IsVerbose3) log.Verbose3("Completed initialization.");
+            if (log.IsEnabled(LogLevel.Trace)) log.Trace("Completed initialization.");
         }
 
         public void Start()
@@ -133,7 +137,7 @@ namespace Orleans.Runtime.Messaging
 
         public void StopAcceptingClientMessages()
         {
-            if (log.IsVerbose) log.Verbose("StopClientMessages");
+            if (log.IsEnabled(LogLevel.Debug)) log.Debug("StopClientMessages");
             if (Gateway == null) return;
 
             try
@@ -229,7 +233,7 @@ namespace Orleans.Runtime.Messaging
         /// </summary>
         public void BlockApplicationMessages()
         {
-            if(log.IsVerbose) log.Verbose("BlockApplicationMessages");
+            if(log.IsEnabled(LogLevel.Debug)) log.Debug("BlockApplicationMessages");
             IsBlockingApplicationMessages = true;
         }
     }
