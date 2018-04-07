@@ -69,38 +69,7 @@ namespace Orleans
                 return await asyncTask;
             }
         }
-
-        /// <summary>
-        /// Returns a <see cref="Task{Object}"/> for the provided <see cref="Task{T}"/>.
-        /// </summary>
-        /// <typeparam name="T">The underlying type of <paramref name="task"/>.</typeparam>
-        /// <param name="task">The task.</param>
-        internal static Task<T> ToTypedTask<T>(this Task<object> task)
-        {
-            if (typeof(T) == typeof(object))
-                return task as Task<T>;
-
-            switch (task.Status)
-            {
-                case TaskStatus.RanToCompletion:
-                    return Task.FromResult((T)GetResult(task));
-
-                case TaskStatus.Faulted:
-                    return TaskFromFaulted<T>(task);
-
-                case TaskStatus.Canceled:
-                    return TaskFromCanceled<T>();
-
-                default:
-                    return ConvertAsync(task);
-            }
-
-            async Task<T> ConvertAsync(Task<object> asyncTask)
-            {
-                return (T)await asyncTask;
-            }
-        }
-
+        
         /// <summary>
         /// Returns a <see cref="Task{Object}"/> for the provided <see cref="Task{Object}"/>.
         /// </summary>
@@ -113,13 +82,6 @@ namespace Orleans
         private static Task<object> TaskFromFaulted(Task task)
         {
             var completion = new TaskCompletionSource<object>();
-            completion.SetException(task.Exception.InnerExceptions);
-            return completion.Task;
-        }
-
-        private static Task<T> TaskFromFaulted<T>(Task task)
-        {
-            var completion = new TaskCompletionSource<T>();
             completion.SetException(task.Exception.InnerExceptions);
             return completion.Task;
         }
@@ -309,47 +271,6 @@ namespace Orleans
             {
                 return Task.FromException<object>(exc);
             }
-        }
-
-        internal static Task<T> ConvertTaskViaTcs<T>(Task<T> task)
-        {
-            if (task == null) return Task.FromResult(default(T));
-
-            var resolver = new TaskCompletionSource<T>();
-
-            if (task.Status == TaskStatus.RanToCompletion)
-            {
-                resolver.TrySetResult(task.Result);
-            }
-            else if (task.IsFaulted)
-            {
-                resolver.TrySetException(task.Exception.InnerExceptions);
-            }
-            else if (task.IsCanceled)
-            {
-                resolver.TrySetException(new TaskCanceledException(task));
-            }
-            else
-            {
-                if (task.Status == TaskStatus.Created) task.Start();
-
-                task.ContinueWith(t =>
-                {
-                    if (t.IsFaulted)
-                    {
-                        resolver.TrySetException(t.Exception.InnerExceptions);
-                    }
-                    else if (t.IsCanceled)
-                    {
-                        resolver.TrySetException(new TaskCanceledException(t));
-                    }
-                    else
-                    {
-                        resolver.TrySetResult(t.GetResult());
-                    }
-                });
-            }
-            return resolver.Task;
         }
 
         //The rationale for GetAwaiter().GetResult() instead of .Result
