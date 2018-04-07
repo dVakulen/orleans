@@ -26,7 +26,7 @@ namespace Orleans
         private readonly ILogger logger;
         private readonly ClientMessagingOptions clientMessagingOptions;
 
-        private readonly ConcurrentDictionary<CorrelationId, CallbackData> callbacks;
+        private readonly ConcurrentDictionary<CorrelationId, ICallbackData> callbacks;
         private readonly ConcurrentDictionary<GuidId, LocalObjectData> localObjects;
 
         private ClientMessageCenter transport;
@@ -96,7 +96,7 @@ namespace Orleans
             this.loggerFactory = loggerFactory;
             this.logger = loggerFactory.CreateLogger<OutsideRuntimeClient>();
             this.handshakeClientId = GrainId.NewClientId();
-            callbacks = new ConcurrentDictionary<CorrelationId, CallbackData>();
+            callbacks = new ConcurrentDictionary<CorrelationId, ICallbackData>();
             localObjects = new ConcurrentDictionary<GuidId, LocalObjectData>();
             this.clientMessagingOptions = clientMessagingOptions.Value;
             this.typeMapRefreshInterval = typeManagementOptions.Value.TypeMapRefreshInterval;
@@ -127,7 +127,7 @@ namespace Orleans
             this.sharedCallbackData = new SharedCallbackData(
                 this.TryResendMessage,
                 msg => this.UnRegisterCallback(msg.Id),
-                this.loggerFactory.CreateLogger<CallbackData>(),
+                this.loggerFactory.CreateLogger<ICallbackData>(),
                 this.clientMessagingOptions,
                 this.serializationManager);
 
@@ -601,13 +601,13 @@ namespace Orleans
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope",
             Justification = "CallbackData is IDisposable but instances exist beyond lifetime of this method so cannot Dispose yet.")]
-        public void SendRequest(GrainReference target, InvokeMethodRequest request, TaskCompletionSource<object> context, string debugContext = null, InvokeMethodOptions options = InvokeMethodOptions.None, string genericArguments = null)
+        public void SendRequest<T>(GrainReference target, InvokeMethodRequest request, TaskCompletionSource<T> context, string debugContext = null, InvokeMethodOptions options = InvokeMethodOptions.None, string genericArguments = null)
         {
             var message = this.messageFactory.CreateMessage(request, options);
             SendRequestMessage(target, message, context, debugContext, options, genericArguments);
         }
 
-        private void SendRequestMessage(GrainReference target, Message message, TaskCompletionSource<object> context, string debugContext = null, InvokeMethodOptions options = InvokeMethodOptions.None, string genericArguments = null)
+        private void SendRequestMessage<T>(GrainReference target, Message message, TaskCompletionSource<T> context, string debugContext = null, InvokeMethodOptions options = InvokeMethodOptions.None, string genericArguments = null)
         {
             var targetGrainId = target.GrainId;
             var oneWay = (options & InvokeMethodOptions.OneWay) != 0;
@@ -644,7 +644,7 @@ namespace Orleans
 
             if (!oneWay)
             {
-                var callbackData = new CallbackData(this.sharedCallbackData, context, message);
+                var callbackData = new CallbackData<T>(this.sharedCallbackData, context, message);
                 callbacks.TryAdd(message.Id, callbackData);
             }
 
@@ -683,7 +683,7 @@ namespace Orleans
             if (response.Result == Message.ResponseTypes.Rejection && response.RejectionType == Message.RejectionTypes.DuplicateRequest)
                 return;
 
-            CallbackData callbackData;
+            ICallbackData callbackData;
             var found = callbacks.TryGetValue(response.Id, out callbackData);
             if (found)
             {
@@ -700,8 +700,7 @@ namespace Orleans
 
         private void UnRegisterCallback(CorrelationId id)
         {
-            CallbackData ignore;
-            callbacks.TryRemove(id, out ignore);
+            callbacks.TryRemove(id, out var ignore);
         }
 
         public void Reset(bool cleanup)

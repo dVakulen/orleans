@@ -32,7 +32,7 @@ namespace Orleans.Runtime
         private readonly ILoggerFactory loggerFactory;
         private readonly SiloMessagingOptions messagingOptions;
         private readonly List<IDisposable> disposables;
-        private readonly ConcurrentDictionary<CorrelationId, CallbackData> callbacks;
+        private readonly ConcurrentDictionary<CorrelationId, ICallbackData> callbacks;
         private SharedCallbackData sharedCallbackData;
         private SafeTimer callbackTimer;
 
@@ -67,7 +67,7 @@ namespace Orleans.Runtime
             this.ServiceProvider = serviceProvider;
             this.MySilo = siloDetails.SiloAddress;
             this.disposables = new List<IDisposable>();
-            this.callbacks = new ConcurrentDictionary<CorrelationId, CallbackData>();
+            this.callbacks = new ConcurrentDictionary<CorrelationId, ICallbackData>();
             this.ResponseTimeout = messagingOptions.Value.ResponseTimeout;
             this.typeManager = typeManager;
             this.messageFactory = messageFactory;
@@ -111,10 +111,10 @@ namespace Orleans.Runtime
 
         public IGrainReferenceRuntime GrainReferenceRuntime => this.grainReferenceRuntime ?? (this.grainReferenceRuntime = this.ServiceProvider.GetRequiredService<IGrainReferenceRuntime>());
 
-        public void SendRequest(
+        public void SendRequest<T>(
             GrainReference target,
             InvokeMethodRequest request,
-            TaskCompletionSource<object> context,
+            TaskCompletionSource<T> context,
             string debugContext,
             InvokeMethodOptions options,
             string genericArguments = null)
@@ -123,10 +123,10 @@ namespace Orleans.Runtime
             SendRequestMessage(target, message, context, debugContext, options, genericArguments);
         }
 
-        private void SendRequestMessage(
+        private void SendRequestMessage<T>(
             GrainReference target,
             Message message,
-            TaskCompletionSource<object> context,
+            TaskCompletionSource<T> context,
             string debugContext,
             InvokeMethodOptions options,
             string genericArguments = null)
@@ -196,7 +196,7 @@ namespace Orleans.Runtime
 
             if (!oneWay)
             {
-                var callbackData = new CallbackData(this.sharedCallbackData, context, message);
+                var callbackData = new CallbackData<T>(this.sharedCallbackData, context, message);
                 callbacks.TryAdd(message.Id, callbackData);
             }
 
@@ -229,8 +229,7 @@ namespace Orleans.Runtime
         /// <param name="id"></param>
         private void UnRegisterCallback(CorrelationId id)
         {
-            CallbackData ignore;
-            callbacks.TryRemove(id, out ignore);
+            callbacks.TryRemove(id, out var ignore);
         }
 
         public void SniffIncomingMessage(Message message)
@@ -589,7 +588,7 @@ namespace Orleans.Runtime
                 }
             }
 
-            CallbackData callbackData;
+            ICallbackData callbackData;
             bool found = callbacks.TryGetValue(message.Id, out callbackData);
             if (found)
             {
@@ -703,7 +702,7 @@ namespace Orleans.Runtime
             this.sharedCallbackData = new SharedCallbackData(
                 msg => this.Dispatcher.TryResendMessage(msg),
                 msg => this.UnRegisterCallback(msg.Id),
-                this.loggerFactory.CreateLogger<CallbackData>(),
+                this.loggerFactory.CreateLogger<ICallbackData>(),
                 this.messagingOptions,
                 this.serializationManager);
             var minTicks = Math.Min(this.messagingOptions.ResponseTimeout.Ticks, TimeSpan.FromSeconds(1).Ticks);

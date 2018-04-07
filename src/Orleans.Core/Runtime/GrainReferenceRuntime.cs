@@ -15,8 +15,7 @@ namespace Orleans.Runtime
         private const bool USE_DEBUG_CONTEXT = false;
         private const bool USE_DEBUG_CONTEXT_PARAMS = false;
         private static readonly ConcurrentDictionary<int, string> debugContexts = new ConcurrentDictionary<int, string>();
-        
-        private readonly Func<GrainReference, InvokeMethodRequest, string, InvokeMethodOptions, Task<object>> sendRequestDelegate;
+
         private readonly ILogger logger;
         private readonly IInternalGrainFactory internalGrainFactory;
         private readonly SerializationManager serializationManager;
@@ -33,7 +32,6 @@ namespace Orleans.Runtime
             IEnumerable<IOutgoingGrainCallFilter> outgoingCallFilters)
         {
             this.grainReferenceMethodCache = new InterfaceToImplementationMappingCache();
-            this.sendRequestDelegate = SendRequest;
             this.logger = logger;
             this.RuntimeClient = runtimeClient;
             this.cancellationTokenRuntime = cancellationTokenRuntime;
@@ -70,7 +68,7 @@ namespace Orleans.Runtime
             if (IsUnordered(reference))
                 options |= InvokeMethodOptions.Unordered;
 
-            Task<object> resultTask = InvokeMethod_Impl(reference, request, null, options);
+            Task<T> resultTask = InvokeMethod_Impl<T>(reference, request, null, options);
 
             if (resultTask == null)
             {
@@ -83,8 +81,7 @@ namespace Orleans.Runtime
                 return Task.FromResult(default(T));
             }
 
-            resultTask = OrleansTaskExtentions.ConvertTaskViaTcs(resultTask);
-            return resultTask.ToTypedTask<T>();
+            return resultTask;
         }
 
         public TGrainInterface Convert<TGrainInterface>(IAddressable grain)
@@ -92,7 +89,7 @@ namespace Orleans.Runtime
             return this.internalGrainFactory.Cast<TGrainInterface>(grain);
         }
 
-        private Task<object> InvokeMethod_Impl(GrainReference reference, InvokeMethodRequest request, string debugContext, InvokeMethodOptions options)
+        private Task<T> InvokeMethod_Impl<T>(GrainReference reference, InvokeMethodRequest request, string debugContext, InvokeMethodOptions options)
         {
             if (debugContext == null && USE_DEBUG_CONTEXT)
             {
@@ -119,26 +116,26 @@ namespace Orleans.Runtime
 
             if (this.filters?.Length > 0)
             {
-                return InvokeWithFilters(reference, request, debugContext, options);
+                return InvokeWithFilters<T>(reference, request, debugContext, options);
             }
             
-            return SendRequest(reference, request, debugContext, options);
+            return SendRequest<T>(reference, request, debugContext, options);
         }
 
-        private Task<object> SendRequest(GrainReference reference, InvokeMethodRequest request, string debugContext, InvokeMethodOptions options)
+        private Task<T> SendRequest<T>(GrainReference reference, InvokeMethodRequest request, string debugContext, InvokeMethodOptions options)
         {
             bool isOneWayCall = (options & InvokeMethodOptions.OneWay) != 0;
 
-            var resolver = isOneWayCall ? null : new TaskCompletionSource<object>();
+            var resolver = isOneWayCall ? null : new TaskCompletionSource<T>();
             this.RuntimeClient.SendRequest(reference, request, resolver, debugContext, options, reference.GenericArguments);
             return isOneWayCall ? null : resolver.Task;
         }
 
-        private async Task<object> InvokeWithFilters(GrainReference reference, InvokeMethodRequest request, string debugContext, InvokeMethodOptions options)
+        private async Task<T> InvokeWithFilters<T>(GrainReference reference, InvokeMethodRequest request, string debugContext, InvokeMethodOptions options)
         {
-            var invoker = new OutgoingCallInvoker(reference, request, options, debugContext, this.sendRequestDelegate, this.grainReferenceMethodCache, this.filters);
+            var invoker = new OutgoingCallInvoker<T>(reference, request, options, debugContext, SendRequest<T>, this.grainReferenceMethodCache, this.filters);
             await invoker.Invoke();
-            return invoker.Result;
+            return (T)invoker.Result;
         }
 
         private void CallClientInvokeCallback(GrainReference reference, InvokeMethodRequest request)

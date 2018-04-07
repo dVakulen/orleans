@@ -8,19 +8,19 @@ namespace Orleans.Runtime
     /// <summary>
     /// Invokes a request on a grain reference.
     /// </summary>
-    internal class OutgoingCallInvoker : IOutgoingGrainCallContext
+    internal class OutgoingCallInvoker<T> : IOutgoingGrainCallContext
     {
         private readonly InvokeMethodRequest request;
         private readonly InvokeMethodOptions options;
         private readonly string debugContext;
-        private readonly Func<GrainReference, InvokeMethodRequest, string, InvokeMethodOptions, Task<object>> sendRequest;
+        private readonly Func<GrainReference, InvokeMethodRequest, string, InvokeMethodOptions, Task<T>> sendRequest;
         private readonly InterfaceToImplementationMappingCache mapping;
         private readonly IOutgoingGrainCallFilter[] filters;
         private readonly GrainReference grainReference;
         private int stage;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="OutgoingCallInvoker"/> class.
+        /// Initializes a new instance of the <see cref="OutgoingCallInvoker{T}"/> class.
         /// </summary>
         /// <param name="grain">The grain reference.</param>
         /// <param name="request">The request.</param>
@@ -34,7 +34,7 @@ namespace Orleans.Runtime
             InvokeMethodRequest request,
             InvokeMethodOptions options,
             string debugContext,
-            Func<GrainReference, InvokeMethodRequest, string, InvokeMethodOptions, Task<object>> sendRequest,
+            Func<GrainReference, InvokeMethodRequest, string, InvokeMethodOptions, Task<T>> sendRequest,
             InterfaceToImplementationMappingCache mapping,
             IOutgoingGrainCallFilter[] filters)
         {
@@ -112,7 +112,7 @@ namespace Orleans.Runtime
         private static void ThrowInvalidCall()
         {
             throw new InvalidOperationException(
-                $"{nameof(OutgoingCallInvoker)}.{nameof(Invoke)}() received an invalid call.");
+                $"{nameof(OutgoingCallInvoker<T>)}.{nameof(Invoke)}() received an invalid call.");
         }
     }
 }
