@@ -6,17 +6,34 @@ using Orleans.Transactions;
 
 namespace Orleans.Runtime
 {
-    internal class CallbackData
+    internal interface ICallbackData
+    {
+        Message Message { get; set; }
+
+        ITransactionInfo TransactionInfo { get; set; }
+
+        bool IsCompleted { get; }
+
+        void DoCallback(Message response);
+
+        bool IsExpired(long currentTimestamp);
+
+        void OnTimeout(TimeSpan timeout);
+
+        void OnTargetSiloFail();
+    }
+
+    internal class CallbackData<T> : ICallbackData
     {
         private readonly SharedCallbackData shared;
-        private readonly TaskCompletionSource<object> context;
+        private readonly TaskCompletionSource<T> context;
 
         private long durationTimestamp;
         private bool alreadyFired;
 
         public CallbackData(
             SharedCallbackData shared,
-            TaskCompletionSource<object> ctx, 
+            TaskCompletionSource<T> ctx, 
             Message msg)
         {
             this.shared = shared;

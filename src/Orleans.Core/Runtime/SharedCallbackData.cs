@@ -32,7 +32,7 @@ namespace Orleans.Runtime
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
-        public void ResponseCallback(Message message, TaskCompletionSource<object> context)
+        public void ResponseCallback<T>(Message message, TaskCompletionSource<T> context)
         {
             Response response;
             if (message.Result != Message.ResponseTypes.Rejection)
@@ -75,7 +75,7 @@ namespace Orleans.Runtime
 
             if (!response.ExceptionFlag)
             {
-                context.TrySetResult(response.Data);
+                context.TrySetResult((T)response.Data);
             }
             else
             {
