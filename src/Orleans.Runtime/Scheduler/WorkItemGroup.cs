@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Orleans.Serialization;
 
 
 namespace Orleans.Runtime.Scheduler
@@ -19,11 +21,13 @@ namespace Orleans.Runtime.Scheduler
             Running = 2,
             Shutdown = 3
         }
+        private readonly Task activationParentTask;
+        public bool RequiresTaskCreation { get; set; }
         private readonly ILogger log;
         private readonly OrleansTaskScheduler masterScheduler;
         private WorkGroupStatus state;
         private readonly Object lockable;
-        private readonly Queue<Task> workItems;
+        private readonly Queue<IWorkItem> workItems;
 
         private long totalItemsEnQueued;    // equals total items queued, + 1
         private long totalItemsProcessed;
@@ -153,7 +157,7 @@ namespace Orleans.Runtime.Scheduler
             SchedulingContext = schedulingContext;
             cancellationToken = ct;
             state = WorkGroupStatus.Waiting;
-            workItems = new Queue<Task>();
+            workItems = new Queue<IWorkItem>();
             lockable = new Object();
             totalItemsEnQueued = 0;
             totalItemsProcessed = 0;
@@ -185,6 +189,12 @@ namespace Orleans.Runtime.Scheduler
                         return sb.ToString();
                     });
             }
+
+            activationParentTask = Task.Factory.StartNew(async () =>
+                            {
+                                await Task.Delay(Int32.MaxValue);
+                            }, CancellationToken.None, TaskCreationOptions.None, TaskRunner);
+            activationParentTask.Ignore();
         }
 
         /// <summary>
@@ -192,7 +202,7 @@ namespace Orleans.Runtime.Scheduler
         /// If we're adding it to the run list and we used to be waiting, now we're runnable.
         /// </summary>
         /// <param name="task">The work item to add.</param>
-        public void EnqueueTask(Task task)
+        public void EnqueueTask(IWorkItem task)
         {
             lock (lockable)
             {
@@ -206,7 +216,6 @@ namespace Orleans.Runtime.Scheduler
                         String.Format("Enqueuing task {0} to a stopped work item group. Going to ignore and not execute it. "
                         + "The likely reason is that the task is not being 'awaited' properly.", task),
                         ErrorCode.SchedulerNotEnqueuWorkWhenShutdown);
-                    task.Ignore(); // Ignore this Task, so in case it is faulted it will not cause UnobservedException.
                     return;
                 }
 
@@ -227,13 +236,18 @@ namespace Orleans.Runtime.Scheduler
                         count, Name, maxPendingItemsLimit));
                 }
                 if (state != WorkGroupStatus.Waiting) return;
-
-                state = WorkGroupStatus.Runnable;
+                
 #if DEBUG
                 if (log.IsEnabled(LogLevel.Trace)) log.Trace("Add to RunQueue {0}, #{1}, onto {2}", task, thisSequenceNumber, SchedulingContext);
 #endif
-                masterScheduler.ScheduleExecution(this);
+                ScheduleExecution();
             }
+        }
+
+        private void ScheduleExecution()
+        {
+            // state = WorkGroupStatus.Runnable;
+            masterScheduler.ScheduleExecution(this);
         }
 
         /// <summary>
@@ -269,11 +283,6 @@ namespace Orleans.Runtime.Scheduler
                 if (StatisticsCollector.CollectShedulerQueuesStats)
                     queueTracking.OnStopExecution();
 
-                foreach (Task task in workItems)
-                {
-                    // Ignore all queued Tasks, so in case they are faulted they will not cause UnobservedException.
-                    task.Ignore();
-                }
                 workItems.Clear();
             }
         }
@@ -304,6 +313,19 @@ namespace Orleans.Runtime.Scheduler
             }
 
             var thread = Thread.CurrentThread;
+            if (RuntimeContext.Current == null)
+            {
+                RuntimeContext.Current = new RuntimeContext
+                {
+                    Scheduler = masterScheduler
+                };
+            }
+            RuntimeContext.SetExecutionContext(SchedulingContext, TaskRunner);
+            var previousTask = InternalCurrentTaskAccessor.GetCurrentTask(activationParentTask);
+            if (previousTask != activationParentTask)
+            {
+                InternalCurrentTaskAccessor.SetCurrentTask(activationParentTask);
+            }
 
             try
             {
@@ -337,11 +359,11 @@ namespace Orleans.Runtime.Scheduler
                     }
 
                     // Get the first Work Item on the list
-                    Task task;
+                    IWorkItem task;
                     lock (lockable)
                     {
                         if (workItems.Count > 0)
-                            CurrentTask = task = workItems.Dequeue();
+                            task = workItems.Dequeue();
                         else // If the list is empty, then we're done
                             break;
                     }
@@ -362,7 +384,7 @@ namespace Orleans.Runtime.Scheduler
                         if (StatisticsCollector.CollectTurnsStats)
                             SchedulerStatisticsGroup.OnTurnExecutionStartsByWorkGroup(workItemGroupStatisticsNumber, thread.WorkerThreadStatisticsNumber, SchedulingContext);
 #endif
-                        TaskRunner.RunTask(task);
+                        task.Execute();
                     }
                     catch (Exception ex)
                     {
@@ -377,7 +399,7 @@ namespace Orleans.Runtime.Scheduler
                         {
                             SchedulerStatisticsGroup.NumLongRunningTurns.Increment();
                             log.Warn(ErrorCode.SchedulerTurnTooLong3, "Task {0} in WorkGroup {1} took elapsed time {2:g} for execution, which is longer than {3}. Running on thread {4}",
-                                OrleansTaskExtentions.ToString(task), SchedulingContext.ToString(), taskLength, OrleansTaskScheduler.TurnWarningLengthThreshold, thread.ToString());
+                                task.ToString(), SchedulingContext.ToString(), taskLength, OrleansTaskScheduler.TurnWarningLengthThreshold, thread.ToString());
                         }
 
                         CurrentTask = null;
@@ -394,6 +416,10 @@ namespace Orleans.Runtime.Scheduler
             }
             finally
             {
+                if (previousTask != activationParentTask)
+                {
+                    InternalCurrentTaskAccessor.SetCurrentTask(previousTask);
+                }
                 // Now we're not Running anymore. 
                 // If we left work items on our run list, we're Runnable, and need to go back on the silo run queue; 
                 // If our run list is empty, then we're waiting.
@@ -403,8 +429,7 @@ namespace Orleans.Runtime.Scheduler
                     {
                         if (WorkItemCount > 0)
                         {
-                            state = WorkGroupStatus.Runnable;
-                            masterScheduler.ScheduleExecution(this);
+                            ScheduleExecution();
                         }
                         else
                         {
@@ -469,5 +494,34 @@ namespace Orleans.Runtime.Scheduler
             var msg = string.Format("{0} {1}", what, DumpStatus());
             log.Warn(errorCode, msg);
         }
+    }
+}
+
+public static class InternalCurrentTaskAccessor
+{
+    private static Action<Task, Task> taskSetter;
+    private static Func<Task, Task> taskGetter;
+
+    static InternalCurrentTaskAccessor()
+    {
+        SetupCurrentTaskAccessors();
+    }
+
+    public static Task GetCurrentTask(Task t)
+    {
+        return taskGetter(t);
+    }
+
+
+    public static void SetCurrentTask(Task t)
+    {
+        taskSetter(t, t);
+    }
+
+    private static void SetupCurrentTaskAccessors()
+    {
+        var internalCurrentTaskField = typeof(Task).GetField("t_currentTask", BindingFlags.Static | BindingFlags.NonPublic);
+        taskSetter = (Action<Task, Task>)new FieldUtils().GetReferenceSetter(internalCurrentTaskField);
+        taskGetter = (Func<Task, Task>)new FieldUtils().GetGetter(internalCurrentTaskField);
     }
 }

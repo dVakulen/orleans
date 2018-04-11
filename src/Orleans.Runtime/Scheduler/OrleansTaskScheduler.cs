@@ -277,8 +277,7 @@ namespace Orleans.Runtime.Scheduler
             else
             {
                 // Create Task wrapper for this work item
-                Task t = TaskSchedulerUtils.WrapWorkItemAsTask(workItem, context, workItemGroup.TaskRunner);
-                t.Start(workItemGroup.TaskRunner);
+                workItemGroup.EnqueueTask(workItem);
             }
         }
 

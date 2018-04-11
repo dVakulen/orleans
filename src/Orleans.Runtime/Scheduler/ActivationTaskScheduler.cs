@@ -68,7 +68,8 @@ namespace Orleans.Runtime.Scheduler
 #if DEBUG
             if (logger.IsEnabled(LogLevel.Trace)) logger.Trace(myId + " QueueTask Task Id={0}", task.Id);
 #endif
-            workerGroup.EnqueueTask(task);
+            var todo = new TaskWorkItem(this, task, workerGroup.SchedulingContext, logger);
+            workerGroup.EnqueueTask(todo);
         }
 
         /// <summary>
