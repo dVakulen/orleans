@@ -207,6 +207,3 @@ src/SetupTestScriptOutput.txt
 
 # Binary MSBuild Log files
 *.binlog
-
-# VS Code
-.vscode/

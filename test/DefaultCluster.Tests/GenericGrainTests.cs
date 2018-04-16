@@ -644,8 +644,14 @@ namespace DefaultCluster.Tests.General
             var grain =  this.GrainFactory.GetGrain<IGenericPingSelf<string>>(id);
             var target =  this.GrainFactory.GetGrain<IGenericPingSelf<string>>(targetId);
             var s1 = Guid.NewGuid().ToString();
-            var s2 = await grain.PingSelfThroughOther(target, s1);
-            Assert.Equal(s1, s2);
+	        var s2 = s1;
+	        
+	        for (int i = 0; i < 10000; i++)
+	        {
+				await grain.PingSelfThroughOther(target, s1);
+			}
+			await grain.PingSelfThroughOther(target, s1);
+			Assert.Equal(s1, s2);
         }
 
         [Fact, TestCategory("BVT"), TestCategory("Functional"), TestCategory("Generics"), TestCategory("ActivateDeactivate")]

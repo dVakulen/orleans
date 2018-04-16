@@ -25,7 +25,7 @@ namespace Benchmarks
                     mapReduceBenchmark.BenchmarkSetup();
                     return mapReduceBenchmark;
                 },
-                benchmark => benchmark.Bench().GetAwaiter().GetResult(),
+                benchmark => benchmark.Bench().Wait(),
                 benchmark => benchmark.Teardown());
             },
             ["Serialization"] = () =>
@@ -64,37 +64,21 @@ namespace Benchmarks
                     benchmark.Setup();
                     return benchmark;
                 },
-                benchmark => benchmark.RunAsync().GetAwaiter().GetResult(),
+                benchmark => benchmark.RunAsync().Wait(),
                 benchmark => benchmark.Teardown());
             },
             ["Ping"] = () =>
             {
                 RunBenchmark(
-                    "Running Ping benchmark",
-                    () =>
-                    {
-                        var benchmark = new PingBenchmark();
-                        benchmark.Setup();
-                        return benchmark;
-                    },
-                    benchmark => benchmark.RunAsync().GetAwaiter().GetResult(),
-                    benchmark => benchmark.Teardown());
-            },
-            ["SequentialPing"] = () =>
-            {
-                BenchmarkRunner.Run<SequentialPingBenchmark>();
-            },
-            ["PingForever"] = () =>
-            {
-                new SequentialPingBenchmark().PingForever().GetAwaiter().GetResult();
-            },
-            ["PingPongForever"] = () =>
-            {
-                new SequentialPingBenchmark().PingPongForever().GetAwaiter().GetResult();
-            },
-            ["PingPongForeverSaturate"] = () =>
-            {
-                new SequentialPingBenchmark().PingPongForever().GetAwaiter().GetResult();
+                "Running Ping benchmark",
+                () =>
+                {
+                    var benchmark = new PingBenchmark();
+                    benchmark.Setup();
+                    return benchmark;
+                },
+                benchmark => benchmark.RunAsync().Wait(),
+                benchmark => benchmark.Teardown());
             },
         };
 

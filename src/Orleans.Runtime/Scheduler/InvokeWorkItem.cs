@@ -47,29 +47,21 @@ namespace Orleans.Runtime.Scheduler
                 var grain = activation.GrainInstance;
                 var runtimeClient = this.dispatcher.RuntimeClient;
                 Task task = runtimeClient.Invoke(grain, this.activation, this.message);
-
-                // Note: This runs for all outcomes of resultPromiseTask - both Success or Fault
-                if (task.IsCompleted)
+                task.ContinueWith(t =>
                 {
-                    OnComplete();
-                }
-                else
-                {
-                    task.ContinueWith(t => OnComplete()).Ignore();
-                }
+                    // Note: This runs for all outcomes of resultPromiseTask - both Success or Fault
+                    activation.DecrementInFlightCount();
+                    this.dispatcher.OnActivationCompletedRequest(activation, message);
+                }).Ignore();
             }
             catch (Exception exc)
             {
                 logger.Warn(ErrorCode.InvokeWorkItem_UnhandledExceptionInInvoke, 
                     String.Format("Exception trying to invoke request {0} on activation {1}.", message, activation), exc);
-                OnComplete();
-            }
-        }
 
-        private void OnComplete()
-        {
-            activation.DecrementInFlightCount();
-            this.dispatcher.OnActivationCompletedRequest(activation, message);
+                activation.DecrementInFlightCount();
+                this.dispatcher.OnActivationCompletedRequest(activation, message);
+            }
         }
 
         #endregion

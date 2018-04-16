@@ -16,7 +16,6 @@ namespace Orleans.Runtime.TestHooks
         Task<bool> HasStreamProvider(string providerName);
         Task<int> UnregisterGrainForTesting(GrainId grain);
         Task LatchIsOverloaded(bool overloaded, TimeSpan latchPeriod);
-        Task<Dictionary<SiloAddress, SiloStatus>> GetApproximateSiloStatuses();
     }
 
     internal interface ITestHooksSystemTarget : ITestHooks, ISystemTarget

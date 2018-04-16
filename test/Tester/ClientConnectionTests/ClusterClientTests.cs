@@ -41,7 +41,7 @@ namespace Tester.ClientConnectionTests
 
             Task<bool> RetryFunc(Exception exception)
             {
-                Assert.IsType<SiloUnavailableException>(exception);
+                Assert.IsType<OrleansException>(exception);
                 exceptions.Add(exception);
                 gatewayProvider.Gateways = new List<Uri> {gwEndpoint.ToGatewayUri()}.AsReadOnly();
                 return Task.FromResult(true);

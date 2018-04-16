@@ -49,8 +49,8 @@ namespace BenchmarkGrains.MapReduce
 
         public Task SendAsync(TInput t)
         {
-            this._input.Enqueue(t);
-            NotifyOfPendingWork();
+            var processed = this._processor.Process(t);
+            this._target.SendAsync(processed);
             return Task.CompletedTask;
         }
 

@@ -2,13 +2,12 @@
 using System.Collections.Generic;
 using System.Reflection;
 using BenchmarkDotNet.Attributes;
-using Microsoft.Extensions.DependencyInjection;
-using Orleans;
-using Orleans.Configuration;
 using Orleans.Runtime.Configuration;
 using Orleans.Serialization;
 using Orleans.Serialization.ProtobufNet;
+using TestExtensions;
 using UnitTests.GrainInterfaces;
+using Xunit;
 
 namespace Benchmarks.Serialization
 {
@@ -21,8 +20,10 @@ namespace Benchmarks.Serialization
     }
 
     [Config(typeof(SerializationBenchmarkConfig))]
+    [Collection(TestEnvironmentFixture.DefaultCollection)]
     public class SerializationBenchmarks
     {
+        private SerializationTestEnvironment environment;
         private void InitializeSerializer(SerializerToUse serializerToUse)
         {
             TypeInfo fallback = null;
@@ -43,17 +44,12 @@ namespace Benchmarks.Serialization
                     throw new InvalidOperationException("Invalid Serializer was selected");
             }
 
-            var client = new ClientBuilder()
-                .ConfigureDefaults()
-                .Configure<ClusterOptions>(options =>
-                {
-                    options.ClusterId = nameof(SerializationBenchmarks);
-                    options.ServiceId = Guid.NewGuid().ToString();
-                })
-                .Configure<SerializationProviderOptions>(
-                    options => options.FallbackSerializationProvider = fallback)
-                .Build();
-            this.serializationManager = client.ServiceProvider.GetRequiredService<SerializationManager>();
+            var config = new ClientConfiguration
+            {
+                FallbackSerializationProvider = fallback
+            };
+            this.environment = SerializationTestEnvironment.InitializeWithDefaults(config);
+            this.serializationManager = this.environment.SerializationManager;
         }
         
         [Params(SerializerToUse.IlBasedFallbackSerializer, SerializerToUse.Default, SerializerToUse.ProtoBufNet)]

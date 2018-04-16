@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Orleans;
 using Orleans.Concurrency;
@@ -539,6 +540,15 @@ namespace UnitTests.Grains
 
         public Task<T> PingSelfThroughOther(IGenericPingSelf<T> target, T t)
         {
+            CountdownEvent q = new CountdownEvent(10000);
+            //foreach (var i in Enumerable.Range(0, 10000))
+            //{
+            //    Task.Delay(0).ContinueWith(task =>
+            //    {
+            //        q.Signal();
+            //    });
+            //}
+            //q.Wait();
             return target.PingOther(this, t);
         }
 

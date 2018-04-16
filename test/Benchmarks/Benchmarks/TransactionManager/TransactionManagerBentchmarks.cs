@@ -3,18 +3,17 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Logging.Abstractions;
 using Orleans;
 using Orleans.Configuration;
 using Orleans.Runtime.Configuration;
-using Orleans.Serialization;
 using Orleans.Transactions.Abstractions;
 using Orleans.Transactions;
 using Orleans.Transactions.Development;
 using Orleans.Transactions.AzureStorage;
 using Orleans.TestingHost.Utils;
+using TestExtensions;
 
 namespace Benchmarks.TransactionManager
 {
@@ -148,14 +147,15 @@ namespace Benchmarks.TransactionManager
 
         private static async Task<ITransactionLogStorage> AzureStorageFactory()
         {
-            var client = new ClientBuilder().Configure<ClusterOptions>(o => o.ServiceId = o.ClusterId = "fake").Build();
+            var config = new ClientConfiguration();
+            var environment = SerializationTestEnvironment.InitializeWithDefaults(config);
             var azureConfig = Options.Create(new AzureTransactionLogOptions()
             {
                 // TODO: Find better way for test isolation.
                 TableName = $"TransactionLog{((uint)Guid.NewGuid().GetHashCode()) % 100000}",
-                ConnectionString = "UseDevelopmentStorage=true"
+                ConnectionString = TestDefaultConfiguration.DataConnectionString
             });
-            AzureTransactionLogStorage storage = new AzureTransactionLogStorage(client.ServiceProvider.GetRequiredService<SerializationManager>(), azureConfig);
+            AzureTransactionLogStorage storage = new AzureTransactionLogStorage(environment.SerializationManager, azureConfig);
             await storage.Initialize();
             return storage;
         }
