@@ -49,7 +49,7 @@ namespace Orleans.Runtime
         public const int PULLING_AGENTS_MANAGER_SYSTEM_TARGET_TYPE_CODE = 254;
         public const int PULLING_AGENT_SYSTEM_TARGET_TYPE_CODE = 255;
 
-        public static readonly GrainId SiloDirectConnectionId = GrainId.GetSystemGrainId(new Guid("01111111-1111-1111-1111-111111111111"));
+        public static readonly GrainId SiloDirectConnectionId = null; //GrainId.GetSystemTargetGrainId(new Guid("01111111-1111-1111-1111-111111111111"));
 
         internal const long ReminderTableGrainId = 12345;
 
@@ -102,21 +102,6 @@ namespace Orleans.Runtime
         public static bool IsSingletonSystemTarget(GrainId id)
         {
             return singletonSystemTargetNames.ContainsKey(id);
-        }
-
-        private static readonly Dictionary<GrainId, string> systemGrainNames = new Dictionary<GrainId, string>
-        {
-            {SiloDirectConnectionId, "SiloDirectConnectionId"}
-        };
-
-        public static bool TryGetSystemGrainName(GrainId id, out string name)
-        {
-            return systemGrainNames.TryGetValue(id, out name);
-        }
-
-        public static bool IsSystemGrain(GrainId grain)
-        {
-            return systemGrainNames.ContainsKey(grain);
         }
     }
 }
