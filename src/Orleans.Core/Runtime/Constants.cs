@@ -49,7 +49,11 @@ namespace Orleans.Runtime
         public const int PULLING_AGENTS_MANAGER_SYSTEM_TARGET_TYPE_CODE = 254;
         public const int PULLING_AGENT_SYSTEM_TARGET_TYPE_CODE = 255;
 
+<<<<<<< HEAD
         public static readonly GrainId SiloDirectConnectionId = null; //GrainId.GetSystemTargetGrainId(new Guid("01111111-1111-1111-1111-111111111111"));
+=======
+        public static readonly GrainId SiloDirectConnectionId = GrainId.GetSystemGrainId(new Guid("01111111-1111-1111-1111-111111111111"));
+>>>>>>> 48b97b439787658f03d568ef76775b845b6f0709
 
         internal const long ReminderTableGrainId = 12345;
 
