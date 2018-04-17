@@ -756,6 +756,16 @@ namespace DefaultCluster.Tests.General
             var result = await grain.GetStateType();
             Assert.Equal(typeof(List<Guid>), result);
         }
+
+
+        [Fact, TestCategory("BVT"), TestCategory("Generics")]
+        public async Task Generic_AccessCallContext()
+        {
+            var nonGeneric = GrainFactory.GetGrain<ICaterpillarGrain>(0);
+            await nonGeneric.Eat("Jazz");
+            var generic = GrainFactory.GetGrain<IHungryGrain<string>>(0);
+            await generic.Eat("Jazz");
+        }
     }
 
     namespace Generic.EdgeCases
