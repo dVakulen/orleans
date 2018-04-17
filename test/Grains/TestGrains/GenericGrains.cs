@@ -529,6 +529,20 @@ namespace UnitTests.Grains
         public Task Eat(string food) => Task.CompletedTask;
     }
 
+    public class HungryGrain :
+        Grain,
+        IHungryGrain<int>,
+        IIncomingGrainCallFilter
+    {
+        Task IIncomingGrainCallFilter.Invoke(IIncomingGrainCallContext ctx)
+        {
+            this.GetLogger().Verbose("ImplementationMethod {0}", ctx.ImplementationMethod);
+            return ctx.Invoke();
+        }
+
+        public Task Eat(int food) => Task.CompletedTask;
+    }
+
     [Reentrant]
     public class PingSelfGrain<T> : Grain, IGenericPingSelf<T>
     {
