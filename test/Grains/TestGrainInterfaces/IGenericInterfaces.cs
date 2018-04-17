@@ -180,7 +180,14 @@ namespace UnitTests.GrainInterfaces
         Task SetValue(T value);
         Task<T> GetValue();
     }
+    
+    public interface IHungryGrain<T> : IGrainWithIntegerKey
+    {
+        Task Eat(T food);
+    }
 
+    public interface ICaterpillarGrain : IHungryGrain<string> { }
+    
     public interface IGenericPingSelf<T> : IGrainWithGuidKey
     {
         Task<T> Ping(T t);

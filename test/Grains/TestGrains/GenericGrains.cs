@@ -514,6 +514,21 @@ namespace UnitTests.Grains
         }
     }
 
+    public class CaterpillarGrain :
+        Grain,
+        ICaterpillarGrain,
+        IHungryGrain<string>,
+        IIncomingGrainCallFilter
+    {
+        Task IIncomingGrainCallFilter.Invoke(IIncomingGrainCallContext ctx)
+        {
+            this.GetLogger().Verbose("ImplementationMethod {0}", ctx.ImplementationMethod);
+            return ctx.Invoke();
+        }
+
+        public Task Eat(string food) => Task.CompletedTask;
+    }
+
     [Reentrant]
     public class PingSelfGrain<T> : Grain, IGenericPingSelf<T>
     {

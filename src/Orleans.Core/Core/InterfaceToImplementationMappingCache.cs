@@ -113,6 +113,12 @@ namespace Orleans
                 // Add the resulting map of methodId -> method to the interface map.
                 var interfaceId = GrainInterfaceUtils.GetGrainInterfaceId(iface);
                 result[interfaceId] = methodMap;
+
+                if (iface.IsGenericType)
+                {
+                    interfaceId = GrainInterfaceUtils.GetGrainInterfaceId(iface.GetGenericTypeDefinition());
+                    result[interfaceId] = methodMap;
+                }
             }
 
             return result;
