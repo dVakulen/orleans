@@ -169,6 +169,7 @@ namespace Orleans.Runtime
         public readonly TimeSpan CollectionAgeLimit;
         private readonly ILogger logger;
         private IGrainMethodInvoker lastInvoker;
+        private string lastInvokerGenericGrainType;
         private IServiceScope serviceScope;
         private HashSet<IGrainTimer> timers;
         
@@ -221,7 +222,7 @@ namespace Orleans.Runtime
         public IGrainMethodInvoker GetInvoker(GrainTypeManager typeManager, int interfaceId, string genericGrainType = null)
         {
             // Return previous cached invoker, if applicable
-            if (lastInvoker != null && interfaceId == lastInvoker.InterfaceId) // extension invoker returns InterfaceId==0, so this condition will never be true if an extension is installed
+            if (lastInvoker != null && interfaceId == lastInvoker.InterfaceId && lastInvokerGenericGrainType == genericGrainType) // extension invoker returns InterfaceId==0, so this condition will never be true if an extension is installed
                 return lastInvoker;
 
             if (extensionInvoker != null && extensionInvoker.IsExtensionInstalled(interfaceId))
@@ -234,6 +235,8 @@ namespace Orleans.Runtime
                 // Find the specific invoker for this interface / grain type
                 lastInvoker = typeManager.GetInvoker(interfaceId, genericGrainType);
             }
+
+            lastInvokerGenericGrainType = genericGrainType;
 
             return lastInvoker;
         }

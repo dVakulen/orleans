@@ -518,6 +518,7 @@ namespace UnitTests.Grains
         Grain,
         ICaterpillarGrain,
         IHungryGrain<string>,
+        IHungryGrain<double>,
         IIncomingGrainCallFilter
     {
         Task IIncomingGrainCallFilter.Invoke(IIncomingGrainCallContext ctx)
@@ -527,6 +528,8 @@ namespace UnitTests.Grains
         }
 
         public Task Eat(string food) => Task.CompletedTask;
+
+        public Task Eat(double food) => Task.CompletedTask;
     }
 
     public class HungryGrain :

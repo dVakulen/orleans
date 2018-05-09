@@ -767,8 +767,8 @@ namespace DefaultCluster.Tests.General
             var generic = GrainFactory.GetGrain<IHungryGrain<string>>(0);
             await generic.Eat("Jazz");
 
-            var differentGenericType = GrainFactory.GetGrain<IHungryGrain<int>>(0);
-            await differentGenericType.Eat(1);
+            var differentGenericType = GrainFactory.GetGrain<IHungryGrain<double>>(0);
+            await differentGenericType.Eat(1.5);
         }
     }
 
