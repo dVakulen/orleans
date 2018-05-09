@@ -15,6 +15,7 @@ namespace Orleans.Runtime
         private readonly IGrainMethodInvoker rootInvoker;
         private readonly List<IIncomingGrainCallFilter> filters;
         private readonly InterfaceToImplementationMappingCache interfaceToImplementationMapping;
+        private readonly string genericGrainArguments;
         private int stage;
 
         /// <summary>
@@ -25,18 +26,21 @@ namespace Orleans.Runtime
         /// <param name="rootInvoker">The generated invoker.</param>
         /// <param name="filters">The invocation interceptors.</param>
         /// <param name="interfaceToImplementationMapping">The implementation map.</param>
+        /// <param name="genericGrainArguments">The generic grain arguments.</param>
         public GrainMethodInvoker(
             IAddressable grain,
             InvokeMethodRequest request,
             IGrainMethodInvoker rootInvoker,
             List<IIncomingGrainCallFilter> filters,
-            InterfaceToImplementationMappingCache interfaceToImplementationMapping)
+            InterfaceToImplementationMappingCache interfaceToImplementationMapping,
+            string genericGrainArguments)
         {
             this.request = request;
             this.rootInvoker = rootInvoker;
             this.Grain = grain;
             this.filters = filters;
             this.interfaceToImplementationMapping = interfaceToImplementationMapping;
+            this.genericGrainArguments = genericGrainArguments;
         }
 
         /// <inheritdoc />
@@ -123,7 +127,8 @@ namespace Orleans.Runtime
             // Get or create the implementation map for this object.
             var implementationMap = interfaceToImplementationMapping.GetOrCreate(
                 implementationType,
-                request.InterfaceId);
+                request.InterfaceId, 
+                genericGrainArguments);
 
             // Get the method info for the method being invoked.
             implementationMap.TryGetValue(request.MethodId, out var method);

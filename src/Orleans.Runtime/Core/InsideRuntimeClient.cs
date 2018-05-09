@@ -359,7 +359,7 @@ namespace Orleans.Runtime
                         throw exc;
                     }
                     
-                    var requestInvoker = new GrainMethodInvoker(target, request, invoker, GrainCallFilters, interfaceToImplementationMapping);
+                    var requestInvoker = new GrainMethodInvoker(target, request, invoker, GrainCallFilters, interfaceToImplementationMapping, message.GenericGrainType);
                     await requestInvoker.Invoke();
                     resultObject = requestInvoker.Result;
                 }

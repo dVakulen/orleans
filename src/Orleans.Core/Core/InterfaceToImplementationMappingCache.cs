@@ -24,20 +24,21 @@ namespace Orleans
         }
 
         /// <summary>
-        /// The map from implementation types to interface ids to map of method ids to method infos.
+        /// The map from implementation types to interface ids to generic type to map of method ids to method infos.
         /// </summary>
-        private readonly CachedReadConcurrentDictionary<Type, Dictionary<int, Dictionary<int, Entry>>> mappings =
-            new CachedReadConcurrentDictionary<Type, Dictionary<int, Dictionary<int, Entry>>>();
+        private readonly CachedReadConcurrentDictionary<Type, Dictionary<int, Dictionary<string, Dictionary<int, Entry>>>> mappings =
+            new CachedReadConcurrentDictionary<Type, Dictionary<int, Dictionary<string, Dictionary<int, Entry>>>>();
 
         /// <summary>
         /// Returns a mapping from method id to method info for the provided implementation and interface id.
         /// </summary>
         /// <param name="implementationType">The grain type.</param>
         /// <param name="interfaceId">The interface id.</param>
+        /// <param name="genericArguments">The generic grain arguments.</param>
         /// <returns>
         /// A mapping from method id to method info.
         /// </returns>
-        public Dictionary<int, Entry> GetOrCreate(Type implementationType, int interfaceId)
+        public Dictionary<int, Entry> GetOrCreate(Type implementationType, int interfaceId, string genericArguments)
         {
             // Get or create the mapping between interfaceId and invoker for the provided type.
             if (!this.mappings.TryGetValue(implementationType, out var invokerMap))
@@ -53,7 +54,13 @@ namespace Orleans
                     $"Type {implementationType} does not implement interface with id {interfaceId} ({interfaceId:X}).");
             }
 
-            return interfaceToImplementationMap;
+            if (!interfaceToImplementationMap.TryGetValue(genericArguments, out var implementationMap))
+            {
+                throw new InvalidOperationException(
+                    $"Type {implementationType} does not implement interface with id {interfaceId} and generic arguments {genericArguments}.");
+            }
+
+            return implementationMap;
         }
 
         /// <summary>
@@ -61,7 +68,7 @@ namespace Orleans
         /// </summary>
         /// <param name="implementationType">The implementation type.</param>
         /// <returns>The mapped interface.</returns>
-        private static Dictionary<int, Dictionary<int, Entry>> CreateInterfaceToImplementationMap(Type implementationType)
+        private static Dictionary<int, Dictionary<string, Dictionary<int, Entry>>> CreateInterfaceToImplementationMap(Type implementationType)
         {
             if (implementationType.IsConstructedGenericType) return CreateMapForConstructedGeneric(implementationType);
             return CreateMapForNonGeneric(implementationType);
@@ -72,7 +79,7 @@ namespace Orleans
         /// </summary>
         /// <param name="implementationType">The implementation type.</param>
         /// <returns>A map from interface id to map of method id to method info for the provided type.</returns>
-        private static Dictionary<int, Dictionary<int, Entry>> CreateMapForNonGeneric(Type implementationType)
+        private static Dictionary<int, Dictionary<string, Dictionary<int, Entry>>> CreateMapForNonGeneric(Type implementationType)
         {
             if (implementationType.IsConstructedGenericType)
             {
@@ -84,16 +91,21 @@ namespace Orleans
             var interfaces = implementationType.GetInterfaces();
 
             // Create an invoker for every interface on the provided type.
-            var result = new Dictionary<int, Dictionary<int, Entry>>(interfaces.Length);
+            var result = new Dictionary<int, Dictionary<string, Dictionary<int, Entry>>>(interfaces.Length);
+            
             foreach (var iface in interfaces)
             {
+                var genericIface = iface.IsGenericType ? iface.GetGenericTypeDefinition() : null;
+                var genericInterfaceMethods = genericIface == null ? null : GrainInterfaceUtils.GetMethods(genericIface);
+
                 var methods = GrainInterfaceUtils.GetMethods(iface);
 
                 // Map every method on this interface from the definition interface onto the implementation class.
                 var methodMap = new Dictionary<int, Entry>(methods.Length);
                 var mapping = default(InterfaceMapping);
-                foreach (var method in methods)
+                for (var i = 0; i < methods.Length; i++)
                 {
+                    var method = methods[i];
                     // If this method is not from the expected interface (eg, because it's from a parent interface), then
                     // get the mapping for the interface which it does belong to.
                     if (mapping.InterfaceType != method.DeclaringType)
@@ -106,18 +118,38 @@ namespace Orleans
                     {
                         if (mapping.InterfaceMethods[k] != method) continue;
                         methodMap[GrainInterfaceUtils.ComputeMethodId(method)] = new Entry(mapping.TargetMethods[k], method);
+
+                        var genericInterfaceMethod = genericInterfaceMethods?[i];
+                        if (genericInterfaceMethod != null)
+                        {
+                            methodMap[GrainInterfaceUtils.ComputeMethodId(genericInterfaceMethod)] = new Entry(mapping.TargetMethods[k], method);
+                        }
+
                         break;
                     }
                 }
 
                 // Add the resulting map of methodId -> method to the interface map.
                 var interfaceId = GrainInterfaceUtils.GetGrainInterfaceId(iface);
-                result[interfaceId] = methodMap;
+                result[interfaceId] = new Dictionary<string, Dictionary<int, Entry>>
+                {
+                    { string.Empty, methodMap }
+                };
 
                 if (iface.IsGenericType)
                 {
-                    interfaceId = GrainInterfaceUtils.GetGrainInterfaceId(iface.GetGenericTypeDefinition());
-                    result[interfaceId] = methodMap;
+                    // When call to grain is performed through closed generic interface -
+                    // the interfaceId corresponds to it's open version, so in order to differentiate between 
+                    // multiple interfaces with different generic arguments - create per interface dictionary 
+                    // with variations of generic arguments.
+                    var genericTypeArgs = Runtime.TypeUtils.GenericTypeArgsString(iface.UnderlyingSystemType.FullName);
+                    var genericInterfaceId = GrainInterfaceUtils.GetGrainInterfaceId(iface.GetGenericTypeDefinition());
+                    if (!result.TryGetValue(genericInterfaceId, out var genericInterfaceMapping))
+                    {
+                        result[genericInterfaceId] = genericInterfaceMapping = new Dictionary<string, Dictionary<int, Entry>>();
+                    }
+
+                    genericInterfaceMapping.Add(genericTypeArgs, methodMap);
                 }
             }
 
@@ -129,7 +161,7 @@ namespace Orleans
         /// </summary>
         /// <param name="implementationType">The implementation type.</param>
         /// <returns>A map from interface id to map of method id to method info for the provided type.</returns>
-        private static Dictionary<int, Dictionary<int, Entry>> CreateMapForConstructedGeneric(Type implementationType)
+        private static Dictionary<int, Dictionary<string, Dictionary<int, Entry>>> CreateMapForConstructedGeneric(Type implementationType)
         {
             // It is important to note that the interfaceId and methodId are computed based upon the non-concrete
             // version of the implementation type. During code generation, the concrete type would not be available
@@ -148,7 +180,7 @@ namespace Orleans
             var concreteInterfaces = implementationType.GetInterfaces();
 
             // Create an invoker for every interface on the provided type.
-            var result = new Dictionary<int, Dictionary<int, Entry>>(genericInterfaces.Length);
+            var result = new Dictionary<int, Dictionary<string, Dictionary<int, Entry>>>(genericInterfaces.Length);
             for (var i = 0; i < genericInterfaces.Length; i++)
             {
                 // Because these methods are identical except for type parameters, their methods should also be identical except
@@ -183,7 +215,10 @@ namespace Orleans
 
                 // Add the resulting map of methodId -> method to the interface map.
                 var interfaceId = GrainInterfaceUtils.GetGrainInterfaceId(genericInterfaces[i]);
-                result[interfaceId] = methodMap;
+                result[interfaceId] = new Dictionary<string, Dictionary<int, Entry>>
+                {
+                    { string.Empty, methodMap }
+                };
             }
 
             return result;

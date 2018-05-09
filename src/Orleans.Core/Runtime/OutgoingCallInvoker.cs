@@ -17,6 +17,7 @@ namespace Orleans.Runtime
         private readonly InterfaceToImplementationMappingCache mapping;
         private readonly IOutgoingGrainCallFilter[] filters;
         private readonly GrainReference grainReference;
+        private readonly string genericGrainArguments;
         private int stage;
 
         /// <summary>
@@ -45,6 +46,7 @@ namespace Orleans.Runtime
             this.mapping = mapping;
             this.grainReference = grain;
             this.filters = filters;
+            this.genericGrainArguments = grain.GenericArguments;
         }
 
         /// <inheritdoc />
@@ -60,7 +62,8 @@ namespace Orleans.Runtime
                 // Get or create the implementation map for this object.
                 var implementationMap = mapping.GetOrCreate(
                     implementationType,
-                    request.InterfaceId);
+                    request.InterfaceId,
+                    genericGrainArguments);
 
                 // Get the method info for the method being invoked.
                 implementationMap.TryGetValue(request.MethodId, out var method);
